@@ -1,0 +1,1432 @@
+openapi: 3.1.0
+info:
+  title: NurseFlow Scheduling API
+  version: 0.1.0
+  description: |
+    개발 전 계약 초안. Android Kotlin 앱과 Kotlin/Spring Boot 백엔드 사이의 REST API.
+    확정된 결정: 간호사는 병동 전체 공개표 또는 본인 공개표 조회, 미충원 표 공개 허용,
+    관리자 확정 전 draft는 비공개, 관리자 confirm 성공 시 해당 revision을 활성 달력에 공개 적용.
+    P0에서 병동 운영규칙, OIDC 제공자, 배포환경, 보존정책을 확정한 뒤 스키마를 고정한다.
+servers:
+  - url: /api/v1
+    description: API base path (host is environment-specific)
+security:
+  - bearerAuth: []
+tags:
+  - name: Identity
+  - name: Wards
+  - name: Rosters
+  - name: Absences
+  - name: Assignments
+  - name: Generation
+  - name: Published calendars
+paths:
+  /me:
+    get:
+      tags: [Identity]
+      operationId: getCurrentUser
+      summary: 로그인 사용자와 병동 membership 조회
+      responses:
+        '200':
+          description: 사용자 세션 정보
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CurrentUser'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /wards:
+    get:
+      tags: [Wards]
+      operationId: listMyWards
+      summary: 로그인 사용자가 접근 가능한 병동 목록
+      responses:
+        '200':
+          description: 접근 가능한 병동
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/WardMembership'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /wards/{wardId}/staff:
+    parameters:
+      - $ref: '#/components/parameters/WardId'
+    get:
+      tags: [Wards]
+      operationId: listWardStaff
+      summary: 병동 간호사 및 배치 자격 조회
+      description: 관리자만 사용 가능. 페이지 크기 상한을 적용한다.
+      x-required-role: WARD_ADMIN
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: 간호사 목록
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StaffPage'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    post:
+      tags: [Wards]
+      operationId: createWardStaff
+      summary: 병동 간호사 등록
+      x-required-role: WARD_ADMIN
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StaffInput'
+      responses:
+        '201':
+          description: 간호사 등록됨
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StaffMember'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /wards/{wardId}/staff/{nurseId}:
+    parameters:
+      - $ref: '#/components/parameters/WardId'
+      - $ref: '#/components/parameters/NurseId'
+    put:
+      tags: [Wards]
+      operationId: updateWardStaff
+      summary: 간호사 자격 또는 활성 상태 수정
+      x-required-role: WARD_ADMIN
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StaffInput'
+      responses:
+        '200':
+          description: 간호사 정보 갱신됨
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StaffMember'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /wards/{wardId}/shift-types:
+    parameters:
+      - $ref: '#/components/parameters/WardId'
+    get:
+      tags: [Wards]
+      operationId: listShiftTypes
+      summary: 병동 근무 유형 조회
+      responses:
+        '200':
+          description: 근무 유형 목록
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ShiftType'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+    post:
+      tags: [Wards]
+      operationId: createShiftType
+      summary: 근무 유형 생성
+      x-required-role: WARD_ADMIN
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ShiftTypeInput'
+      responses:
+        '201':
+          description: 생성됨
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ShiftType'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /wards/{wardId}/shift-types/{shiftTypeId}:
+    parameters:
+      - $ref: '#/components/parameters/WardId'
+      - $ref: '#/components/parameters/ShiftTypeId'
+    put:
+      tags: [Wards]
+      operationId: updateShiftType
+      summary: 근무 유형/시간 갱신
+      x-required-role: WARD_ADMIN
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ShiftTypeInput'
+      responses:
+        '200':
+          description: 근무 유형 갱신됨
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ShiftType'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /wards/{wardId}/rosters:
+    parameters:
+      - $ref: '#/components/parameters/WardId'
+    get:
+      tags: [Rosters]
+      operationId: listWardRosters
+      summary: 관리자용 월간 roster/draft 목록
+      x-required-role: WARD_ADMIN
+      parameters:
+        - name: month
+          in: query
+          required: true
+          description: 병동 현지 시간 기준 대상 월
+          schema:
+            type: string
+            pattern: '^\\d{4}-(0[1-9]|1[0-2])$'
+            example: '2026-11'
+      responses:
+        '200':
+          description: 해당 월 roster 목록
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/RosterSummary'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+    post:
+      tags: [Rosters]
+      operationId: createRoster
+      summary: 월간 draft 생성
+      description: 같은 ward/month에 유효한 draft가 있으면 기존 draft를 덮지 않고 conflict를 반환한다.
+      x-required-role: WARD_ADMIN
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateRosterRequest'
+      responses:
+        '201':
+          description: draft 생성됨
+          headers:
+            ETag:
+              $ref: '#/components/headers/RosterETag'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Roster'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /rosters/{rosterId}:
+    parameters:
+      - $ref: '#/components/parameters/RosterId'
+    get:
+      tags: [Rosters]
+      operationId: getRosterDraft
+      summary: 관리자용 roster 상세 조회
+      description: 간호사 API에서는 draft를 반환하지 않는다.
+      x-required-role: WARD_ADMIN
+      responses:
+        '200':
+          description: roster 상세
+          headers:
+            ETag:
+              $ref: '#/components/headers/RosterETag'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Roster'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /rosters/{rosterId}/requirements:
+    parameters:
+      - $ref: '#/components/parameters/RosterId'
+    put:
+      tags: [Rosters]
+      operationId: replaceRosterRequirements
+      summary: 월간 인력 수요 전체 교체
+      description: 요청의 전체 항목을 원자적으로 교체한다. 직원/자격 조건과 월 경계 정책은 P0에서 고정한다.
+      x-required-role: WARD_ADMIN
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReplaceRequirementsRequest'
+      responses:
+        '200':
+          description: 갱신된 roster 요약 및 새 revision
+          headers:
+            ETag:
+              $ref: '#/components/headers/RosterETag'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RosterSummary'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '412':
+          $ref: '#/components/responses/PreconditionFailed'
+        '422':
+          $ref: '#/components/responses/RuleViolation'
+
+  /rosters/{rosterId}/absences:
+    parameters:
+      - $ref: '#/components/parameters/RosterId'
+    get:
+      tags: [Absences]
+      operationId: listApprovedAbsences
+      summary: 관리자용 승인 부재 일정 조회
+      description: 신청/결재 데이터가 아니다. 휴가 사유·병명·진단정보는 응답하지 않는다.
+      x-required-role: WARD_ADMIN
+      responses:
+        '200':
+          description: 승인된 부재 시간 구간
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ApprovedAbsence'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+    post:
+      tags: [Absences]
+      operationId: createApprovedAbsence
+      summary: 이미 승인된 휴가/반차를 일정으로 등록
+      description: absenceReason, diagnosis, medicalDetails 필드는 받지 않는다.
+      x-required-role: WARD_ADMIN
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ApprovedAbsenceInput'
+      responses:
+        '201':
+          description: 부재 일정 생성됨
+          headers:
+            ETag:
+              $ref: '#/components/headers/RosterETag'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApprovedAbsence'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '412':
+          $ref: '#/components/responses/PreconditionFailed'
+        '422':
+          $ref: '#/components/responses/RuleViolation'
+
+  /rosters/{rosterId}/absences/{absenceId}:
+    parameters:
+      - $ref: '#/components/parameters/RosterId'
+      - $ref: '#/components/parameters/AbsenceId'
+    put:
+      tags: [Absences]
+      operationId: updateApprovedAbsence
+      summary: 승인 부재 구간 수정
+      x-required-role: WARD_ADMIN
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ApprovedAbsenceInput'
+      responses:
+        '200':
+          description: 부재 일정 갱신됨
+          headers:
+            ETag:
+              $ref: '#/components/headers/RosterETag'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApprovedAbsence'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '412':
+          $ref: '#/components/responses/PreconditionFailed'
+    delete:
+      tags: [Absences]
+      operationId: deleteApprovedAbsence
+      summary: 승인 부재 일정 삭제
+      x-required-role: WARD_ADMIN
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+      responses:
+        '204':
+          description: 삭제됨
+          headers:
+            ETag:
+              $ref: '#/components/headers/RosterETag'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '412':
+          $ref: '#/components/responses/PreconditionFailed'
+
+  /rosters/{rosterId}/assignments/validate:
+    parameters:
+      - $ref: '#/components/parameters/RosterId'
+    post:
+      tags: [Assignments]
+      operationId: validateAssignment
+      summary: 배치 후보의 가능 여부와 사유 확인
+      description: 관리자는 권한 내 직원에 대해서만 검증할 수 있다. 서버는 저장 전에도 같은 규칙을 재검증한다.
+      x-required-role: WARD_ADMIN
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ValidateAssignmentRequest'
+      responses:
+        '200':
+          description: 검증 결과
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AssignmentValidation'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /rosters/{rosterId}/slots/{slotId}/assignment:
+    parameters:
+      - $ref: '#/components/parameters/RosterId'
+      - $ref: '#/components/parameters/SlotId'
+    put:
+      tags: [Assignments]
+      operationId: assignNurseToSlot
+      summary: 빈 슬롯에 간호사를 배치하거나 배정 수정
+      description: UI 검증 결과는 참고용이며 저장 전 서버가 hard rule을 반드시 재검증한다.
+      x-required-role: WARD_ADMIN
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AssignNurseRequest'
+      responses:
+        '200':
+          description: 배치 저장 및 revision 증가
+          headers:
+            ETag:
+              $ref: '#/components/headers/RosterETag'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Roster'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '412':
+          $ref: '#/components/responses/PreconditionFailed'
+        '422':
+          $ref: '#/components/responses/RuleViolation'
+    delete:
+      tags: [Assignments]
+      operationId: unassignSlot
+      summary: 슬롯의 배정 제거
+      x-required-role: WARD_ADMIN
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+      responses:
+        '204':
+          description: 배정 제거 및 revision 증가
+          headers:
+            ETag:
+              $ref: '#/components/headers/RosterETag'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '412':
+          $ref: '#/components/responses/PreconditionFailed'
+
+  /rosters/{rosterId}/generation-jobs:
+    parameters:
+      - $ref: '#/components/parameters/RosterId'
+    post:
+      tags: [Generation]
+      operationId: startGeneration
+      summary: 월간 자동 배치 시작
+      description: 비동기 작업으로 실행한다. 결과는 비공개 draft이며 자동 확정/공개되지 않는다.
+      x-required-role: WARD_ADMIN
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StartGenerationRequest'
+      responses:
+        '202':
+          description: 작업 접수됨
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenerationJob'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '412':
+          $ref: '#/components/responses/PreconditionFailed'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+
+  /generation-jobs/{jobId}:
+    parameters:
+      - $ref: '#/components/parameters/JobId'
+    get:
+      tags: [Generation]
+      operationId: getGenerationJob
+      summary: 자동 배치 진행 상태와 결과 요약
+      x-required-role: WARD_ADMIN
+      responses:
+        '200':
+          description: 작업 상태
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenerationJob'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /generation-jobs/{jobId}/cancel:
+    parameters:
+      - $ref: '#/components/parameters/JobId'
+    post:
+      tags: [Generation]
+      operationId: cancelGenerationJob
+      summary: 진행 중인 자동 배치 취소
+      x-required-role: WARD_ADMIN
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '202':
+          description: 취소 요청 접수
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenerationJob'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /rosters/{rosterId}/confirm:
+    parameters:
+      - $ref: '#/components/parameters/RosterId'
+    post:
+      tags: [Rosters]
+      operationId: confirmAndPublishRoster
+      summary: 최신 draft 확정 및 활성 달력에 공개 적용
+      description: |
+        한 번의 원자적 명령이다. 최신 hard rules와 revision을 재검증한 뒤 PUBLISHED snapshot을 적용한다.
+        미충원은 허용한다. 미충원이 있으면 관리자는 표시된 부족 인원 수를 확인하고 acknowledgeUnfilledCount에 같은 값을 보내야 한다.
+        확정 전에는 새 draft가 간호사 달력에 보이지 않는다. 기존 공개본은 새 snapshot 적용 전까지 유지된다.
+      x-required-role: WARD_ADMIN
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConfirmRosterRequest'
+      responses:
+        '200':
+          description: 확정되고 활성 달력에 공개 적용된 roster
+          headers:
+            ETag:
+              $ref: '#/components/headers/RosterETag'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RosterSummary'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '412':
+          $ref: '#/components/responses/PreconditionFailed'
+        '422':
+          $ref: '#/components/responses/RuleViolation'
+
+  /wards/{wardId}/published-rosters:
+    parameters:
+      - $ref: '#/components/parameters/WardId'
+    get:
+      tags: [Published calendars]
+      operationId: getPublishedWardCalendar
+      summary: 병동 전체 공개 달력 조회
+      description: |
+        병동 membership과 ward-wide view 권한이 있는 사용자만 가능하다.
+        승인 부재 레코드, 부재 사유, 관리자 메모는 응답하지 않는다.
+        이 응답은 shared/public cache에 저장하지 않는다.
+      x-required-role: WARD_MEMBER
+      parameters:
+        - name: month
+          in: query
+          required: true
+          schema:
+            type: string
+            pattern: '^\\d{4}-(0[1-9]|1[0-2])$'
+            example: '2026-11'
+      responses:
+        '200':
+          description: 공개된 병동 전체 근무표
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+                example: private, no-store
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PublishedWardCalendar'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /wards/{wardId}/published-rosters/mine:
+    parameters:
+      - $ref: '#/components/parameters/WardId'
+    get:
+      tags: [Published calendars]
+      operationId: getMyPublishedCalendar
+      summary: 로그인한 간호사 본인 일정만 조회
+      description: |
+        nurseId를 요청에서 받지 않는다. 인증 토큰의 subject로 본인 일정을 결정한다.
+        응답은 이 사용자에게 배정된 공개 근무만 포함하며 부재 기록/사유는 포함하지 않는다.
+      x-required-role: WARD_MEMBER
+      parameters:
+        - name: month
+          in: query
+          required: true
+          schema:
+            type: string
+            pattern: '^\\d{4}-(0[1-9]|1[0-2])$'
+            example: '2026-11'
+      responses:
+        '200':
+          description: 본인의 공개 근무표
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+                example: private, no-store
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PublishedPersonalCalendar'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: OIDC provider가 발급한 access token. Spring Security Resource Server가 검증한다.
+  parameters:
+    WardId:
+      name: wardId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    RosterId:
+      name: rosterId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    AbsenceId:
+      name: absenceId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    NurseId:
+      name: nurseId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    ShiftTypeId:
+      name: shiftTypeId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    SlotId:
+      name: slotId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    JobId:
+      name: jobId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    IfMatch:
+      name: If-Match
+      in: header
+      required: true
+      description: Strong ETag of the roster revision loaded by the client.
+      schema:
+        type: string
+      example: '"roster-70c0e496-r12"'
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      description: Unique UUID per logical mutation; retrying the same key must not duplicate the operation.
+      schema:
+        type: string
+        format: uuid
+    Page:
+      name: page
+      in: query
+      required: false
+      schema:
+        type: integer
+        minimum: 0
+        default: 0
+    PageSize:
+      name: pageSize
+      in: query
+      required: false
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 50
+  headers:
+    RosterETag:
+      description: Strong revision ETag for subsequent If-Match writes.
+      schema:
+        type: string
+  responses:
+    BadRequest:
+      description: 요청 형식 또는 필드 값 오류
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ApiProblem'
+    Unauthorized:
+      description: 유효한 access token이 없음
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ApiProblem'
+    Forbidden:
+      description: 역할 또는 병동 권한 부족
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ApiProblem'
+    NotFound:
+      description: 리소스가 없거나 현재 사용자가 접근할 수 없음
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ApiProblem'
+    Conflict:
+      description: 중복 roster 또는 상태 충돌
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ApiProblem'
+    PreconditionFailed:
+      description: If-Match revision이 최신이 아님
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ApiProblem'
+    RuleViolation:
+      description: hard rule 위반 또는 정책상 잘못된 변경
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ApiProblem'
+    TooManyRequests:
+      description: 요청 또는 자동 배치 제한 초과
+      headers:
+        Retry-After:
+          schema:
+            type: integer
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ApiProblem'
+    InternalError:
+      description: 내부 오류. 민감정보는 응답에 포함하지 않는다.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ApiProblem'
+  schemas:
+    CurrentUser:
+      type: object
+      required: [userId, displayName, memberships]
+      properties:
+        userId:
+          type: string
+          format: uuid
+        displayName:
+          type: string
+        memberships:
+          type: array
+          items:
+            $ref: '#/components/schemas/WardMembership'
+    WardMembership:
+      type: object
+      required: [wardId, wardName, roles, canViewWardCalendar]
+      properties:
+        wardId:
+          type: string
+          format: uuid
+        wardName:
+          type: string
+        roles:
+          type: array
+          minItems: 1
+          uniqueItems: true
+          items:
+            type: string
+            enum: [WARD_ADMIN, WARD_MEMBER]
+        canViewWardCalendar:
+          type: boolean
+    StaffPage:
+      type: object
+      required: [items, page, pageSize, totalItems]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/StaffMember'
+        page:
+          type: integer
+        pageSize:
+          type: integer
+        totalItems:
+          type: integer
+          minimum: 0
+    StaffInput:
+      type: object
+      additionalProperties: false
+      required: [displayName, qualifications, active]
+      properties:
+        displayName:
+          type: string
+          minLength: 1
+          maxLength: 100
+        qualifications:
+          type: array
+          maxItems: 50
+          uniqueItems: true
+          items:
+            type: string
+            maxLength: 64
+        active:
+          type: boolean
+    StaffMember:
+      type: object
+      required: [nurseId, displayName, qualifications, active]
+      properties:
+        nurseId:
+          type: string
+          format: uuid
+        displayName:
+          type: string
+          maxLength: 100
+        qualifications:
+          type: array
+          items:
+            type: string
+            maxLength: 64
+        active:
+          type: boolean
+    ShiftType:
+      type: object
+      additionalProperties: false
+      required: [shiftTypeId, code, displayName, startTime, endTime, spansMidnight, active]
+      properties:
+        shiftTypeId:
+          type: string
+          format: uuid
+        code:
+          type: string
+          pattern: '^[A-Z0-9_]{1,32}$'
+        displayName:
+          type: string
+          maxLength: 64
+        startTime:
+          type: string
+          format: time
+          example: '19:00:00'
+        endTime:
+          type: string
+          format: time
+          example: '07:00:00'
+        spansMidnight:
+          type: boolean
+        active:
+          type: boolean
+    ShiftTypeInput:
+      type: object
+      additionalProperties: false
+      required: [code, displayName, startTime, endTime, spansMidnight]
+      properties:
+        code:
+          type: string
+          pattern: '^[A-Z0-9_]{1,32}$'
+        displayName:
+          type: string
+          maxLength: 64
+        startTime:
+          type: string
+          format: time
+          example: '19:00:00'
+        endTime:
+          type: string
+          format: time
+          example: '07:00:00'
+        spansMidnight:
+          type: boolean
+        active:
+          type: boolean
+          default: true
+    CreateRosterRequest:
+      type: object
+      additionalProperties: false
+      required: [month]
+      properties:
+        month:
+          type: string
+          pattern: '^\\d{4}-(0[1-9]|1[0-2])$'
+          example: '2026-11'
+    RosterSummary:
+      type: object
+      required: [rosterId, wardId, month, status, revision, timeZone, staffing]
+      properties:
+        rosterId:
+          type: string
+          format: uuid
+        wardId:
+          type: string
+          format: uuid
+        month:
+          type: string
+          pattern: '^\\d{4}-(0[1-9]|1[0-2])$'
+        status:
+          type: string
+          enum: [DRAFT, PUBLISHED]
+        revision:
+          type: integer
+          minimum: 1
+        timeZone:
+          type: string
+          description: IANA time zone identifier
+          example: Asia/Seoul
+        staffing:
+          $ref: '#/components/schemas/StaffingSummary'
+        publishedAt:
+          type: string
+          format: date-time
+        confirmedBy:
+          type: string
+          format: uuid
+    Roster:
+      allOf:
+        - $ref: '#/components/schemas/RosterSummary'
+        - type: object
+          required: [slots]
+          properties:
+            slots:
+              type: array
+              items:
+                $ref: '#/components/schemas/StaffingSlot'
+            diagnostics:
+              type: array
+              description: 관리자 전용. 미충원/규칙 사유이며 간호사 공개 응답에는 포함하지 않는다.
+              items:
+                $ref: '#/components/schemas/RuleDiagnostic'
+    StaffingSummary:
+      type: object
+      required: [required, assigned, unfilled, hardRuleViolations]
+      properties:
+        required:
+          type: integer
+          minimum: 0
+        assigned:
+          type: integer
+          minimum: 0
+        unfilled:
+          type: integer
+          minimum: 0
+        hardRuleViolations:
+          type: integer
+          const: 0
+    StaffingRequirement:
+      type: object
+      additionalProperties: false
+      required: [date, shiftTypeId, requiredCount, requiredQualifications]
+      properties:
+        date:
+          type: string
+          format: date
+        shiftTypeId:
+          type: string
+          format: uuid
+        requiredCount:
+          type: integer
+          minimum: 0
+          maximum: 100
+        requiredQualifications:
+          type: array
+          items:
+            type: string
+            maxLength: 64
+    ReplaceRequirementsRequest:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties:
+        items:
+          type: array
+          maxItems: 1000
+          items:
+            $ref: '#/components/schemas/StaffingRequirement'
+    StaffingSlot:
+      type: object
+      required: [slotId, date, shiftTypeId, startAt, endAt, status]
+      properties:
+        slotId:
+          type: string
+          format: uuid
+        date:
+          type: string
+          format: date
+        shiftTypeId:
+          type: string
+          format: uuid
+        startAt:
+          type: string
+          format: date-time
+        endAt:
+          type: string
+          format: date-time
+        status:
+          type: string
+          enum: [FILLED, UNFILLED]
+        assignment:
+          oneOf:
+            - $ref: '#/components/schemas/Assignment'
+            - type: 'null'
+    Assignment:
+      type: object
+      required: [nurseId, displayName, locked]
+      properties:
+        nurseId:
+          type: string
+          format: uuid
+        displayName:
+          type: string
+          maxLength: 100
+        locked:
+          type: boolean
+    ApprovedAbsence:
+      type: object
+      required: [absenceId, nurseId, kind, startsAt, endsAt]
+      properties:
+        absenceId:
+          type: string
+          format: uuid
+        nurseId:
+          type: string
+          format: uuid
+        kind:
+          type: string
+          enum: [APPROVED_LEAVE, APPROVED_HALF_DAY]
+        startsAt:
+          type: string
+          format: date-time
+        endsAt:
+          type: string
+          format: date-time
+    ApprovedAbsenceInput:
+      type: object
+      additionalProperties: false
+      required: [nurseId, kind, startsAt, endsAt]
+      properties:
+        nurseId:
+          type: string
+          format: uuid
+        kind:
+          type: string
+          enum: [APPROVED_LEAVE, APPROVED_HALF_DAY]
+        startsAt:
+          type: string
+          format: date-time
+        endsAt:
+          type: string
+          format: date-time
+    ValidateAssignmentRequest:
+      type: object
+      additionalProperties: false
+      required: [slotId, nurseId]
+      properties:
+        slotId:
+          type: string
+          format: uuid
+        nurseId:
+          type: string
+          format: uuid
+    AssignmentValidation:
+      type: object
+      required: [allowed, hardViolations, softWarnings, rosterRevision]
+      properties:
+        allowed:
+          type: boolean
+        hardViolations:
+          type: array
+          items:
+            $ref: '#/components/schemas/RuleDiagnostic'
+        softWarnings:
+          type: array
+          items:
+            $ref: '#/components/schemas/RuleDiagnostic'
+        rosterRevision:
+          type: integer
+    AssignNurseRequest:
+      type: object
+      additionalProperties: false
+      required: [nurseId]
+      properties:
+        nurseId:
+          type: string
+          format: uuid
+        locked:
+          type: boolean
+          default: false
+    RuleDiagnostic:
+      type: object
+      required: [code, severity, message]
+      properties:
+        code:
+          type: string
+          maxLength: 64
+        severity:
+          type: string
+          enum: [HARD, SOFT]
+        message:
+          type: string
+          maxLength: 500
+        affectedDate:
+          type: string
+          format: date
+    StartGenerationRequest:
+      type: object
+      additionalProperties: false
+      required: [preserveLockedAssignments]
+      properties:
+        preserveLockedAssignments:
+          type: boolean
+        timeLimitSeconds:
+          type: integer
+          minimum: 1
+          maximum: 600
+          default: 120
+    GenerationJob:
+      type: object
+      required: [jobId, rosterId, status, sourceRosterRevision, createdAt]
+      properties:
+        jobId:
+          type: string
+          format: uuid
+        rosterId:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [QUEUED, RUNNING, COMPLETED, PARTIAL, TIMED_OUT, CANCELLED, FAILED]
+        progressPercent:
+          type: integer
+          minimum: 0
+          maximum: 100
+        sourceRosterRevision:
+          type: integer
+        resultRosterRevision:
+          type: integer
+        staffing:
+          $ref: '#/components/schemas/StaffingSummary'
+        diagnostics:
+          type: array
+          items:
+            $ref: '#/components/schemas/RuleDiagnostic'
+        createdAt:
+          type: string
+          format: date-time
+        finishedAt:
+          type: string
+          format: date-time
+    ConfirmRosterRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        acknowledgeUnfilledCount:
+          type: integer
+          minimum: 0
+          description: 미충원이 있을 때 최신 staffing.unfilled와 일치해야 한다. 미충원 0이면 생략 가능.
+    PublishedWardCalendar:
+      type: object
+      required: [wardId, month, revision, timeZone, staffing, slots]
+      properties:
+        wardId:
+          type: string
+          format: uuid
+        month:
+          type: string
+          pattern: '^\\d{4}-(0[1-9]|1[0-2])$'
+        revision:
+          type: integer
+        timeZone:
+          type: string
+        staffing:
+          $ref: '#/components/schemas/StaffingSummary'
+        slots:
+          type: array
+          items:
+            $ref: '#/components/schemas/StaffingSlot'
+    PublishedPersonalCalendar:
+      type: object
+      required: [wardId, month, revision, timeZone, assignments]
+      properties:
+        wardId:
+          type: string
+          format: uuid
+        month:
+          type: string
+          pattern: '^\\d{4}-(0[1-9]|1[0-2])$'
+        revision:
+          type: integer
+        timeZone:
+          type: string
+        assignments:
+          type: array
+          items:
+            $ref: '#/components/schemas/PersonalAssignment'
+    PersonalAssignment:
+      type: object
+      required: [date, shiftType, startsAt, endsAt]
+      properties:
+        date:
+          type: string
+          format: date
+        shiftType:
+          type: string
+        startsAt:
+          type: string
+          format: date-time
+        endsAt:
+          type: string
+          format: date-time
+    ApiProblem:
+      type: object
+      additionalProperties: true
+      required: [type, title, status, code]
+      properties:
+        type:
+          type: string
+          format: uri-reference
+          example: about:blank
+        title:
+          type: string
+        status:
+          type: integer
+        detail:
+          type: string
+          description: 민감정보나 타 사용자 정보를 포함하지 않는 안전한 안내
+        instance:
+          type: string
+          format: uri-reference
+        code:
+          type: string
+          example: REST_AFTER_NIGHT
+        traceId:
+          type: string
+        currentRevision:
+          type: integer
+        retryable:
+          type: boolean
+        fieldErrors:
+          type: array
+          items:
+            type: object
+            required: [field, message]
+            properties:
+              field:
+                type: string
+              message:
+                type: string
+        ruleViolations:
+          type: array
+          items:
+            $ref: '#/components/schemas/RuleDiagnostic'
