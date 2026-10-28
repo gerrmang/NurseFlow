@@ -39,6 +39,4 @@ For decision-heavy commits, follow the repository's Lore trailer format: intent 
 
 ## GitHub Enforcement Status
 
-NurseFlow currently has no commit and no remote. Branch naming and separation can be followed locally. After a remote is connected, configure `dev` and `main` protection, PR requirements, required CI checks, and approval rules in GitHub. Until then, do not describe these server-side controls as active.
-
-Initial repository bootstrap may create the first shared baseline commit on `main`; after that, feature work starts from `dev` on a work branch.
+The initial documentation baseline is committed and `dev` is based on it. The repository still has no remote. Branch naming and separation can be followed locally. After a remote is connected, configure `dev` and `main` protection, PR requirements, required CI checks, and approval rules in GitHub. Until then, do not describe these server-side controls as active.
