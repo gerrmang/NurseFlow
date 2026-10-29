@@ -1,6 +1,6 @@
 # NurseFlow Git Branch and PR Policy
 
-This adapts the current branch runbook used in [TRI-BE](https://github.com/wingwogus/TRI-BE/blob/dev/docs/runbooks/git-flow.md) and the policy update in [TRI-BE PR #14](https://github.com/wingwogus/TRI-BE/pull/14). NurseFlow's local repository has no remote yet, so this document governs local branches now; GitHub PR enforcement remains a setup step.
+This adapts the current branch runbook used in [TRI-BE](https://github.com/wingwogus/TRI-BE/blob/dev/docs/runbooks/git-flow.md) and the policy update in [TRI-BE PR #14](https://github.com/wingwogus/TRI-BE/pull/14). NurseFlow's `origin` is [gerrmang/NurseFlow](https://github.com/gerrmang/NurseFlow); GitHub PR enforcement remains a setup step until rules and checks are verified.
 
 ## Branch Roles
 
@@ -39,4 +39,4 @@ For decision-heavy commits, follow the repository's Lore trailer format: intent 
 
 ## GitHub Enforcement Status
 
-The initial documentation baseline is committed and `dev` is based on it. The repository still has no remote. Branch naming and separation can be followed locally. After a remote is connected, configure `dev` and `main` protection, PR requirements, required CI checks, and approval rules in GitHub. Until then, do not describe these server-side controls as active.
+The initial documentation baseline is committed, and `dev` and `main` exist locally and on `origin`. Configure `dev` and `main` protection, PR requirements, required CI checks, and approval rules in GitHub. Do not describe these server-side controls as active until verified.
