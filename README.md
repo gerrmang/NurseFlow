@@ -12,6 +12,8 @@
 
 The Android and web clients share one backend API. The Android prototype currently uses fictional in-process data; its edits are not yet saved to the server. The API requires OIDC configuration and provisioned ward data before end-to-end use. See [MVP scope](docs/mvp-scope.md) and [Claude development handoff](docs/claude-development-handoff.md).
 
+The backend and Android project checkpoint is on `feat/roster-rule-validator`. Select that branch when cloning from GitHub; `main` and `dev` currently contain the planning baseline only.
+
 ## Local development
 
 1. Open `backend/` in IntelliJ IDEA with JDK 21. Run `./gradlew test` in that directory. Configure `NURSEFLOW_OIDC_ISSUER_URI` and `NURSEFLOW_OIDC_AUDIENCE` before starting `bootRun`.
