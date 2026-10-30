@@ -1,5 +1,6 @@
 package com.nurseflow.roster.application.service
 
+import tools.jackson.core.type.TypeReference
 import tools.jackson.databind.json.JsonMapper
 import com.nurseflow.common.error.ApiException
 import com.nurseflow.roster.api.dto.request.*
@@ -10,6 +11,8 @@ import com.nurseflow.roster.domain.model.RuleSeverity
 import com.nurseflow.roster.domain.model.ShiftAssignment
 import com.nurseflow.roster.domain.model.ShiftKind
 import com.nurseflow.roster.domain.rule.RosterRuleValidator
+import com.nurseflow.roster.persistence.entity.DbAbsence
+import com.nurseflow.roster.persistence.entity.DbGenerationJob
 import com.nurseflow.roster.persistence.entity.DbNurse
 import com.nurseflow.roster.persistence.entity.DbRoster
 import com.nurseflow.roster.persistence.entity.DbSlot
@@ -30,6 +33,7 @@ class RosterService(
     private val mapper: JsonMapper,
 ) {
     private val validator = RosterRuleValidator()
+    private val diagnosticList = object : TypeReference<List<RuleDiagnostic>>() {}
 
     fun etag(rosterId: UUID, revision: Int): String = "roster-$rosterId-r$revision"
 
@@ -117,7 +121,7 @@ class RosterService(
     @Transactional(readOnly = true)
     fun listAbsences(rosterId: UUID, subject: String): List<ApprovedAbsenceView> {
         visibleToAdmin(rosterId, subject)
-        return repo.absences(rosterId)
+        return repo.absences(rosterId).map(::absenceView)
     }
 
     @Transactional
@@ -147,7 +151,7 @@ class RosterService(
         rosterId: UUID, absenceId: UUID, ifMatch: String, input: ApprovedAbsenceInput, subject: String,
     ): AbsenceMutation {
         val roster = lockedDraft(rosterId, ifMatch, subject)
-        if (repo.absences(roster.id).none { it.absenceId == absenceId }) {
+        if (repo.absences(roster.id).none { it.id == absenceId }) {
             fail(HttpStatus.NOT_FOUND, "ABSENCE_NOT_FOUND", "부재 일정을 찾을 수 없습니다.")
         }
         validateAbsence(roster, input)
@@ -286,7 +290,7 @@ class RosterService(
         val rosterId = repo.jobRosterId(jobId)
             ?: fail(HttpStatus.NOT_FOUND, "GENERATION_JOB_NOT_FOUND", "자동배치 작업을 찾을 수 없습니다.")
         visibleToAdmin(rosterId, subject)
-        return repo.readGenerationJob(jobId)
+        return readGenerationJob(jobId)
             ?: fail(HttpStatus.NOT_FOUND, "GENERATION_JOB_NOT_FOUND", "자동배치 작업을 찾을 수 없습니다.")
     }
 
@@ -298,13 +302,13 @@ class RosterService(
         val action = "cancel-generation:$jobId"
         replay(idempotencyKey, action, jobId, GenerationJob::class.java)?.let { return it }
         repo.lockGenerationJob(jobId)
-        val job = repo.readGenerationJob(jobId)
+        val job = readGenerationJob(jobId)
             ?: fail(HttpStatus.NOT_FOUND, "GENERATION_JOB_NOT_FOUND", "자동배치 작업을 찾을 수 없습니다.")
         if (job.status !in setOf("QUEUED", "RUNNING")) {
             fail(HttpStatus.CONFLICT, "GENERATION_NOT_CANCELLABLE", "이미 종료된 자동배치 작업입니다.")
         }
         if (job.status == "QUEUED") repo.cancelQueuedJob(jobId) else repo.requestCancel(jobId)
-        val result = repo.readGenerationJob(jobId)!!
+        val result = readGenerationJob(jobId)!!
         recordReplay(idempotencyKey, action, jobId, result)
         return result
     }
@@ -317,12 +321,12 @@ class RosterService(
 
     @Transactional
     fun processGeneration(jobId: UUID) {
-        val initial = repo.readGenerationJob(jobId) ?: return
+        val initial = readGenerationJob(jobId) ?: return
         if (initial.status != "RUNNING") return
         val requestedBy = repo.generationRequestedBy(jobId)
         val roster = lockAuthorizedRoster(initial.rosterId, requestedBy)
         if (roster.status != "DRAFT" || roster.revision != initial.sourceRosterRevision) {
-            repo.finishGeneration(
+            finishGeneration(
                 jobId, "FAILED", null, null,
                 listOf(RuleDiagnostic("STALE_ROSTER_REVISION", "HARD", "근무표가 변경되어 자동배치를 적용하지 않았습니다.")),
             )
@@ -346,7 +350,7 @@ class RosterService(
             }
         }
         if (preexistingViolations.isNotEmpty()) {
-            repo.finishGeneration(jobId, "FAILED", null, null, preexistingViolations.distinctBy { it.code to it.affectedDate })
+            finishGeneration(jobId, "FAILED", null, null, preexistingViolations.distinctBy { it.code to it.affectedDate })
             return
         }
         val counts = preserved.groupingBy { it.nurseId!! }.eachCount().toMutableMap()
@@ -380,7 +384,7 @@ class RosterService(
             }
         }
         if (cancelled || repo.generationCancelled(jobId)) {
-            repo.finishGeneration(jobId, "CANCELLED", null, null, emptyList())
+            finishGeneration(jobId, "CANCELLED", null, null, emptyList())
             return
         }
         if (preserveLocked) repo.clearUnlockedAssignments(roster.id) else repo.clearAllAssignments(roster.id)
@@ -410,7 +414,7 @@ class RosterService(
             staffing.unfilled > 0 -> "PARTIAL"
             else -> "COMPLETED"
         }
-        repo.finishGeneration(jobId, status, roster.revision + 1, staffing, diagnostics)
+        finishGeneration(jobId, status, roster.revision + 1, staffing, diagnostics)
     }
 
     @Transactional(readOnly = true)
@@ -550,6 +554,37 @@ class RosterService(
     private fun ensureDraft(roster: DbRoster) {
         if (roster.status != "DRAFT") fail(HttpStatus.CONFLICT, "NOT_DRAFT", "확정된 근무표는 수정할 수 없습니다.")
     }
+
+    private fun absenceView(absence: DbAbsence) = ApprovedAbsenceView(
+        absence.id, absence.nurseId, absence.kind, absence.startsAt, absence.endsAt,
+    )
+
+    private fun readGenerationJob(jobId: UUID): GenerationJob? = repo.readGenerationJob(jobId)?.let(::generationJobView)
+
+    private fun generationJobView(job: DbGenerationJob) = GenerationJob(
+        jobId = job.jobId,
+        rosterId = job.rosterId,
+        status = job.status,
+        sourceRosterRevision = job.sourceRevision,
+        createdAt = job.createdAt,
+        progressPercent = when (job.status) {
+            "QUEUED" -> 0
+            "RUNNING" -> null
+            else -> 100
+        },
+        resultRosterRevision = job.resultRevision,
+        staffing = job.staffingJson?.let { mapper.readValue(it, StaffingSummary::class.java) },
+        diagnostics = job.diagnosticsJson?.let { mapper.readValue(it, diagnosticList) } ?: emptyList(),
+        finishedAt = job.finishedAt,
+    )
+
+    private fun finishGeneration(
+        jobId: UUID, status: String, resultRevision: Int?,
+        staffing: StaffingSummary?, diagnostics: List<RuleDiagnostic>,
+    ) = repo.finishGeneration(
+        jobId, status, resultRevision,
+        staffing?.let(mapper::writeValueAsString), mapper.writeValueAsString(diagnostics),
+    )
 
     private fun <T> replay(key: UUID, action: String, payload: Any, type: Class<T>): T? =
         repo.replay(key, action, requestHash(payload), type)

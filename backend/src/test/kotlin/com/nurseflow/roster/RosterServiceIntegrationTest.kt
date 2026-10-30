@@ -207,6 +207,29 @@ class RosterServiceIntegrationTest @Autowired constructor(
         assertEquals(1, service.listAbsences(original.rosterId, admin).size)
     }
 
+    @Test
+    fun `assign replays the same idempotency key without a second mutation`() {
+        val secondNurse = UUID.randomUUID()
+        jdbc.update("INSERT INTO nurses(nurse_id,ward_id,subject,display_name,qualifications,active) VALUES(?,?,?,?,?,TRUE)",
+            secondNurse, wardId, "test-nurse-2", "간호사 2", "[]")
+        val draft = newRoster("2026-11", LocalDate.parse("2026-11-02"), dayTypeId)
+        val key = UUID.randomUUID()
+        val slotId = draft.slots.single().slotId
+
+        val first = service.assign(draft.rosterId, slotId, tag(draft), key, AssignNurseRequest(nurseId), admin)
+        val replayed = service.assign(draft.rosterId, slotId, tag(draft), key, AssignNurseRequest(nurseId), admin)
+        assertEquals(first, replayed)
+        assertEquals(draft.revision + 1, service.getRoster(draft.rosterId, admin).revision)
+
+        val reused = assertThrows(ApiException::class.java) {
+            service.assign(draft.rosterId, slotId, tag(draft), key, AssignNurseRequest(secondNurse), admin)
+        }
+        assertEquals("IDEMPOTENCY_KEY_REUSED", reused.code)
+        val current = service.getRoster(draft.rosterId, admin)
+        assertEquals(draft.revision + 1, current.revision)
+        assertEquals(nurseId, current.slots.single().assignment?.nurseId)
+    }
+
     private fun newRoster(month: String, date: LocalDate, shiftTypeId: UUID): RosterView {
         val draft = service.createRoster(wardId, CreateRosterRequest(month), admin, UUID.randomUUID())
         service.replaceRequirements(draft.rosterId, tag(draft), ReplaceRequirementsRequest(listOf(

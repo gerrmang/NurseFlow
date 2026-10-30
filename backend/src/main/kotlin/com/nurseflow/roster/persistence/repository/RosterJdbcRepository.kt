@@ -1,11 +1,9 @@
 package com.nurseflow.roster.persistence.repository
 
 import com.nurseflow.common.error.ApiException
-import com.nurseflow.roster.api.dto.response.ApprovedAbsenceView
-import com.nurseflow.roster.api.dto.response.GenerationJob
-import com.nurseflow.roster.api.dto.response.RuleDiagnostic
-import com.nurseflow.roster.api.dto.response.StaffingSummary
 import com.nurseflow.roster.domain.model.ShiftKind
+import com.nurseflow.roster.persistence.entity.DbAbsence
+import com.nurseflow.roster.persistence.entity.DbGenerationJob
 import com.nurseflow.roster.persistence.entity.DbNurse
 import com.nurseflow.roster.persistence.entity.DbRoster
 import com.nurseflow.roster.persistence.entity.DbSlot
@@ -202,14 +200,9 @@ class RosterJdbcRepository(
 
     // ── Absences ──
 
-    fun absences(rosterId: UUID): List<ApprovedAbsenceView> = jdbc.query(
+    fun absences(rosterId: UUID): List<DbAbsence> = jdbc.query(
         "SELECT absence_id,nurse_id,kind,starts_at,ends_at FROM approved_absences WHERE roster_id=? ORDER BY starts_at",
-        { rs, _ ->
-            ApprovedAbsenceView(
-                uuid(rs, "absence_id"), uuid(rs, "nurse_id"), rs.getString("kind"),
-                Instant.parse(rs.getString("starts_at")), Instant.parse(rs.getString("ends_at")),
-            )
-        }, rosterId,
+        { rs, _ -> mapAbsence(rs) }, rosterId,
     )
 
     fun insertAbsence(id: UUID, rosterId: UUID, nurseId: UUID, kind: String, startsAt: Instant, endsAt: Instant) {
@@ -229,16 +222,11 @@ class RosterJdbcRepository(
     fun deleteAbsence(absenceId: UUID, rosterId: UUID): Boolean =
         jdbc.update("DELETE FROM approved_absences WHERE absence_id=? AND roster_id=?", absenceId, rosterId) > 0
 
-    fun adjacentPublishedAbsences(wardId: UUID, month: String): List<ApprovedAbsenceView> = jdbc.query(
+    fun adjacentPublishedAbsences(wardId: UUID, month: String): List<DbAbsence> = jdbc.query(
         """SELECT a.absence_id,a.nurse_id,a.kind,a.starts_at,a.ends_at FROM approved_absences a
             JOIN rosters r ON r.roster_id=a.roster_id
             WHERE r.ward_id=? AND r.active=TRUE AND r.status='PUBLISHED' AND r.roster_month<>?""",
-        { rs, _ ->
-            ApprovedAbsenceView(
-                uuid(rs, "absence_id"), uuid(rs, "nurse_id"), rs.getString("kind"),
-                Instant.parse(rs.getString("starts_at")), Instant.parse(rs.getString("ends_at")),
-            )
-        }, wardId, month,
+        { rs, _ -> mapAbsence(rs) }, wardId, month,
     )
 
     fun adjacentPublishedRosterIds(wardId: UUID, month: String): List<UUID> = jdbc.query(
@@ -253,25 +241,18 @@ class RosterJdbcRepository(
         { rs, _ -> uuid(rs, "roster_id") }, jobId,
     ).firstOrNull()
 
-    fun readGenerationJob(jobId: UUID): GenerationJob? = jdbc.query(
+    fun readGenerationJob(jobId: UUID): DbGenerationJob? = jdbc.query(
         "SELECT * FROM generation_jobs WHERE job_id=?",
         { rs, _ ->
-            GenerationJob(
+            DbGenerationJob(
                 jobId = uuid(rs, "job_id"),
                 rosterId = uuid(rs, "roster_id"),
                 status = rs.getString("status"),
-                sourceRosterRevision = rs.getInt("source_revision"),
+                sourceRevision = rs.getInt("source_revision"),
                 createdAt = Instant.parse(rs.getString("created_at")),
-                progressPercent = when (rs.getString("status")) {
-                    "QUEUED" -> 0
-                    "RUNNING" -> null
-                    else -> 100
-                },
-                resultRosterRevision = rs.getObject("result_revision")?.let { rs.getInt("result_revision") },
-                staffing = rs.getString("staffing_json")?.let { mapper.readValue(it, StaffingSummary::class.java) },
-                diagnostics = rs.getString("diagnostics_json")?.let {
-                    mapper.readValue(it, object : TypeReference<List<RuleDiagnostic>>() {})
-                } ?: emptyList(),
+                resultRevision = rs.getObject("result_revision")?.let { rs.getInt("result_revision") },
+                staffingJson = rs.getString("staffing_json"),
+                diagnosticsJson = rs.getString("diagnostics_json"),
                 finishedAt = rs.getString("finished_at")?.let(Instant::parse),
             )
         }, jobId,
@@ -325,13 +306,12 @@ class RosterJdbcRepository(
 
     fun finishGeneration(
         jobId: UUID, status: String, resultRevision: Int?,
-        staffing: StaffingSummary?, diagnostics: List<RuleDiagnostic>,
+        staffingJson: String?, diagnosticsJson: String,
     ) {
         jdbc.update(
             """UPDATE generation_jobs SET status=?,result_revision=?,staffing_json=?,diagnostics_json=?,finished_at=?
                 WHERE job_id=?""",
-            status, resultRevision, staffing?.let(mapper::writeValueAsString),
-            mapper.writeValueAsString(diagnostics), Instant.now().toString(), jobId,
+            status, resultRevision, staffingJson, diagnosticsJson, Instant.now().toString(), jobId,
         )
     }
 
@@ -380,6 +360,11 @@ class RosterJdbcRepository(
         rs.getString("roster_month"), rs.getString("status"), rs.getInt("revision"),
         ZoneId.of(rs.getString("time_zone")),
         rs.getString("published_at")?.let(Instant::parse), rs.getString("confirmed_by"),
+    )
+
+    private fun mapAbsence(rs: ResultSet) = DbAbsence(
+        uuid(rs, "absence_id"), uuid(rs, "nurse_id"), rs.getString("kind"),
+        Instant.parse(rs.getString("starts_at")), Instant.parse(rs.getString("ends_at")),
     )
 
     private fun uuid(rs: ResultSet, column: String): UUID = UUID.fromString(rs.getString(column))
