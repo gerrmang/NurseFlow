@@ -10,9 +10,10 @@
 5. 초대받지 않은 Kakao 로그인 사용자와 다른 병동 사용자의 데이터 접근 0건.
 6. Android와 웹이 확정 후 같은 활성 공개 revision을 조회.
 7. 비교 가능한 **후속 파일럿**에서 전체 월간 작업시간 <= 엑셀 기준 50%.
+8. 팀별 경력 구성 최적화가 hard rule·필요 인원 충원보다 우선하지 않으며, 미달 사유와 실제 단계 분포가 관리자에게 재현 가능하게 표시됨.
 
 ## P0 정책 계약 (모든 fixture에 버전 기록)
-병원/병동·timezone, 월간 시간 범위 및 인접 월 조건, 실제 근무 시작/종료, 직원 자격/수요, 휴가·반차 interval 경계, 휴식 규칙, hard/soft 정책과 버전, fairness 산식/적격집단/분모, 기존 고정배치 처리, 미충원 확인/공개 정책, 생성 시간제한·status, 권한·공개 범위.
+병원/병동·팀·timezone, 월간 시간 범위 및 인접 월 조건, 실제 근무 시작/종료, 직원 자격/팀별 수요, 병동 관리자가 설정한 근무연차·직급의 1~5단계 변환 정책 버전과 프로필 확인 상태, 휴가·반차 interval 경계, 휴식 규칙, hard/soft 정책과 버전, 경력 구성·fairness 산식/적격집단/분모, 기존 고정배치 처리, 미충원 확인/공개 정책, 생성 시간제한·status, 권한·공개 범위.
 
 ## Golden fixtures
 - 전일 휴가, 오전/오후 반차; 근무와 정확히 맞닿거나 겹치는 interval.
@@ -20,6 +21,8 @@
 - 전월 말 나이트→당월 1일 데이, 당월 말 나이트→익월 데이.
 - 휴가/자격/필요인력 충돌로 인한 shortage.
 - 가용 시간·계약량·야간 자격이 다른 직원의 fairness 비교.
+- 같은 병동 A/B팀의 경력 단계 1~5, 근무별 필요 인원 2·3·5명, 한 단계 인원 부족, 휴가·반차·Night 휴식으로 특정 단계가 불가한 경우. 단계 다양성 목표가 충원·hard rule과 충돌하면 미충원과 경력 구성 미달을 구분한다.
+- 간호사가 입력한 근무연차·직급이 관리자 확인 전이거나 확인 후 수정된 경우, 병동 단계 기준이 변경된 경우. 미확인 입력이 경력 구성 점수에 들어가지 않고 관리자에게 표시되는지 확인한다.
 - hard rules와 soft goals가 상충하는 사례.
 - 알려진 feasible/infeasible 작은 모델 및 솔버 timeout.
 - 재생성 시 고정 배치, 정책 변경, 생성 중 최신 데이터 변경.
@@ -31,6 +34,8 @@
 - interval overlap, boundary, overnight, timezone, 월말·월초.
 - 동일 validator의 rule code/설명 및 hard-before-soft 우선.
 - fairness 산식 및 적격집합의 결정성.
+- 근무연차·직급의 단계 계산 경계값과 팀별 경력 분포 점수의 결정성. 5명 미만 근무에 1~5단계 전원 배치를 강제하지 않는지 확인.
+- 병동별 연차·직급 정책이 다를 때 같은 입력의 단계 계산, 정책 변경 후 재계산·초안 재검증, 확인되지 않은 프로필의 점수 제외.
 - 빈/중복/누락 일정 입력 처리.
 - 모든 생성 결과는 독립 validator 통과 또는 폐기/오류 상태.
 - 작은 모델은 exhaustive oracle로 feasible/optimality/infeasible status 확인.
@@ -42,15 +47,17 @@
 - 변경된 policy/leave/staff revision이 stale 초안을 무효화.
 - 거부 시 수정은 원자적으로 반영되지 않으며 설명 제공.
 - shortage 상태, 생성 status, 이유가 API/UI에서 일치.
+- 동일 날짜·근무의 팀별 경력 구성 진단이 자동·수동 편성 결과와 일치하며, 단계 미달만으로 배치·확정을 거부하지 않음.
 - 공개 스냅샷 및 재공개 revision 관리.
 - 서버에서 role·hospital·ward membership 확인; URL/object ID 변조 테스트.
 - Kakao 로그인만 완료한 사용자는 병동 조회 거부; 초대 수락으로 사용자·membership·간호사 연결을 원자적으로 생성. 자기 권한 승격과 초대 재사용 거부.
 - logs/export/errors에 사유·건강정보·타 병동 데이터가 남지 않는지 확인.
+- 간호사의 근무연차·직급 입력은 본인 프로필만 수정할 수 있고 관리자 확인 권한은 병동 관리자에게만 있다. 간호사 공개 근무표 응답에 개인 경력 프로필·확인 기록이 섞이지 않는지 확인.
 
 ## E2E
 1. 관리자가 병동 초대 링크를 발급하고, Kakao 로그인 사용자가 수락해 소속·역할을 얻는다. 초대 전에는 병동 자료가 보이지 않는다.
 2. 관리자가 월 설정, 인원/수요, 승인 부재를 입력하고 자동 초안 생성.
-3. 불가/미충원/fairness 이유 확인, 수동 수정 후 재검증.
+3. 불가/미충원/팀별 경력 구성/fairness 이유 확인, 수동 수정 후 재검증.
 4. draft는 간호사에게 숨기고, manager confirm 성공 시 활성 달력으로 공개. 기존 public revision은 새 draft 생성 중 그대로 노출.
 5. 필요 인원으로 생성된 근무 칸이 없는 초안은 확정 불가. 미충원 표는 확정 가능하며 부족 슬롯/인원을 관리자가 확인했다는 기록을 남기고, hard rule 위반은 계속 차단.
 6. 게시 후 변경은 새 revision으로 진행, stale 변경은 덮어쓰지 않음.
@@ -77,4 +84,4 @@ P0에서 최대 직원·월 슬롯·동시 관리자 규모와 SLO를 고정한 
 - 목표 <= 기준 시간 50%와 동시에 hard-rule/권한/게시 게이트를 통과해야 성공.
 
 ## 요구사항 연결
-휴가/반차/야간 휴식 -> boundary fixtures; fairness -> fairness oracle; 미충원/진단 상태 -> shortage+timeout cases; 관리자 공개 -> lifecycle E2E; 개인정보/권한 -> API/export/log tests; 시간 목표 -> pilot protocol.
+휴가/반차/야간 휴식 -> boundary fixtures; 팀별 경력 구성 -> 단계 계산·분포 fixture; fairness -> fairness oracle; 미충원/진단 상태 -> shortage+timeout cases; 관리자 공개 -> lifecycle E2E; 개인정보/권한 -> API/export/log tests; 시간 목표 -> pilot protocol.
