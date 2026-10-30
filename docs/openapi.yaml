@@ -11,7 +11,8 @@ info:
     이 파일에는 아직 해당 endpoint/schema를 반영하지 않았다. 해당 부분은 구현 전 계약 확정이 필요하다.
     병동 내 팀별 편성 및 관리자 확인을 거친 근무연차·직급의 1~5 경력 단계 구성 목표도
     docs/mvp-scope.md에 추가되었다. 현재 StaffInput/StaffMember와 근무 수요 스키마에는
-    팀·프로필·단계 정책·경력 구성 진단 필드가 없으므로 관련 기능 구현 전에 계약을 확장해야 한다.
+    팀·프로필·단계 정책·경력 구성 진단·관리자 허용형 팀 간 지원근무 필드가 없으므로
+    관련 기능 구현 전에 계약을 확장해야 한다.
 servers:
   - url: /api/v1
     description: API base path (host is environment-specific)
