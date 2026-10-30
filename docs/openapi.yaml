@@ -659,6 +659,7 @@ paths:
       summary: 최신 draft 확정 및 활성 달력에 공개 적용
       description: |
         한 번의 원자적 명령이다. 최신 hard rules와 revision을 재검증한 뒤 PUBLISHED snapshot을 적용한다.
+        필요 인원으로 생성된 근무 칸이 하나도 없는 draft는 ROSTER_REQUIREMENTS_REQUIRED 오류로 확정할 수 없다.
         미충원은 허용한다. 미충원이 있으면 관리자는 표시된 부족 인원 수를 확인하고 acknowledgeUnfilledCount에 같은 값을 보내야 한다.
         확정 전에는 새 draft가 간호사 달력에 보이지 않는다. 기존 공개본은 새 snapshot 적용 전까지 유지된다.
       x-required-role: WARD_ADMIN

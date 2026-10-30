@@ -90,9 +90,15 @@ class RosterService(
                 Int::class.java, wardId, request.month)!! > 0) {
             fail(HttpStatus.CONFLICT, "DRAFT_EXISTS", "해당 월의 초안이 이미 있습니다.")
         }
+        val publishedAbsences = activePublished(wardId, request.month)?.let { absences(it.id) }.orEmpty()
         val id = UUID.randomUUID()
         jdbc.update("INSERT INTO rosters(roster_id,ward_id,roster_month,status,active,revision) VALUES(?,?,?,'DRAFT',FALSE,1)",
             id, wardId, request.month)
+        publishedAbsences.forEach { absence ->
+            jdbc.update("INSERT INTO approved_absences(absence_id,roster_id,nurse_id,kind,starts_at,ends_at) VALUES(?,?,?,?,?,?)",
+                UUID.randomUUID(), id, absence.nurseId, absence.kind,
+                absence.startsAt.toString(), absence.endsAt.toString())
+        }
         return view(findRoster(id)!!).also { recordReplay(idempotencyKey, action, request, it) }
     }
 
@@ -263,6 +269,9 @@ class RosterService(
         checkRevision(roster, ifMatch)
         ensureDraft(roster)
         val currentSlots = slots(roster.id)
+        if (currentSlots.isEmpty()) {
+            fail(HttpStatus.UNPROCESSABLE_CONTENT, "ROSTER_REQUIREMENTS_REQUIRED", "필요 인원을 설정한 뒤 확정해 주세요.")
+        }
         val unfilled = currentSlots.count { it.nurseId == null }
         if (unfilled > 0 && request.acknowledgeUnfilledCount != unfilled) {
             fail(HttpStatus.UNPROCESSABLE_CONTENT, "UNFILLED_ACK_REQUIRED", "미충원 인원 수를 확인해 주세요.")

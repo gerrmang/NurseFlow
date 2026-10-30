@@ -12,7 +12,7 @@
 
 The Android and web clients share one backend API. The Android prototype currently uses fictional in-process data; its edits are not yet saved to the server. The API requires OIDC configuration and provisioned ward data before end-to-end use. See [MVP scope](docs/mvp-scope.md) and [Claude development handoff](docs/claude-development-handoff.md).
 
-The backend and Android project checkpoint is on `feat/roster-rule-validator`. Select that branch when cloning from GitHub; `main` and `dev` currently contain the planning baseline only.
+Choose the branch that contains the work you need when cloning. New feature work starts from the latest reviewed `dev`; the `main` branch is updated through a release PR. See [Git policy](docs/runbooks/git-flow.md) and [Claude next stage](docs/claude-next-stage.md).
 
 ## Local development
 

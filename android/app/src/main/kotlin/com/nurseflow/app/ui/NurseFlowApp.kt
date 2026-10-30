@@ -58,6 +58,8 @@ import com.nurseflow.app.R
 import com.nurseflow.app.ui.theme.NurseFlowColors as C
 import java.time.LocalDate
 import java.time.YearMonth
+import java.time.DayOfWeek
+import java.time.temporal.TemporalAdjusters
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
@@ -73,6 +75,7 @@ private data class Nurse(val id: String, val name: String, val title: String = "
 private data class Candidate(val nurse: Nurse, val eligible: Boolean, val detail: String)
 
 private class DemoRoster {
+    val sampleMonth: YearMonth = YearMonth.of(2026, 11)
     val nurses = listOf(
         Nurse("haneul", "김하늘", "책임"), Nurse("seoyeon", "이서연"),
         Nurse("jimin", "박지민"), Nurse("yuna", "최유나"),
@@ -81,8 +84,10 @@ private class DemoRoster {
     val draft = mutableStateMapOf<Pair<String, LocalDate>, Shift>()
     val published = mutableStateMapOf<Pair<String, LocalDate>, Shift>()
     val absence = mutableStateMapOf<Pair<String, LocalDate>, String>()
+    val publishedAbsence = mutableStateMapOf<Pair<String, LocalDate>, String>()
     var draftVersion by mutableIntStateOf(4)
     var publishedVersion by mutableIntStateOf(3)
+    var publishedAt by mutableStateOf(LocalDate.of(2026, 10, 25))
 
     init {
         val rows = listOf(
@@ -108,12 +113,13 @@ private class DemoRoster {
         draft["haneul" to LocalDate.of(2026, 11, 10)] = Shift.DAY
         draft["daeun" to LocalDate.of(2026, 11, 9)] = Shift.NIGHT
         published.putAll(draft)
+        publishedAbsence.putAll(absence)
         published["jimin" to LocalDate.of(2026, 11, 23)] = Shift.OFF
         published["haneul" to LocalDate.of(2026, 11, 2)] = Shift.DAY
     }
 
     fun visibleShift(id: String, date: LocalDate, public: Boolean): String {
-        val leave = absence[id to date]
+        val leave = (if (public) publishedAbsence else absence)[id to date]
         if (leave != null) return when (leave) {
             "휴가" -> "휴"
             "오전 반차" -> "AM"
@@ -147,7 +153,10 @@ private class DemoRoster {
     fun publish() {
         published.clear()
         published.putAll(draft)
+        publishedAbsence.clear()
+        publishedAbsence.putAll(absence)
         publishedVersion = draftVersion
+        publishedAt = LocalDate.now()
     }
 }
 
@@ -776,7 +785,8 @@ private fun NurseRosterScreen(
     roster: DemoRoster, ward: String, month: YearMonth, wholeWard: Boolean,
     onToggle: (Boolean) -> Unit, onMonthChange: (Int) -> Unit, onWard: () -> Unit
 ) {
-    var selectedDay by rememberSaveable { mutableIntStateOf(4) }
+    var selectedDay by rememberSaveable(month.toString()) { mutableIntStateOf(if (month == roster.sampleMonth) 4 else 1) }
+    val hasPublishedRoster = month == roster.sampleMonth
     Column(Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
         Spacer(Modifier.height(12.dp))
         Label("$ward  ▾", 12, C.secondary, modifier = Modifier.clickable(onClick = onWard))
@@ -793,48 +803,92 @@ private fun NurseRosterScreen(
             TabChoice("병동 전체", wholeWard, Modifier.weight(1f)) { onToggle(true) }
         }
         Spacer(Modifier.height(12.dp))
-        if (!wholeWard) {
-            StatusBanner("${month.monthValue}월 근무표 · 10월 25일 공개 (v${roster.publishedVersion})", true)
-            Spacer(Modifier.height(12.dp))
-            Column(Modifier.fillMaxWidth().background(C.brand, RoundedCornerShape(16.dp)).padding(16.dp)) {
-                Label("다음 근무", 12, Color.White)
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Column(Modifier.weight(1f)) { Label("11월 2일 (월) · Day", 18, Color.White, true); Label("07:00 – 15:00", 13, Color.White) }
-                    ShiftChip("D", 28)
-                }
+        if (!hasPublishedRoster) {
+            CardBox(Modifier.fillMaxWidth()) {
+                Label("${month.monthValue}월에 공개된 근무표가 없어요", 16, C.text, true)
+                Spacer(Modifier.height(5.dp))
+                Label("관리자가 근무표를 확정하면 이곳에서 볼 수 있어요.", 13, C.secondary)
             }
+        } else if (!wholeWard) {
+            StatusBanner("${month.monthValue}월 근무표 · ${roster.publishedAt.monthValue}월 ${roster.publishedAt.dayOfMonth}일 공개 (v${roster.publishedVersion})", true)
             Spacer(Modifier.height(12.dp))
+            val next = roster.published.entries.asSequence()
+                .filter { (key, shift) -> key.first == "haneul" && YearMonth.from(key.second) == month &&
+                    key.second >= LocalDate.now() && shift != Shift.OFF }
+                .minByOrNull { it.key.second }
+            if (next != null) {
+                Column(Modifier.fillMaxWidth().background(C.brand, RoundedCornerShape(16.dp)).padding(16.dp)) {
+                    Label("다음 근무", 12, Color.White)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        val date = next.key.second
+                        val shift = next.value
+                        Column(Modifier.weight(1f)) {
+                            Label("${date.monthValue}월 ${date.dayOfMonth}일 (${koreanWeekday(date)}) · ${shift.label}", 18, Color.White, true)
+                            Label(shift.hours, 13, Color.White)
+                        }
+                        ShiftChip(shift.short, 28)
+                    }
+                }
+                Spacer(Modifier.height(12.dp))
+            }
             OwnCalendar(roster, month)
         } else {
+            val firstMonday = month.atDay(1).with(TemporalAdjusters.nextOrSame(DayOfWeek.MONDAY))
+            val weekDates = (0..6).map { firstMonday.plusDays(it.toLong()) }
+            val selectedDate = month.atDay(selectedDay.coerceIn(1, month.lengthOfMonth()))
             Spacer(Modifier.height(2.dp))
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-                (2..8).forEach { day ->
-                    Column(Modifier.weight(1f).background(if (day == selectedDay) C.brand else C.surface, RoundedCornerShape(12.dp))
-                        .clickable { selectedDay = day }.padding(vertical = 8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                        Label(koreanWeekday(LocalDate.of(2026, 11, day)), 11, if (day == selectedDay) Color.White else C.secondary)
-                        Label("$day", 16, if (day == selectedDay) Color.White else C.text, true)
+                weekDates.forEach { date ->
+                    Column(Modifier.weight(1f).background(if (date == selectedDate) C.brand else C.surface, RoundedCornerShape(12.dp))
+                        .clickable { selectedDay = date.dayOfMonth }.padding(vertical = 8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                        Label(koreanWeekday(date), 11, if (date == selectedDate) Color.White else C.secondary)
+                        Label("${date.dayOfMonth}", 16, if (date == selectedDate) Color.White else C.text, true)
                     }
                 }
             }
             Spacer(Modifier.height(12.dp))
-            Label("11월 ${selectedDay}일 (${koreanWeekday(LocalDate.of(2026, 11, selectedDay))})", 16, C.text, true)
+            Label("${selectedDate.monthValue}월 ${selectedDate.dayOfMonth}일 (${koreanWeekday(selectedDate)})", 16, C.text, true)
             Spacer(Modifier.height(10.dp))
-            listOf(Triple("D", "Day 07–15", "윤가은  강민서  서지우"), Triple("E", "Evening 15–23", "김하늘  오세린  문채원"), Triple("N", "Night 23–07", "정다은  배수아")).forEach { (code, label, names) ->
+            listOf(Shift.DAY, Shift.EVENING, Shift.NIGHT).forEach { shift ->
+                val assignedNames = roster.nurses.filter { roster.published[it.id to selectedDate] == shift }
+                    .map(Nurse::name)
+                val compactHours = when (shift) {
+                    Shift.DAY -> "07–15"
+                    Shift.EVENING -> "15–23"
+                    Shift.NIGHT -> "23–07"
+                    Shift.OFF -> ""
+                }
                 CardBox(Modifier.fillMaxWidth().padding(bottom = 10.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        ShiftChip(code, 28); Spacer(Modifier.width(8.dp)); Label(label, 14, C.text, true)
-                        Spacer(Modifier.weight(1f)); Label(if (code == "N") "2명" else "3명", 12, C.secondary)
+                        ShiftChip(shift.short, 28); Spacer(Modifier.width(8.dp)); Label("${shift.label} $compactHours", 14, C.text, true)
+                        Spacer(Modifier.weight(1f)); Label("${assignedNames.size}명", 12, C.secondary)
                     }
-                    Label(names, 13, C.secondary, modifier = Modifier.padding(top = 12.dp))
+                    if (assignedNames.isEmpty()) {
+                        Label("배치된 근무자 없음", 13, C.secondary, modifier = Modifier.padding(top = 12.dp))
+                    } else {
+                        Row(Modifier.padding(top = 12.dp), horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                            assignedNames.forEach { name ->
+                                Box(Modifier.background(C.subtle, RoundedCornerShape(99.dp))
+                                    .padding(horizontal = 10.dp, vertical = 5.dp)) {
+                                    Label(name, 11, C.secondary)
+                                }
+                            }
+                        }
+                    }
                 }
             }
-            CardBox(Modifier.fillMaxWidth()) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    ShiftChip("휴", 28); Spacer(Modifier.width(8.dp)); Label("휴가 · 반차", 14, C.text, true)
-                    Spacer(Modifier.weight(1f)); Label("🔒 사유 비공개", 12, C.secondary)
+            val publicAbsences = roster.publishedAbsence.entries.filter { it.key.second == selectedDate }
+            if (publicAbsences.isNotEmpty()) {
+                CardBox(Modifier.fillMaxWidth()) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        ShiftChip("휴", 28); Spacer(Modifier.width(8.dp)); Label("휴가 · 반차", 14, C.text, true)
+                        Spacer(Modifier.weight(1f)); Label("🔒 사유 비공개", 12, C.secondary)
+                    }
+                    publicAbsences.forEach { entry ->
+                        val name = roster.nurses.firstOrNull { it.id == entry.key.first }?.name ?: return@forEach
+                        Label("$name · ${entry.value}", 13, C.secondary, modifier = Modifier.padding(top = 8.dp))
+                    }
                 }
-                Label("최유나 · 오후 반차", 13, C.secondary, modifier = Modifier.padding(top = 12.dp))
-                Label("송예린 · 휴가", 13, C.secondary, modifier = Modifier.padding(top = 5.dp))
             }
         }
     }
@@ -851,7 +905,9 @@ private fun TabChoice(text: String, selected: Boolean, modifier: Modifier, onCli
 private fun OwnCalendar(roster: DemoRoster, month: YearMonth) {
     val first = month.atDay(1)
     val offset = first.dayOfWeek.value % 7
-    val cells = (0 until 35).map { index -> index - offset + 1 }.map { if (it in 1..month.lengthOfMonth()) month.atDay(it) else null }
+    val cellCount = ((offset + month.lengthOfMonth() + 6) / 7) * 7
+    val cells = (0 until cellCount).map { index -> index - offset + 1 }
+        .map { day -> if (day in 1..month.lengthOfMonth()) month.atDay(day) else null }
     Column(Modifier.fillMaxWidth().background(C.surface, RoundedCornerShape(16.dp)).padding(12.dp)) {
         Row { listOf("일", "월", "화", "수", "목", "금", "토").forEachIndexed { index, label ->
             Box(Modifier.weight(1f), contentAlignment = Alignment.Center) { Label(label, 11, if (index == 0) C.danger else if (index == 6) C.info else C.secondary) }
@@ -873,7 +929,8 @@ private fun OwnCalendar(roster: DemoRoster, month: YearMonth) {
         }
         HorizontalDivider(color = C.border)
         Row(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
-            listOf("D" to 9, "E" to 7, "N" to 3, "O" to 9, "휴" to 2).forEach { (code, count) ->
+            val codes = (1..month.lengthOfMonth()).map { roster.visibleShift("haneul", month.atDay(it), true) }
+            listOf("D", "E", "N", "O", "휴").map { it to codes.count { code -> code == it } }.forEach { (code, count) ->
                 Row(verticalAlignment = Alignment.CenterVertically) { ShiftChip(code); Spacer(Modifier.width(3.dp)); Label("$count", 12, C.text, true) }
             }
         }

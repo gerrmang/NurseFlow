@@ -102,7 +102,7 @@ class RosterServiceIntegrationTest @Autowired constructor(
 
     @Test
     fun `confirm rejects draft absence crossing into published prior-month shift`() {
-        val november = service.createRoster(wardId, CreateRosterRequest("2026-11"), admin, UUID.randomUUID())
+        val november = newRoster("2026-11", LocalDate.parse("2026-11-02"), dayTypeId)
         val absence = ApprovedAbsenceInput(nurseId, "APPROVED_HALF_DAY",
             Instant.parse("2026-10-31T20:00:00Z"), Instant.parse("2026-11-01T03:00:00Z"))
         val added = service.addAbsence(november.rosterId, tag(november), UUID.randomUUID(), absence, admin)
@@ -112,7 +112,7 @@ class RosterServiceIntegrationTest @Autowired constructor(
 
         val conflict = assertThrows(RosterApiException::class.java) {
             service.confirm(november.rosterId, "\"${service.etag(november.rosterId, added.rosterRevision)}\"",
-                UUID.randomUUID(), ConfirmRosterRequest(), admin)
+                UUID.randomUUID(), ConfirmRosterRequest(1), admin)
         }
         assertTrue(conflict.ruleViolations.any { it.code == "APPROVED_ABSENCE_PUBLISHED_OVERLAP" })
         assertEquals("DRAFT", service.getRoster(november.rosterId, admin).status)
@@ -163,6 +163,46 @@ class RosterServiceIntegrationTest @Autowired constructor(
         assertEquals("CANCELLED", cancelled.status)
         assertFalse(service.markGenerationRunning(queued.jobId))
         assertEquals(draft.revision, service.getRoster(draft.rosterId, admin).revision)
+    }
+
+    @Test
+    fun `same-month replacement draft retains approved leave before new assignments`() {
+        val original = assign(newRoster("2026-11", LocalDate.parse("2026-11-02"), dayTypeId), nurseId)
+        val input = ApprovedAbsenceInput(nurseId, "APPROVED_LEAVE",
+            Instant.parse("2026-10-31T22:00:00Z"), Instant.parse("2026-11-01T06:00:00Z"))
+        val added = service.addAbsence(original.rosterId, tag(original), UUID.randomUUID(), input, admin)
+        service.confirm(original.rosterId,
+            "\"${service.etag(original.rosterId, added.rosterRevision)}\"", UUID.randomUUID(),
+            ConfirmRosterRequest(), admin)
+
+        val replacement = service.createRoster(wardId, CreateRosterRequest("2026-11"), admin, UUID.randomUUID())
+        val emptyConfirmation = assertThrows(RosterApiException::class.java) {
+            service.confirm(replacement.rosterId, tag(replacement), UUID.randomUUID(), ConfirmRosterRequest(), admin)
+        }
+        assertEquals("ROSTER_REQUIREMENTS_REQUIRED", emptyConfirmation.code)
+        assertEquals("PUBLISHED", service.getRoster(original.rosterId, admin).status)
+        assertEquals(nurseId, service.publishedWard(wardId, "2026-11", admin).slots.single().assignment?.nurseId)
+        val copied = service.listAbsences(replacement.rosterId, admin).single()
+        assertEquals(input.nurseId, copied.nurseId)
+        assertEquals(input.kind, copied.kind)
+        assertEquals(input.startsAt, copied.startsAt)
+        assertEquals(input.endsAt, copied.endsAt)
+        assertTrue(copied.absenceId != added.absence.absenceId)
+
+        val requirements = service.replaceRequirements(replacement.rosterId, tag(replacement),
+            ReplaceRequirementsRequest(listOf(
+                StaffingRequirement(LocalDate.parse("2026-11-01"), dayTypeId, 1, emptyList()),
+            )), admin)
+        val slot = service.getRoster(replacement.rosterId, admin).slots.single()
+        val conflict = assertThrows(RosterApiException::class.java) {
+            service.assign(replacement.rosterId, slot.slotId,
+                "\"${service.etag(replacement.rosterId, requirements.revision)}\"",
+                UUID.randomUUID(), AssignNurseRequest(nurseId), admin)
+        }
+        assertEquals("RULE_VIOLATION", conflict.code)
+        assertTrue(conflict.ruleViolations.any { it.code == "APPROVED_LEAVE_OVERLAP" })
+        assertEquals("PUBLISHED", service.getRoster(original.rosterId, admin).status)
+        assertEquals(1, service.listAbsences(original.rosterId, admin).size)
     }
 
     private fun newRoster(month: String, date: LocalDate, shiftTypeId: UUID): RosterView {

@@ -1,9 +1,11 @@
 # Claude Code 인계: NurseFlow 시연 MVP
 
+이 문서는 초기 체크포인트 인계 기록이다. 기반 기능 PR을 `dev`와 `main`에 병합한 뒤의 새 작업은 [다음 개발 단계](claude-next-stage.md)를 따른다.
+
 ## 시작 전 확인
 
 1. Claude Code의 프로젝트 폴더를 `/Users/sihwan/Documents/ChatGPT/NurseFlow`로 선택한다. CLI를 쓰면 이 폴더에서 `claude`를 실행한다.
-2. 현재 백엔드·Android·문서 체크포인트는 `feat/roster-rule-validator`의 `bbadc97`까지 커밋·푸시되어 있다. 첫 Opus 세션은 **Local, 이 브랜치 선택**으로 열어 현재 작업을 읽는다. 별도 worktree를 켜더라도 시작 브랜치가 `main`이나 `dev`가 아닌지 확인한다.
+2. 초기 백엔드·Android·문서 체크포인트는 `feat/roster-rule-validator`에 커밋·푸시되었다. 기능 병합 전에는 이 브랜치를 읽고, 병합 후 새 기능은 최신 `dev`에서 시작한다. 별도 worktree의 시작 브랜치를 확인한다.
 3. 첫 작업은 현재 변경과 `dev`로 보낼 PR 범위를 검토하고 다음 기능 브랜치 순서를 설계하는 것이다. 변경 내용을 폐기·덮어쓰기·강제 푸시하지 않는다.
 4. 기획 기준은 [초기 MVP 범위](mvp-scope.md), API 계약 초안은 [OpenAPI](openapi.yaml), 개발·리뷰 분담은 [AI 작업 흐름](ai-development-review-workflow.md)이다. Figma의 최신 화면은 [NurseFlow 디자인](https://www.figma.com/design/QtqAXph795SVIVHujdZvHF/NurseFlow?node-id=7-221)에 있다.
 5. 현재 Claude Code CLI에는 MCP 서버가 설정되어 있지 않다. Figma 화면을 직접 읽게 하려면 Claude Code 로그인 후 공식 Figma 플러그인을 설치하고 `/plugin`에서 Figma 계정을 연결한다. Codex에 연결된 Figma 플러그인은 Claude로 자동 전달되지 않는다.
