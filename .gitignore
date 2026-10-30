@@ -1,1 +1,9 @@
 .omx/
+.gradle/
+**/build/
+.kotlin/
+**/local.properties
+.idea/
+.DS_Store
+.claude/worktrees/
+.claude/settings.local.json

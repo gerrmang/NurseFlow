@@ -1,0 +1,22 @@
+spring:
+  application:
+    name: nurseflow-backend
+  datasource:
+    url: jdbc:h2:file:./nurseflow;DB_CLOSE_ON_EXIT=FALSE
+    driver-class-name: org.h2.Driver
+    username: sa
+  sql:
+    init:
+      mode: always
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${NURSEFLOW_OIDC_ISSUER_URI}
+          audiences: ${NURSEFLOW_OIDC_AUDIENCE}
+  jackson:
+    deserialization:
+      fail-on-unknown-properties: true
+
+server:
+  port: 8080
