@@ -9,4 +9,4 @@ Before changing application code, configuration, documentation, tests, or deploy
 5. Follow the PR template and record verification, skipped checks, API/DB changes, deployment impact, and rollback where applicable.
 6. Do not include secrets, leave reasons, or health information in logs, examples, or fixtures.
 
-The repository currently has no configured remote. Do not claim GitHub PR review, branch protection, or CI enforcement until a remote repository is connected and those settings are verified.
+The repository's `origin` is `https://github.com/gerrmang/NurseFlow.git`. Do not claim GitHub PR review, branch protection, or CI enforcement until those settings and checks are verified.

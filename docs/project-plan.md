@@ -1,6 +1,6 @@
 # Project Plan: 간호사 근무표 앱
 
-요구사항: [PRD](requirements.md) · 테스트: [Test Spec](test-plan.md) · 인터뷰 원본: [요구사항 명세](requirements-interview.md)
+초기 시연 범위: [MVP 결정](mvp-scope.md) · 요구사항: [PRD](requirements.md) · 테스트: [Test Spec](test-plan.md) · 인터뷰 원본: [요구사항 명세](requirements-interview.md)
 
 ## RALPLAN-DR
 ### 원칙
@@ -19,33 +19,33 @@
 - A. 결정적 휴리스틱 + local search: 설명이 간단하고 빠르게 시작 가능. 결합 제약에서 가능 해를 놓칠 수 있음.
 - B. 제약 최적화 솔버 + 독립 validator: 복합 제약 모델이 자연스럽고 작은 문제의 증명 가능성. 모델링·운영 비용 및 timeout 상태 설명 필요.
 - C. 수동 편성 UX 우선 후 자동화: 현장 학습이 빠르나 자동 월간 초안이라는 핵심 MVP 목표를 만족하지 않음.
-**ADR 결정:** “AI 기반 자동배치”는 생성형 AI가 규칙을 임의 판단하는 방식이 아니라 hard constraints와 soft objectives를 적용하는 일정 최적화로 해석한다. Kotlin 기반 Android 클라이언트를 현재 기술 선호로 채택하되 서버/API/DB는 P0에서 결정한다. 엔진은 지금 확정하지 않는다. P0에서 A/B를 같은 정책 표현·validator·combined-rule fixtures·hardware/time budget으로 비교하고 합의된 출구 기준으로 고른다. 두 안 모두 독립 validator를 쓴다. 어느 안도 기준 미달이면 자동배치 범위 축소/파일럿 보류를 사용자 결정으로 올린다.
+**초기 시연 ADR 결정:** “AI 기반 자동배치”는 생성형 AI가 규칙을 임의 판단하는 방식이 아니라 hard constraints와 soft objectives를 적용하는 일정 최적화로 해석한다. 시연 MVP는 Kotlin Android/Compose와 반응형 웹, 공통 Kotlin/Spring Boot API, 로컬 H2 파일 DB를 사용한다. 초기 생성 엔진은 결정적 휴리스틱과 독립 validator로 시작하고, 실제 병동 파일럿 전에 제약 최적화 솔버와 같은 입력·시간 한도에서 비교한다. 어느 안도 안전·충원 기준에 못 미치면 결과를 미충원으로 보고하고 필수 규칙을 완화하지 않는다.
 
 ## 단계 및 출구 기준
-### P0 — 운영정책·기술·파일럿 정의
-기술 선호는 Kotlin 기반 Android 앱으로 기록한다. P0에서 최소 지원 OS, UI toolkit, 단말 지원 범위, 서버/API/DB, 인증, sync/offline, 배포·데이터 위치를 결정한다.
-정책표(근무 시작/종료·시간대·월 경계, 인력수요/자격, 휴식·연속 근무, fairness 산식/분모, 고정배치 정책)와 병동 membership 기반 병동 전체/본인 API 권한 검사, 미충원 확인 및 확정 시 공개 적용, 버전 이력, 최대 규모/SLO, 인증/호스팅/보존·삭제, import/export, 파일럿 비교표본/시간 계산을 확정한다. 엔진 후보를 동일 시험 입력으로 비교한다.
-**Exit:** Kotlin/Android 앱 및 백엔드 구성, 병동별 지원·미지원 규칙, confirm 시 공개 적용/미충원 확인 감사필드, 보안/배포 제약, 테스트 fixture, 비교 기준/엔진 결정·fallback, 파일럿 측정법 문서화 완료. 결정되지 않은 정책이 있으면 해당 범위를 MVP·파일럿에서 지원하지 않는다.
+### P0 — 초기 시연 MVP 범위와 가상 정책 확정
+플랫폼(Android/Compose + 반응형 웹), 공통 서버(Spring Boot), 시연 DB(H2), Kakao 로그인 후 관리자 초대, 관리자 입력 확정 불가 일정, 관리자만 확정·공개하는 경계는 [MVP 결정](mvp-scope.md)에서 확정했다.
+가상 병동의 간호사·자격 구성, Day/Evening/Night별 날짜 수요, 반차 구간, 균등 배분 산식, 초대 링크 만료·철회와 첫 관리자 초기화, Android App Links/웹 링크 및 Kakao Redirect URI를 API 계약과 fixture로 구체화한다. 실제 병원 호스팅·운영 DB·보존정책·오프라인 지원은 초기 시연 범위 밖으로 둔다.
+**Exit:** 두 클라이언트에 공통인 역할표·초대 흐름·가상 정책표·OpenAPI 계약·완전 충원/미충원 fixture와 시연 인수 기준이 문서화된다.
 
 ### P1 — 도메인·권한·규칙 검증기
-직원, 자격, 근무유형, 수요 슬롯, 승인 부재, 정책 revision, monthly roster revision 모델과 서버 validator를 만든다.
-**Exit:** unit/property/integration 월 경계 fixture 통과. 모든 write path가 공통 validator와 권한 검사를 사용.
+Kakao OIDC 로그인·초대 수락, 사용자/병동 membership·간호사 연결·역할 변경, 직원·자격·근무유형·수요 슬롯·확정 부재·정책 revision·monthly roster revision 모델과 서버 validator를 만든다.
+**Exit:** 초대 만료·재사용·권한 상승 차단과 unit/property/integration 월 경계 fixture가 통과한다. 모든 write path가 공통 validator와 병동 권한 검사를 사용한다.
 
 ### P2 — 관리자 수동 편성
-월간 달력, 인력/수요 입력, 부재 interval, 배치/수정, 가능/불가 상태와 텍스트 이유.
-**Exit:** UI/API 우회 모두 hard rule 차단; 미공개 초안/부재정보는 제한된 역할에만 보임.
+Android와 웹의 월간 달력, 인력/수요 입력, 사전 취합된 불가 interval, 배치/수정, 가능/불가 상태와 텍스트 이유.
+**Exit:** 두 클라이언트가 같은 API/revision을 사용하고 UI/API 우회 모두 hard rule을 차단한다. 미공개 초안/부재정보는 관리자에게만 보인다.
 
 ### P3 — 자동 배치 초안
-P0에서 선택한 엔진, hard rule과 fairness objective, typed shortage, timeout/cancel/status, 생성 입력·policy·engine revision.
+초기 결정적 휴리스틱, hard rule과 fairness objective, typed shortage, timeout/cancel/status, 생성 입력·policy·engine revision. 생성형 모델의 토큰 사용 없이 독립 validator를 통과한 결과만 초안에 반영한다.
 **Exit:** 대표 fixtures에서 결과 독립 검증 통과, violation=0, timeout/shortage/infeasible 상태 분리, stale 결과 안전 폐기.
 
 ### P4 — 관리자 검토·확정·공개와 간호사 조회
-편집/고정 배치, 재검증, 확정본 및 불변 공개 snapshot, 공개/재공개, read scope.
-**Exit:** E2E에서 확정 전 초안 노출 0, 동시 수정·중복 공개 안전, 공개 범위와 사유 분리 검증.
+Android·웹의 편집/고정 배치, 재검증, 확정본 및 불변 공개 snapshot, 공개/재공개, 병동 전체/본인 read scope.
+**Exit:** E2E에서 확정 전 초안 노출 0, 동시 수정·중복 공개 안전, 공개 범위와 사유 분리, Android·웹의 동일 활성 revision을 검증한다.
 
-### P5 — 파일럿·출시 판단
-기준선 대비 동일 범위 작업시간, 수정량·재생성·shortage·hard violation·공개 오류·사용자 피드백을 측정.
-**Exit:** 합의 표본 기준과 통계 프로토콜 충족, 전체 작업시간 <=50%, 안전/권한/공개 기준 모두 통과. 기준 미달이면 병목 및 반복 계획 보고.
+### P5 — 가상 데이터 시연과 실제 파일럿 분리
+초기 MVP에서는 가상 병동의 완전 충원/미충원 시나리오, 초대/권한, Android·웹 동기화, 수정량·재생성·shortage·hard violation·공개 오류를 검증한다.
+**시연 Exit:** [MVP 인수 기준](mvp-scope.md)을 통과한다. 이후 실제 병원 파일럿에서 기준선 대비 동일 범위 작업시간과 사용자 피드백을 측정한다. 엑셀 대비 전체 작업시간 <=50%는 파일럿의 출시 판단 기준이며 가상 데이터 시연의 성과라고 주장하지 않는다.
 
 ## 정량 인수 및 검증
 1. 생성·수동 저장·확정·공개 모든 경로 hard violation 0, validator 독립 실행.
