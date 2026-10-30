@@ -10,3 +10,4 @@
 - The server is authoritative for roster constraints and publication. Approved leave and half-day intervals are entered by the ward administrator. Nurses read the published ward/personal calendar; self-entry and preferences are outside this demo MVP.
 - Use fictional demo staff only. Never place Kakao credentials, real nurse information, or leave reasons in code, fixtures, logs, prompts, or commits.
 - Work in small feature branches from `dev`. Submit feature PRs to `dev`; release with a reviewed `dev` to `main` PR. Do not merge or push to `main` directly.
+- Follow `docs/claude-next-stage.md`: use feature-first packages with separate Controller, Request/Response DTO, Service, Domain, and Persistence responsibilities; implement one numbered feature unit per branch and PR, then stop for verification before the next unit.
