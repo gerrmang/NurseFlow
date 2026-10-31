@@ -8,5 +8,6 @@ Before changing application code, configuration, documentation, tests, or deploy
 4. Keep roster hard rules enforced on the server. The Android UI is not the authority for schedule validity.
 5. Follow the PR template and record verification, skipped checks, API/DB changes, deployment impact, and rollback where applicable.
 6. Do not include secrets, leave reasons, or health information in logs, examples, or fixtures.
+7. Write commit intent/body, pull request title/body, and user-facing review reports in Korean where possible. Keep Git trailer keys, Conventional Commit types, code identifiers, API paths, and commands in their required original form.
 
 The repository's `origin` is `https://github.com/gerrmang/NurseFlow.git`. Do not claim GitHub PR review, branch protection, or CI enforcement until those settings and checks are verified.
