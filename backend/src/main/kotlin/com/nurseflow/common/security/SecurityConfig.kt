@@ -1,4 +1,4 @@
-package com.nurseflow
+package com.nurseflow.common.security
 
 import jakarta.servlet.http.HttpServletResponse
 import org.springframework.context.annotation.Bean
