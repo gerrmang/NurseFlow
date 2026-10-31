@@ -2,7 +2,7 @@
 
 # NurseFlow project context for Claude Code
 
-- Start with `docs/mvp-scope.md` for the agreed demo MVP, then read `docs/requirements.md`, `docs/openapi.yaml`, `docs/project-plan.md`, and `docs/test-plan.md` as needed. `docs/mvp-scope.md` wins when older planning text differs.
+- Start with `docs/mvp-scope.md` and `docs/monthly-roster-rules-and-two-person-plan.md` for the agreed demo MVP and expanded scheduling rules, then read `docs/requirements.md`, `docs/openapi.yaml`, `docs/project-plan.md`, and `docs/test-plan.md` as needed. The latest user decisions in these scope documents win when older planning text differs.
 - Follow `docs/ai-development-review-workflow.md`: use Opus for design decisions and Sonnet for bounded implementation; Codex independently reviews new changes every 30 minutes.
 - The imported `AGENTS.md` contains OMX runtime workflows. Use those only when that runtime is available; its repository rules and Lore commit protocol still apply in Claude Code.
 - The repo has `backend/` (Kotlin Spring Boot + local H2) and `android/` (Kotlin Compose Figma prototype). The responsive web client and Kakao login/invitation flow are not implemented yet.
