@@ -1,6 +1,6 @@
 # Project Plan: 간호사 근무표 앱
 
-초기 시연 범위: [MVP 결정](mvp-scope.md) · 요구사항: [PRD](requirements.md) · 테스트: [Test Spec](test-plan.md) · 인터뷰 원본: [요구사항 명세](requirements-interview.md)
+초기 시연 범위: [MVP 결정](mvp-scope.md) · [월간 편성 규칙·2인 분담](monthly-roster-rules-and-two-person-plan.md) · 요구사항: [PRD](requirements.md) · 테스트: [Test Spec](test-plan.md) · 인터뷰 원본: [요구사항 명세](requirements-interview.md)
 
 ## RALPLAN-DR
 ### 원칙
@@ -24,11 +24,11 @@
 ## 단계 및 출구 기준
 ### P0 — 초기 시연 MVP 범위와 가상 정책 확정
 플랫폼(Android/Compose + 반응형 웹), 공통 서버(Spring Boot), 시연 DB(H2), Kakao 로그인 후 관리자 초대, 관리자 입력 확정 불가 일정, 관리자만 확정·공개하는 경계는 [MVP 결정](mvp-scope.md)에서 확정했다.
-가상 병동의 팀·간호사·자격 구성, Day/Evening/Night별 팀·날짜 수요, 관리자가 허용하는 팀 간 지원근무의 범위·철회, 병동 관리자가 설정할 근무연차·직급의 1~5 경력 단계 기준과 프로필 확인 흐름, 단계 구성·균등 배분 산식, 반차 구간, 초대 링크 만료·철회와 첫 관리자 초기화, Android App Links/웹 링크 및 Kakao Redirect URI를 API 계약과 fixture로 구체화한다. 실제 병원 호스팅·운영 DB·보존정책·오프라인 지원은 초기 시연 범위 밖으로 둔다.
+가상 병동의 팀·간호사·자격 구성, Day/Evening/Night별 팀·날짜 수요, 관리자가 허용하는 팀 간 지원근무의 범위·철회, 병동 관리자가 설정할 근무연차·직급의 1~5 경력 단계 기준과 프로필 확인 흐름, 병원별 근무 시각·환산시간·휴일 달력·월 목표시간, 일반/Night 전담·SOF·연속근무·희망 오프·선임 최소 인원, 단계 구성·균등 배분 산식, 반차 구간, 초대 링크 만료·철회와 첫 관리자 초기화, Android App Links/웹 링크 및 Kakao Redirect URI를 API 계약과 fixture로 구체화한다. 실제 병원 호스팅·운영 DB·보존정책·오프라인 지원은 초기 시연 범위 밖으로 둔다.
 **Exit:** 두 클라이언트에 공통인 역할표·초대 흐름·가상 정책표·OpenAPI 계약·완전 충원/미충원 fixture와 시연 인수 기준이 문서화된다.
 
 ### P1 — 도메인·권한·규칙 검증기
-Kakao OIDC 로그인·초대 수락, 사용자/병동 membership·간호사 연결·역할 변경, 병동 내 팀·관리자 허용형 팀 간 지원근무·근무연차·직급·관리자 확인 상태·단계 변환 정책, 직원·자격·근무유형·팀별 수요 슬롯·확정 부재·정책 revision·monthly roster revision 모델과 서버 validator를 만든다.
+Kakao OIDC 로그인·초대 수락, 사용자/병동 membership·간호사 연결·역할 변경, 병동 내 팀·관리자 허용형 팀 간 지원근무·근무연차·직급·관리자 확인 상태·단계 변환 정책, 초대 수락 직원 모수·일반/Night 전담 근무 형태, 직원·자격·근무유형·팀별 수요 슬롯·확정 부재·희망 오프·병원별 시간/휴식/월 목표 정책 revision·monthly roster revision 모델과 서버 validator를 만든다.
 **Exit:** 초대 만료·재사용·권한 상승 차단과 unit/property/integration 월 경계 fixture가 통과한다. 모든 write path가 공통 validator와 병동 권한 검사를 사용한다.
 
 ### P2 — 관리자 수동 편성
@@ -36,7 +36,7 @@ Android와 웹의 월간 달력, 인력/수요 입력, 사전 취합된 불가 i
 **Exit:** 두 클라이언트가 같은 API/revision을 사용하고 UI/API 우회 모두 hard rule을 차단한다. 미공개 초안/부재정보는 관리자에게만 보인다.
 
 ### P3 — 자동 배치 초안
-초기 결정적 휴리스틱, hard rule·충원 우선 및 팀별 경력 구성·개인 간 fairness 목표, 경력 구성 미달과 미충원을 분리한 진단, timeout/cancel/status, 생성 입력·policy·engine revision. 생성형 모델의 토큰 사용 없이 독립 validator를 통과한 결과만 초안에 반영한다.
+초기 결정적 휴리스틱, 승인 부재·Night 다음날 Day·팀 간 허용·선임 최소 인원·연속근무 상한과 개인별 월 목표시간을 반영한 hard rule·충원 우선, 희망 오프·팀별 경력 구성·개인 간 fairness 목표, 시간 부족·경력 구성 미달·미충원을 분리한 진단, timeout/cancel/status, 생성 입력·policy·engine revision. 생성형 모델의 토큰 사용 없이 독립 validator를 통과한 결과만 초안에 반영한다.
 **Exit:** 대표 fixtures에서 결과 독립 검증 통과, violation=0, timeout/shortage/infeasible 상태 분리, stale 결과 안전 폐기.
 
 ### P4 — 관리자 검토·확정·공개와 간호사 조회
@@ -58,6 +58,8 @@ Android·웹의 편집/고정 배치, 재검증, 확정본 및 불변 공개 sna
 8. 파일럿은 데이터 준비~공개까지 측정하고 교육시간 분리, 기준선의 절반 이하 달성 여부 판단.
 9. 팀·근무별 1~5 경력 구성 개선을 재현하고 미확인 프로필을 점수에서 제외하며, 구성 미달을 미충원과 분리해 설명.
 10. 팀 간 지원근무는 관리자의 유효한 허용 기록이 없으면 후보·수동·자동·확정 경로에서 거부되고, 허용되면 배치 팀의 충원·경력 구성에 반영.
+11. 일반 직원의 월 Night 6회 이상 SOF 1일, Night 전담 2명·3개월 블록·월 Night 최소 15회, 최대 연속근무 5일과 VY 별도 처리를 월 경계 fixture로 검증.
+12. 병원별 근무 시각과 환산시간을 분리하고 주말·공휴일 중복 제거로 목표시간을 계산한다. 일반 직원 목표시간 미달 0건, 전담자 별도 목표, 초과시간·미충원·선임 부족을 각각 표시.
 
 ## 프리모텀 (실패 시나리오)
 1. 월초 경계에서 전월 나이트를 잊어 필수 휴식 위반 → 인접 월 문맥을 validator 입력으로 강제하고 자료가 없으면 검증 불완료 상태.

@@ -13,6 +13,9 @@ info:
     docs/mvp-scope.md에 추가되었다. 현재 StaffInput/StaffMember와 근무 수요 스키마에는
     팀·프로필·단계 정책·경력 구성 진단·관리자 허용형 팀 간 지원근무 필드가 없으므로
     관련 기능 구현 전에 계약을 확장해야 한다.
+    추가 확정된 병원별 근무 시각·환산시간, 휴일 달력·월 목표시간, VY/SOF,
+    Night 전담 3개월 순환, 연속근무 상한, 희망 오프·선임 최소 인원 계약도
+    docs/monthly-roster-rules-and-two-person-plan.md를 기준으로 기능별 PR에서 설계한다.
 servers:
   - url: /api/v1
     description: API base path (host is environment-specific)
