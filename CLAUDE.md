@@ -12,3 +12,4 @@
 - Work in small feature branches from `dev`. Submit feature PRs to `dev`; release with a reviewed `dev` to `main` PR. Do not merge or push to `main` directly.
 - Follow `docs/claude-next-stage.md`: use feature-first packages with separate Controller, Request/Response DTO, Service, Domain, and Persistence responsibilities; implement one numbered feature unit per branch and PR, then stop for verification before the next unit.
 - For backend errors and identity, follow `docs/backend-error-auth-dto-conventions.md`: stable ErrorCode/BusinessException, central MVC and security-filter error responses, explicit actor passing to services, and Kotlin request/response data classes.
+- GitHub에 올리는 커밋 제목·본문과 PR 제목·설명, 사용자에게 보여주는 검토 보고는 가능한 한 한글로 작성한다. `feat`·`fix` 같은 유형과 Git trailer 키, 코드 식별자만 원문을 유지한다.

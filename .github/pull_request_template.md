@@ -1,43 +1,42 @@
-<!-- Squash Merge title: type(scope): concise reason -->
+<!-- 스쿼시 병합 제목: type(scope): 변경 이유를 한글로 작성 -->
 
-## Summary
+## 변경 목적과 내용
 
-- What problem does this change solve?
-- What changed at a high level?
+- 어떤 문제를 해결하나요?
+- 주요 변경 사항은 무엇인가요?
 
-## Related issue
+## 관련 이슈
 
-- Link or `None`
+- 이슈 링크 또는 `없음`
 
-## Verification
+## 검증
 
-- Commands/checks run and results:
-- Checks skipped and why:
+- 실행한 명령·검사와 결과:
+- 실행하지 못한 검사와 이유:
 
-## API / data / configuration changes
+## API·데이터·설정 변경
 
-- [ ] API contract
-- [ ] Database schema or migration
-- [ ] Environment/configuration variables
-- [ ] None
+- [ ] API 계약 변경
+- [ ] DB 스키마 또는 마이그레이션 변경
+- [ ] 환경변수 또는 설정 변경
+- [ ] 해당 없음
 
-## Deployment impact
+## 배포 영향
 
-- Runtime, migration, or release impact:
-- Or `None`
+- 실행 환경·데이터 이전·릴리스 영향 또는 `없음`
 
-## Rollback
+## 되돌리기
 
-- How to revert safely:
+- 문제 발생 시 되돌리는 방법:
 
-## Risks
+## 남은 위험과 후속 작업
 
-- Known risks or follow-up:
+- 알려진 위험 또는 후속 작업:
 
-## Checklist
+## 최종 확인
 
-- [ ] Correct target branch (`dev` for normal work, `main` for release/hotfix)
-- [ ] Hard roster rules remain server-enforced
-- [ ] Sensitive absence/health information is not exposed
-- [ ] Documentation/API contract updated if needed
-- [ ] Verification evidence and skipped checks are recorded
+- [ ] 대상 브랜치가 맞음: 일반 작업은 `dev`, 릴리스·긴급 수정은 `main`
+- [ ] 근무 필수 규칙은 서버에서 검증함
+- [ ] 비공개 부재 정보·건강정보가 노출되지 않음
+- [ ] 필요한 문서와 API 계약을 갱신함
+- [ ] 검증 결과와 생략한 검사를 적음
