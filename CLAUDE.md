@@ -11,3 +11,4 @@
 - Use fictional demo staff only. Never place Kakao credentials, real nurse information, or leave reasons in code, fixtures, logs, prompts, or commits.
 - Work in small feature branches from `dev`. Submit feature PRs to `dev`; release with a reviewed `dev` to `main` PR. Do not merge or push to `main` directly.
 - Follow `docs/claude-next-stage.md`: use feature-first packages with separate Controller, Request/Response DTO, Service, Domain, and Persistence responsibilities; implement one numbered feature unit per branch and PR, then stop for verification before the next unit.
+- For backend errors and identity, follow `docs/backend-error-auth-dto-conventions.md`: stable ErrorCode/BusinessException, central MVC and security-filter error responses, explicit actor passing to services, and Kotlin request/response data classes.

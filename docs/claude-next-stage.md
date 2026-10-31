@@ -6,7 +6,7 @@
 
 1. `AGENTS.md`, `CLAUDE.md`: 저장소 규칙, 브랜치와 커밋 방식.
 2. `docs/mvp-scope.md`, [월간 편성 규칙·2인 분담](monthly-roster-rules-and-two-person-plan.md), 이 문서: 확정된 MVP 범위, 병원별 정책과 단계별 개발 순서. 오래된 기획과 충돌하면 MVP 범위와 사용자의 최신 결정이 우선한다.
-3. `docs/openapi.yaml`, `docs/test-plan.md`: 서버 계약과 인수 기준.
+3. `docs/openapi.yaml`, `docs/test-plan.md`, [백엔드 예외·인증·DTO 규칙](backend-error-auth-dto-conventions.md): 서버 계약, 인수 기준과 코드 경계.
 4. `docs/runbooks/git-flow.md`, `docs/ai-development-review-workflow.md`: PR, 검증, Codex 리뷰 흐름.
 5. 현재 단계에 관련된 코드만 추가로 읽는다. 첫 단계에는 `backend/src/main/kotlin/com/nurseflow/roster/`, `backend/src/main/kotlin/com/nurseflow/SecurityConfig.kt`, `backend/src/main/resources/schema.sql`, `backend/src/test/kotlin/com/nurseflow/roster/`가 해당한다. Android 화면 단계에는 `android/README.md`와 `android/app/src/main/kotlin/com/nurseflow/app/ui/NurseFlowApp.kt`를 읽는다.
 
@@ -61,6 +61,9 @@ com.nurseflow
 | --- | --- |
 | 0 | **Opus 설계**: 기능 경계, 현재 클래스 이동표, 의존 방향, PR 순서와 기존 동작 보존 테스트를 `docs/`에 정리. 이 단계에서 구현하지 않는다. |
 | 1 | **백엔드 패키지 정리**: roster Controller/DTO/Service/Domain/Persistence 경계를 분리. API 응답·DB 스키마·런타임 동작은 유지하고 회귀 테스트와 CI로 증명한다. 새 의존성은 추가하지 않는다. |
+| 1a | **오류 계약**: 구조 정리 PR 병합 후 기존 오류 코드·상태·응답을 테스트로 고정하고 `ErrorCode`/`BusinessException`/중앙 handler로 옮긴다. |
+| 1b | **보안 응답·현재 사용자**: 보안 필터의 401/403 응답을 통일하고 Controller에서 확인한 actor를 Service/비동기 작업에 명시적으로 전달한다. |
+| 1c | **Request/Response 검증**: 구조 정리된 DTO를 기준으로 Kotlin `data class`와 필요한 Bean Validation·`@Valid`를 기능별로 적용하고 입력 오류 응답을 검증한다. |
 | 2 | **Kakao 인증 서버**: Android·웹 공통 로그인/세션 계약, 토큰 검증, 시연용 첫 관리자 설정, 초대 전 병동 접근 차단을 구현. 가짜 OIDC 공급자를 이용한 인증·실패 테스트를 포함한다. 실제 Kakao 설정 전에는 E2E 성공을 주장하지 않는다. |
 | 3 | **관리자 초대 발급·철회**: 역할·병동이 지정된 만료형 1회 토큰을 발급하고 해시만 저장한다. 관리자 권한·철회·만료를 테스트한다. |
 | 4 | **초대 수락·병동 소속 생성**: 유효한 초대의 소진, membership/역할·간호사 연결을 한 트랜잭션에서 처리한다. 중복 수락·타 병동 접근·권한 상승을 테스트한다. |
