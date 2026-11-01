@@ -11,6 +11,12 @@
 5. **현재 사용자:** Controller/API 경계에서 검증된 JWT `sub`를 `Actor(subject)` 같은 값으로 바꿔 서비스에 **명시적으로 전달**한다. 서비스에서 정적 `SecurityUtil.getCurrentMemberId()`를 호출하지 않는다. 초대 전 로그인 사용자는 병동 `memberId`가 없을 수 있고, 비동기 생성 작업에는 요청 스레드의 SecurityContext가 자동으로 전달되지 않는다. 각 서비스는 전달된 subject와 대상 ward의 membership을 DB에서 다시 확인한다.
 6. **DTO:** 기능별 `api/dto/request`와 `api/dto/response`를 분리하고 Kotlin `data class`의 `val`로 작성한다. Controller는 DTO와 애플리케이션 명령/결과를 변환한다. 도메인 객체·DB 행을 응답으로 직접 노출하지 않는다. 서비스가 API DTO를 import하지 않도록 패키지 구조 정리 후 점진적으로 옮긴다.
 
+### 의존 방향 보충
+
+- `persistence.repository`는 `ApiException`, `BusinessException`, `HttpStatus`, API 응답 DTO를 참조하지 않는다. 조회 누락은 `null`/명시적 결과로 돌려주고, 비즈니스 오류 코드는 Service가 판정해 `BusinessException(ErrorCode.X)`로 던진다. DB 장애는 임의의 4xx로 바꾸지 않는다.
+- `application.service`는 최종적으로 API Request/Response DTO 대신 기능별 Command/Query/Result를 사용한다. 기존 동작 보존을 위한 구조 정리 PR에서 남기는 임시 참조는 범위와 제거 후속 단계를 PR에 명시하고, 새 기능에는 늘리지 않는다.
+- 패키지 이름을 바꾸는 것만으로 MVC/계층 분리가 완료된 것은 아니다. PR 검토에서 실제 `import` 방향을 확인한다. 특히 `persistence → common.error`는 `common` 패키지여도 HTTP 예외를 전달하므로 허용하지 않는다.
+
 ## 권장 코드 형태
 
 아래는 형태를 설명하는 예시다. 기능별 실제 코드와 오류 메시지는 현재 API 계약에 맞춘다.
@@ -60,11 +66,12 @@ data class Actor(val subject: String)
 - 현재 `GlobalExceptionHandler`는 업무 오류와 일부 형식 오류를 처리한다. `MethodArgumentNotValidException`·메서드 검증·예상 못 한 오류의 안전한 응답, 민감정보 없는 필드 메시지, 기존 412/422 부가 필드 보존을 단계별 테스트로 보완한다.
 - 현재 `SecurityConfig`의 401/403 응답은 JSON 문자열을 직접 조립한다. advice와 같은 안전한 JSON 직렬화기를 공유해 응답 형태를 맞춘다. 보안 필터 예외를 advice만으로 처리하려고 하지 않는다.
 - 현재 Controller는 각 메서드에서 `@AuthenticationPrincipal Jwt`를 받아 `subject`를 전달한다. 공통 API 경계 resolver 또는 인증된 actor 인자를 사용해 반복을 줄이고, 서비스의 명시적 actor 전달과 병동 DB 권한 검사는 유지한다.
+- 진행 중인 패키지 구조 정리에서 `RosterJdbcRepository`가 `ApiException`/`HttpStatus`를 import해 `fail()`에서 던지는 코드는 이 경계와 맞지 않는다. Service가 리소스 누락·멱등성 충돌의 ErrorCode를 결정하도록 Repository 결과를 바꾸기 전에는 이를 최종 계층 분리로 간주하지 않는다.
 - 구조 정리 PR이 병합되기 전에는 그 worktree의 같은 파일을 동시에 수정하지 않는다. 먼저 해당 PR을 검증·병합한 뒤 새 `dev` 브랜치에서 이 규칙을 작은 PR로 구현한다.
 
 ## 구현 PR과 검증 순서
 
-1. **오류 계약 PR:** 기존 모든 오류 코드·HTTP 상태·응답 필드를 고정하는 테스트를 만든다. `ErrorCode`/`BusinessException`/`GlobalExceptionHandler`를 도입하되 외부 응답 형식은 유지한다.
+1. **오류 계약 PR:** 기존 모든 오류 코드·HTTP 상태·응답 필드를 고정하는 테스트를 만든다. `ErrorCode`/`BusinessException`/`GlobalExceptionHandler`를 도입하되 외부 응답 형식은 유지하고 Repository의 `ApiException` 의존을 제거한다.
 2. **보안 응답·actor PR:** 401/403 필터 응답 직렬화기를 통일하고 Controller의 subject 추출을 API 경계에 모은다. 서비스와 비동기 작업에는 actor를 명시적으로 전달한다. 초대 전 사용자·타 병동 접근을 재검증한다.
 3. **입력 DTO 검증 PR:** 기능별 Request/Response 파일과 필요한 검증 어노테이션을 정리하고 `@Valid` 및 검증 제공자 적용을 테스트한다. 구조 정리에서 이미 분리된 DTO는 중복 이동하지 않는다.
 
