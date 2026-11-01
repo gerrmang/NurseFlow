@@ -60,7 +60,7 @@ com.nurseflow
 | 순서 | 기능 단위와 완료 기준 |
 | --- | --- |
 | 0 | **Opus 설계**: 기능 경계, 현재 클래스 이동표, 의존 방향, PR 순서와 기존 동작 보존 테스트를 `docs/`에 정리. 이 단계에서 구현하지 않는다. |
-| 1 | **백엔드 패키지 정리**: roster Controller/DTO/Service/Domain/Persistence 경계를 분리. API 응답·DB 스키마·런타임 동작은 유지하고 회귀 테스트와 CI로 증명한다. 새 의존성은 추가하지 않는다. |
+| 1 | **백엔드 패키지 정리**: roster Controller/DTO/Service/Domain/Persistence 경계를 분리. API 응답·DB 스키마·런타임 동작은 유지하고 회귀 테스트와 CI로 증명한다. Repository는 HTTP 예외나 API DTO에 의존하지 않는다. 기존 Service의 API DTO 사용은 임시 경계로 기록하고 새 기능에서 늘리지 않는다. |
 | 1a | **오류 계약**: 구조 정리 PR 병합 후 기존 오류 코드·상태·응답을 테스트로 고정하고 `ErrorCode`/`BusinessException`/중앙 handler로 옮긴다. |
 | 1b | **보안 응답·현재 사용자**: 보안 필터의 401/403 응답을 통일하고 Controller에서 확인한 actor를 Service/비동기 작업에 명시적으로 전달한다. |
 | 1c | **Request/Response 검증**: 구조 정리된 DTO를 기준으로 Kotlin `data class`와 필요한 Bean Validation·`@Valid`를 기능별로 적용하고 입력 오류 응답을 검증한다. |
