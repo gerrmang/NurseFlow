@@ -2,7 +2,7 @@
 
 상태: **2026-11-02 설계 + H1 구현(백엔드·Android 화면·API 연동)**. H1(병원 소속·권한 기반과 병동 생성)만 `feat/hospital-ward-foundation`에 구현했다. H2 이후는 설계이며 런타임에 없다. 각 기능 단위는 백엔드와 Android 화면·실제 API 연동을 함께 완료한다.
 
-**통합 순서**: 이 브랜치는 미병합 `fix/backend-conventions-rest`(중앙 `ErrorCode`/`BusinessException`/`@CurrentSubject`) 위에 쌓여 있다. 그 PR을 먼저 `dev`에 병합한 뒤 이 브랜치를 `git rebase --onto origin/dev 164933a`로 옮겨 PR을 연다. `dev` 기준으로 두 브랜치를 따로 병합하면 텍스트 충돌은 없지만 `ApiException` 이름 변경과 `RosterService` 입력 모델 이동 때문에 컴파일이 깨지는 것을 임시 작업 폴더에서 확인했다. 병원별 정책 입력 항목은 `docs/hospital-roster-policy-settings.md`(별도 문서 PR, 미병합)를 따르고 이 문서는 소속 구조·권한·적용 시점·기능 순서를 정한다.
+**선행 변경**: 중앙 `ErrorCode`/`BusinessException`/`@CurrentSubject`를 도입한 `fix/backend-conventions-rest`는 PR #12로 `dev`에 병합되었다(병합 커밋 `8d29a07`, 원 커밋 이력 보존). H1은 그 위에서 구현했고 `dev` 대비 H1 범위는 `164933a..feat/hospital-ward-foundation`이다. 추가 rebase는 필요 없다. 병원별 정책 입력 항목은 `docs/hospital-roster-policy-settings.md`(별도 문서 PR, 미병합)를 따르고 이 문서는 소속 구조·권한·적용 시점·기능 순서를 정한다.
 
 ## 1. 현재 코드와의 차이
 
@@ -14,7 +14,7 @@
 | 간호사 | `nurses(ward_id, subject, display_name, qualifications, active)`. 초대 수락 여부·관리자 제외 판정 없음. 자동배치는 `active` 간호사 전체 사용. | 초대 수락·활성·`WARD_MEMBER`·비관리자만 편성 대상 (기능 4·5에서 판정) |
 | 근무 유형 | `shift_types`가 병동 단위, 실제 시각만 저장, 환산시간 없음. | 병원 기본 근무 유형 + 실제 시각과 월간 환산시간 분리 + 병동 예외는 허용 항목만 |
 | 스키마 변경 | `schema.sql`의 `CREATE TABLE IF NOT EXISTS`만 사용. 기존 파일 DB의 테이블은 갱신되지 않음. | 반복 실행 가능한 `ALTER ... IF NOT EXISTS`와 기존 파일 DB 업그레이드 테스트 |
-| 오류 | `dev`는 `ApiException(status, code, detail)`. 중앙 `ErrorCode`는 `fix/backend-conventions-rest`(미병합)에 있음. | 병원 기능 오류 코드를 중앙 `ErrorCode`에 추가했다(이 브랜치는 해당 PR 위에 있음) |
+| 오류 | 중앙 `ErrorCode`/`BusinessException`/`GlobalExceptionHandler`(PR #12로 `dev`에 병합). 병원 기능 오류 코드는 없음. | 병원 기능 오류 코드를 중앙 `ErrorCode`에 추가했다 |
 | 클라이언트 | Android는 `DemoRoster` 가상 데이터만 표시. 네트워크 계층 없음. | 서버 화면은 `core/network`·`feature/organization`으로 분리하고 시연 화면과 섞지 않음 |
 
 ## 2. 목표 모델과 결정
@@ -59,7 +59,7 @@
 - **병동 생성**: 이름 정규화(앞뒤 공백 제거, 1~100자, 제어 문자 금지) → 권한 확인 → 병원 행 `FOR UPDATE` 잠금 → `Idempotency-Key` 재시도 확인(요청자·본문 지문) → 이름 중복 확인 → 병동·`WARD_ADMIN` 소속·재시도 기록 저장. 하나라도 실패하면 모두 롤백한다. 동시 요청은 병원 잠금으로 직렬화하고 유일 인덱스가 2차 방어선이다.
 - **오류 코드**(중앙 `ErrorCode`): `SUBJECT_REQUIRED`(401), `HOSPITAL_NOT_FOUND`·`WARD_NOT_FOUND`(404), `HOSPITAL_ADMIN_REQUIRED`(403), `INVALID_WARD_NAME`·`INVALID_TIME_ZONE`(400), `WARD_NAME_TAKEN`·`IDEMPOTENCY_KEY_REUSED`(409). 알 수 없는 요청 필드(`role` 등)는 400 `INVALID_REQUEST`. Controller는 `@CurrentSubject`로 subject를 받는다.
 - **본인 병동 조회** `GET /api/v1/wards`: 본인 `ward_memberships`의 병동만 역할·병원 이름과 함께 돌려준다. 일반 병동 구성원은 이 목록으로 병동을 선택하며 병원 권한이나 다른 병동은 노출되지 않는다. 병원 관리자 역할만으로는 병동이 나타나지 않는다.
-- **Android**: `core/network`(전송·인증 헤더·`ApiProblem.code` 해석), `core/session`(세션 출처), `feature/organization/{data,domain,ui}`(DTO·저장소, 모델, ViewModel·화면)를 분리했다. 로딩·빈 목록·입력 오류·세션 만료(401)·권한(403)·숨김(404)·통신 실패·5xx와 재시도를 처리한다. 병동 생성은 결과가 불확실한 실패(통신·5xx) 뒤 같은 입력이면 같은 `Idempotency-Key`를 재사용하고, 입력을 바꾸거나 확정 응답을 받으면 새 키를 쓴다. 생성 성공 시 목록을 다시 읽고 새 병동을 선택한다. 선택한 서버 병동의 근무표 화면은 아직 없고 `DemoRoster` 시연 화면은 별도 진입으로만 열린다.
+- **Android**: `core/network`(전송·인증 헤더·`ApiProblem.code` 해석), `core/session`(세션 출처), `feature/organization/{data,domain,ui}`(DTO·저장소, 모델, ViewModel·화면)를 분리했다. 로딩·빈 목록·입력 오류·세션 만료(401)·권한(403)·숨김(404)·통신 실패·5xx와 재시도를 처리한다. 병동 생성은 결과가 불확실한 실패(통신 실패·5xx·해석할 수 없는 2xx 응답) 뒤 같은 입력이면 같은 `Idempotency-Key`를 재사용하고, 입력을 바꾸거나 확정 응답을 받으면 새 키를 쓴다. 생성 요청이 진행 중인 동안에는 병원 전환·양식 변경·병동 선택·재제출을 화면과 ViewModel 모두에서 막고, 응답은 요청을 보낸 병원의 양식에만 반영한다. 생성 성공 시 목록을 다시 읽고 새 병동을 선택한다. 선택한 서버 병동의 근무표 화면은 아직 없고 `DemoRoster` 시연 화면은 별도 진입으로만 열린다.
 - **로그인 경계**: 실제 Kakao 로그인이 없다. 릴리스 빌드는 서버 주소·세션이 없어 "로그인 필요"만 보인다. 디버그 빌드만 개발용 OIDC 토큰 입력 화면을 제공하며 토큰은 메모리에만 두고, 서버는 같은 issuer·audience·서명 검증을 한다. 앱 코드에 토큰·관리자 계정을 하드코딩하지 않는다.
 - **로컬 통합 검증**: `scripts/local-e2e/run-hospital-ward-e2e.sh`가 127.0.0.1 전용 OIDC 발급자, 백엔드 jar(임시 H2 파일 DB, 운영자 초기 설정), Android 네트워크·저장소 코드의 실제 HTTP 호출 테스트를 연결한다.
 - **하지 않은 것**: Kakao 로그인·세션 교환, 사용자 테이블, 초대 발급·수락, 병원 관리자 추가·회수 API, 감사 로그 테이블, 기존 병동의 병원 연결, 팀·정책, 웹 클라이언트, 선택한 병동의 근무표 서버 연동. 운영 코드에 인증 우회를 추가하지 않았고 테스트 전용 `JwtDecoder`는 테스트 소스에만 있다.

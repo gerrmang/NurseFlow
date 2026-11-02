@@ -82,7 +82,7 @@ private fun WardSelectionScreen(
                 state.notice?.let { notice -> item { Notice(notice, error = state.noticeIsError); Spacer(Modifier.height(12.dp)) } }
                 state.selectedHospital?.let { hospital ->
                     item {
-                        HospitalCard(hospital.name, state.hospitals.size > 1) {
+                        HospitalCard(hospital.name, switchable = state.hospitals.size > 1 && !state.isCreating) {
                             val index = state.hospitals.indexOf(hospital)
                             actions.selectHospital(state.hospitals[(index + 1) % state.hospitals.size].hospitalId)
                         }
@@ -108,7 +108,7 @@ private fun WardSelectionScreen(
                     }
                 }
                 items(state.myWards, key = { it.wardId }) { ward ->
-                    MyWardCard(ward, highlighted = ward.wardId == state.highlightedWardId) { actions.choose(ward.wardId) }
+                    MyWardCard(ward, highlighted = ward.wardId == state.highlightedWardId, enabled = !state.isCreating) { actions.choose(ward.wardId) }
                 }
                 if (state.isHospitalAdmin) {
                     item { HospitalAdminSection(state, actions) }
@@ -139,12 +139,12 @@ private fun HospitalCard(name: String, switchable: Boolean, onSwitch: () -> Unit
 }
 
 @Composable
-private fun MyWardCard(ward: MyWard, highlighted: Boolean, onChoose: () -> Unit) {
+private fun MyWardCard(ward: MyWard, highlighted: Boolean, enabled: Boolean, onChoose: () -> Unit) {
     Column(
         Modifier.fillMaxWidth().padding(bottom = 12.dp)
             .border(if (highlighted) 1.5.dp else 0.dp, if (highlighted) C.brand else C.surface, RoundedCornerShape(16.dp))
             .background(C.surface, RoundedCornerShape(16.dp))
-            .clickable(role = Role.Button, onClick = onChoose).padding(16.dp),
+            .clickable(enabled = enabled, role = Role.Button, onClick = onChoose).padding(16.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Label(ward.wardName, 16, C.text, true, Modifier.weight(1f))
@@ -240,7 +240,7 @@ private fun CreateWardCard(form: CreateWardForm, hospitalZone: String, actions: 
         form.failure?.let { error ->
             Spacer(Modifier.height(6.dp))
             Label(
-                error.userMessage() + if (error.outcomeUnknown) " 같은 내용으로 다시 시도하면 중복 없이 처리됩니다." else "",
+                error.userMessage() + if (error.outcomeUnknown) " 병동이 만들어졌는지 확인하지 못했습니다. 같은 내용으로 다시 시도하면 중복 없이 처리됩니다." else "",
                 12, C.danger,
             )
         }

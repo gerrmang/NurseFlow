@@ -31,9 +31,16 @@ sealed interface ApiError {
     /** 5xx. 서버가 처리 결과를 확정하지 못했을 수 있다. 같은 멱등 키로 재시도한다. */
     data class Server(val status: Int) : ApiError
 
-    /** 성공 상태지만 응답 형식이 계약과 다르다. */
+    /**
+     * 2xx 응답을 받았지만 본문을 계약대로 해석하지 못했다. 쓰기 요청이면 서버가 이미 처리했을 수 있지만
+     * 결과를 확인할 수 없으므로 결과 불명으로 다루고 같은 멱등 키로 재시도한다.
+     */
     data object UnexpectedResponse : ApiError
 }
 
-/** 요청 결과가 불확실해 같은 요청을 다시 보내야 하는 오류인가. */
-val ApiError.outcomeUnknown: Boolean get() = this is ApiError.Network || this is ApiError.Server
+/**
+ * 요청 결과가 불확실해 같은 요청을 같은 멱등 키로 다시 보내야 하는 오류인가.
+ * 통신 실패·5xx·해석할 수 없는 2xx가 해당한다. 확정된 4xx·401은 해당하지 않는다.
+ */
+val ApiError.outcomeUnknown: Boolean
+    get() = this is ApiError.Network || this is ApiError.Server || this is ApiError.UnexpectedResponse
