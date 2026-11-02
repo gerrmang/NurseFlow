@@ -1,8 +1,7 @@
 package com.nurseflow.roster.application.generation
 
-import com.nurseflow.roster.api.dto.request.StartGenerationRequest
-import com.nurseflow.roster.api.dto.response.GenerationJob
 import com.nurseflow.roster.application.service.RosterService
+import com.nurseflow.roster.application.model.*
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import org.springframework.core.task.TaskRejectedException

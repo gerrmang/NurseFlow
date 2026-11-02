@@ -24,7 +24,7 @@ import java.util.UUID
 class RosterController(private val service: RosterService, private val generation: GenerationCoordinator) {
     @GetMapping("/wards/{wardId}/rosters")
     fun list(@PathVariable wardId: UUID, @RequestParam month: String, @CurrentSubject subject: String): Items<RosterSummary> =
-        Items(service.listRosters(wardId, month, subject))
+        Items(service.listRosters(wardId, month, subject).map { it.toResponse() })
 
     @PostMapping("/wards/{wardId}/rosters")
     fun create(
@@ -33,14 +33,14 @@ class RosterController(private val service: RosterService, private val generatio
         @RequestHeader("Idempotency-Key") idempotencyKey: UUID,
         @CurrentSubject subject: String,
     ): ResponseEntity<RosterView> {
-        val result = service.createRoster(wardId, request, subject, idempotencyKey)
-        return ResponseEntity.status(HttpStatus.CREATED).eTag(service.etag(result.rosterId, result.revision)).body(result)
+        val result = service.createRoster(wardId, request.toCommand(), subject, idempotencyKey)
+        return ResponseEntity.status(HttpStatus.CREATED).eTag(service.etag(result.rosterId, result.revision)).body(result.toResponse())
     }
 
     @GetMapping("/rosters/{rosterId}")
     fun get(@PathVariable rosterId: UUID, @CurrentSubject subject: String): ResponseEntity<RosterView> {
         val result = service.getRoster(rosterId, subject)
-        return ResponseEntity.ok().eTag(service.etag(result.rosterId, result.revision)).body(result)
+        return ResponseEntity.ok().eTag(service.etag(result.rosterId, result.revision)).body(result.toResponse())
     }
 
     @PutMapping("/rosters/{rosterId}/requirements")
@@ -50,13 +50,13 @@ class RosterController(private val service: RosterService, private val generatio
         @RequestBody request: ReplaceRequirementsRequest,
         @CurrentSubject subject: String,
     ): ResponseEntity<RosterSummary> {
-        val result = service.replaceRequirements(rosterId, ifMatch, request, subject)
-        return ResponseEntity.ok().eTag(service.etag(result.rosterId, result.revision)).body(result)
+        val result = service.replaceRequirements(rosterId, ifMatch, request.toCommand(), subject)
+        return ResponseEntity.ok().eTag(service.etag(result.rosterId, result.revision)).body(result.toResponse())
     }
 
     @GetMapping("/rosters/{rosterId}/absences")
     fun absences(@PathVariable rosterId: UUID, @CurrentSubject subject: String): Items<ApprovedAbsenceView> =
-        Items(service.listAbsences(rosterId, subject))
+        Items(service.listAbsences(rosterId, subject).map { it.toResponse() })
 
     @PostMapping("/rosters/{rosterId}/absences")
     fun addAbsence(
@@ -66,8 +66,8 @@ class RosterController(private val service: RosterService, private val generatio
         @RequestBody request: ApprovedAbsenceInput,
         @CurrentSubject subject: String,
     ): ResponseEntity<ApprovedAbsenceView> {
-        val result = service.addAbsence(rosterId, ifMatch, idempotencyKey, request, subject)
-        return ResponseEntity.status(HttpStatus.CREATED).eTag(service.etag(rosterId, result.rosterRevision)).body(result.absence)
+        val result = service.addAbsence(rosterId, ifMatch, idempotencyKey, request.toCommand(), subject)
+        return ResponseEntity.status(HttpStatus.CREATED).eTag(service.etag(rosterId, result.rosterRevision)).body(result.absence.toResponse())
     }
 
     @PutMapping("/rosters/{rosterId}/absences/{absenceId}")
@@ -78,8 +78,8 @@ class RosterController(private val service: RosterService, private val generatio
         @RequestBody request: ApprovedAbsenceInput,
         @CurrentSubject subject: String,
     ): ResponseEntity<ApprovedAbsenceView> {
-        val result = service.updateAbsence(rosterId, absenceId, ifMatch, request, subject)
-        return ResponseEntity.ok().eTag(service.etag(rosterId, result.rosterRevision)).body(result.absence)
+        val result = service.updateAbsence(rosterId, absenceId, ifMatch, request.toCommand(), subject)
+        return ResponseEntity.ok().eTag(service.etag(rosterId, result.rosterRevision)).body(result.absence.toResponse())
     }
 
     @DeleteMapping("/rosters/{rosterId}/absences/{absenceId}")
@@ -99,7 +99,7 @@ class RosterController(private val service: RosterService, private val generatio
         @RequestHeader("If-Match") ifMatch: String,
         @RequestBody request: ValidateAssignmentRequest,
         @CurrentSubject subject: String,
-    ): AssignmentValidation = service.validate(rosterId, ifMatch, request, subject)
+    ): AssignmentValidation = service.validate(rosterId, ifMatch, request.toCommand(), subject).toResponse()
 
     @PutMapping("/rosters/{rosterId}/slots/{slotId}/assignment")
     fun assign(
@@ -110,8 +110,8 @@ class RosterController(private val service: RosterService, private val generatio
         @RequestBody request: AssignNurseRequest,
         @CurrentSubject subject: String,
     ): ResponseEntity<RosterView> {
-        val result = service.assign(rosterId, slotId, ifMatch, idempotencyKey, request, subject)
-        return ResponseEntity.ok().eTag(service.etag(result.rosterId, result.revision)).body(result)
+        val result = service.assign(rosterId, slotId, ifMatch, idempotencyKey, request.toCommand(), subject)
+        return ResponseEntity.ok().eTag(service.etag(result.rosterId, result.revision)).body(result.toResponse())
     }
 
     @DeleteMapping("/rosters/{rosterId}/slots/{slotId}/assignment")
@@ -133,8 +133,8 @@ class RosterController(private val service: RosterService, private val generatio
         @RequestBody request: ConfirmRosterRequest,
         @CurrentSubject subject: String,
     ): ResponseEntity<RosterSummary> {
-        val result = service.confirm(rosterId, ifMatch, idempotencyKey, request, subject)
-        return ResponseEntity.ok().eTag(service.etag(result.rosterId, result.revision)).body(result)
+        val result = service.confirm(rosterId, ifMatch, idempotencyKey, request.toCommand(), subject)
+        return ResponseEntity.ok().eTag(service.etag(result.rosterId, result.revision)).body(result.toResponse())
     }
 
     @PostMapping("/rosters/{rosterId}/generation-jobs")
@@ -145,11 +145,11 @@ class RosterController(private val service: RosterService, private val generatio
         @RequestBody request: StartGenerationRequest,
         @CurrentSubject subject: String,
     ): ResponseEntity<GenerationJob> = ResponseEntity.status(HttpStatus.ACCEPTED)
-        .body(generation.start(rosterId, ifMatch, idempotencyKey, request, subject))
+        .body(generation.start(rosterId, ifMatch, idempotencyKey, request.toCommand(), subject).toResponse())
 
     @GetMapping("/generation-jobs/{jobId}")
     fun generationJob(@PathVariable jobId: UUID, @CurrentSubject subject: String): GenerationJob =
-        service.getGenerationJob(jobId, subject)
+        service.getGenerationJob(jobId, subject).toResponse()
 
     @PostMapping("/generation-jobs/{jobId}/cancel")
     fun cancelGeneration(
@@ -157,17 +157,17 @@ class RosterController(private val service: RosterService, private val generatio
         @RequestHeader("Idempotency-Key") idempotencyKey: UUID,
         @CurrentSubject subject: String,
     ): ResponseEntity<GenerationJob> = ResponseEntity.status(HttpStatus.ACCEPTED)
-        .body(service.cancelGeneration(jobId, idempotencyKey, subject))
+        .body(service.cancelGeneration(jobId, idempotencyKey, subject).toResponse())
 
     @GetMapping("/wards/{wardId}/published-rosters")
     fun publishedWard(@PathVariable wardId: UUID, @RequestParam month: String, @CurrentSubject subject: String):
         ResponseEntity<PublishedWardCalendar> = ResponseEntity.ok()
             .header("Cache-Control", "private, no-store")
-            .body(service.publishedWard(wardId, month, subject))
+            .body(service.publishedWard(wardId, month, subject).toResponse())
 
     @GetMapping("/wards/{wardId}/published-rosters/mine")
     fun publishedMine(@PathVariable wardId: UUID, @RequestParam month: String, @CurrentSubject subject: String):
         ResponseEntity<PublishedPersonalCalendar> = ResponseEntity.ok()
             .header("Cache-Control", "private, no-store")
-            .body(service.publishedMine(wardId, month, subject))
+            .body(service.publishedMine(wardId, month, subject).toResponse())
 }

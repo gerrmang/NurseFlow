@@ -1,8 +1,7 @@
 package com.nurseflow.roster
 
 import com.nurseflow.common.error.BusinessException
-import com.nurseflow.roster.api.dto.request.*
-import com.nurseflow.roster.api.dto.response.*
+import com.nurseflow.roster.application.model.*
 import com.nurseflow.roster.application.generation.GenerationCoordinator
 import com.nurseflow.roster.application.service.RosterService
 import org.junit.jupiter.api.Assertions.assertEquals

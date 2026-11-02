@@ -4,8 +4,7 @@ import tools.jackson.core.type.TypeReference
 import tools.jackson.databind.json.JsonMapper
 import com.nurseflow.common.error.BusinessException
 import com.nurseflow.common.error.ErrorCode
-import com.nurseflow.roster.api.dto.request.*
-import com.nurseflow.roster.api.dto.response.*
+import com.nurseflow.roster.application.model.*
 import com.nurseflow.roster.domain.model.ApprovedAbsence
 import com.nurseflow.roster.domain.model.ApprovedAbsenceKind
 import com.nurseflow.roster.domain.model.RuleSeverity
