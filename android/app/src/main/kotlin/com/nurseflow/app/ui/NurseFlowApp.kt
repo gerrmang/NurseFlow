@@ -63,7 +63,7 @@ import java.time.temporal.TemporalAdjusters
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
-private enum class Page { WardPicker, AdminRoster, ManualAssign, Absences, Settings, AutoSetup, Review, Confirm, NurseRoster }
+private enum class Page { AdminRoster, ManualAssign, Absences, Settings, AutoSetup, Review, Confirm, NurseRoster }
 private enum class Shift(val short: String, val label: String, val hours: String) {
     DAY("D", "Day", "07:00 – 15:00"),
     EVENING("E", "Evening", "15:00 – 23:00"),
@@ -160,27 +160,27 @@ private class DemoRoster {
     }
 }
 
+/**
+ * Roster screens for the selected ward. Still backed by fictional [DemoRoster] data: edits and
+ * "publish" stay on this device until the roster API is connected.
+ */
 @Composable
-fun NurseFlowApp() {
+fun NurseFlowApp(wardName: String, admin: Boolean, onSwitchWard: () -> Unit) {
     val roster = remember { DemoRoster() }
-    var page by rememberSaveable { mutableStateOf(Page.WardPicker) }
+    var page by rememberSaveable { mutableStateOf(if (admin) Page.AdminRoster else Page.NurseRoster) }
     var selectedDate by rememberSaveable { mutableStateOf(LocalDate.of(2026, 11, 10).toString()) }
     var selectedShift by rememberSaveable { mutableStateOf(Shift.DAY) }
     var month by rememberSaveable { mutableStateOf(YearMonth.of(2026, 11).toString()) }
     var nurseWholeWard by rememberSaveable { mutableStateOf(false) }
-    var selectedWard by rememberSaveable { mutableStateOf("7병동 · 내과") }
+    val selectedWard = wardName
     val currentMonth = YearMonth.parse(month)
 
     Surface(color = C.canvas, modifier = Modifier.fillMaxSize().statusBarsPadding()) {
         when (page) {
-            Page.WardPicker -> WardPickerScreen { ward, admin ->
-                selectedWard = ward
-                page = if (admin) Page.AdminRoster else Page.NurseRoster
-            }
             Page.AdminRoster -> AdminRosterScreen(
                 roster = roster, ward = selectedWard, month = currentMonth,
                 onMonthChange = { month = currentMonth.plusMonths(it.toLong()).toString() },
-                onWard = { page = Page.WardPicker },
+                onWard = onSwitchWard,
                 onCell = { date, shift -> selectedDate = date.toString(); selectedShift = shift; page = Page.ManualAssign },
                 onAbsences = { page = Page.Absences }, onSettings = { page = Page.Settings },
                 onAuto = { page = Page.AutoSetup }, onReview = { page = Page.Review }
@@ -201,7 +201,7 @@ fun NurseFlowApp() {
             Page.NurseRoster -> NurseRosterScreen(roster, selectedWard, currentMonth, nurseWholeWard,
                 onToggle = { nurseWholeWard = it },
                 onMonthChange = { month = currentMonth.plusMonths(it.toLong()).toString() },
-                onWard = { page = Page.WardPicker })
+                onWard = onSwitchWard)
         }
     }
 }
@@ -257,86 +257,6 @@ private fun StatusBanner(message: String, published: Boolean = false, modifier: 
 @Composable
 private fun CardBox(modifier: Modifier = Modifier, content: @Composable () -> Unit) {
     Column(modifier.background(C.surface, RoundedCornerShape(16.dp)).padding(16.dp)) { content() }
-}
-
-@Composable
-private fun WardPickerScreen(onSelect: (String, Boolean) -> Unit) {
-    var query by rememberSaveable { mutableStateOf("") }
-    var lastWard by rememberSaveable { mutableStateOf(true) }
-    Column(Modifier.fillMaxSize().padding(16.dp)) {
-        Spacer(Modifier.height(0.dp))
-        Label("이수진 님", 12, C.secondary)
-        Label("병동 선택", 18, C.text, true)
-        Spacer(Modifier.height(16.dp))
-        CardBox(Modifier.fillMaxWidth()) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Asset(R.drawable.figma_8_313_imgframe, 20)
-                Spacer(Modifier.width(10.dp))
-                Column(Modifier.weight(1f)) { Label("병원", 11, C.secondary); Label("서울한빛병원", 15, C.text, true) }
-                Asset(R.drawable.figma_8_313_imgframe1, 20)
-            }
-        }
-        Spacer(Modifier.height(15.dp))
-        Row(Modifier.fillMaxWidth().height(44.dp)
-            .background(C.surface, RoundedCornerShape(12.dp))
-            .border(1.dp, C.border, RoundedCornerShape(12.dp))
-            .padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-            Asset(R.drawable.figma_8_313_imgframe2, 18)
-            Spacer(Modifier.width(8.dp))
-            BasicTextField(query, { query = it }, singleLine = true,
-                textStyle = TextStyle(color = C.text, fontSize = 14.sp),
-                modifier = Modifier.weight(1f),
-                decorationBox = { inner ->
-                    Box {
-                        if (query.isBlank()) Label("병동 이름 검색", 14, C.muted)
-                        inner()
-                    }
-                })
-        }
-        Spacer(Modifier.height(20.dp))
-        Label("내 병동 3", 13, C.secondary, true)
-        Spacer(Modifier.height(15.dp))
-        listOf(Triple("7병동 · 내과", true, "간호사 24명 · 11월 초안 편집 중"),
-            Triple("8병동 · 외과", false, "11월 근무표 공개됨"),
-            Triple("내과계 중환자실", false, "11월 근무표 준비 중"))
-            .filter { it.first.contains(query, true) }
-            .forEachIndexed { index, ward ->
-                Column(Modifier.fillMaxWidth().padding(bottom = 12.dp).height(if (index == 0) 118.dp else 115.dp)
-                    .border(if (index == 0) 1.5.dp else 0.dp, if (index == 0) C.brand else C.surface, RoundedCornerShape(16.dp))
-                    .background(C.surface, RoundedCornerShape(16.dp))
-                    .clickable { onSelect(ward.first, ward.second) }.padding(16.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Label(ward.first, 16, C.text, true)
-                        if (index == 0) { Spacer(Modifier.width(6.dp)); Label("최근", 11, C.brand, true) }
-                        Spacer(Modifier.weight(1f))
-                        Asset(R.drawable.figma_8_313_imgframe4, 20)
-                    }
-                    Spacer(Modifier.height(4.dp))
-                    Row(Modifier.background(if (ward.second) C.brandSoft else C.infoSoft, RoundedCornerShape(16.dp)).padding(horizontal = 10.dp, vertical = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically) {
-                        Asset(if (ward.second) R.drawable.figma_8_313_imgframe3 else R.drawable.figma_8_313_imgframe5, 14)
-                        Spacer(Modifier.width(4.dp))
-                        Label(if (ward.second) "관리자 · 편집 가능" else "조회 전용", 12, if (ward.second) C.brandDeep else C.info, true)
-                    }
-                    Spacer(Modifier.height(5.dp))
-                    Label(ward.third, 12, C.secondary)
-                }
-            }
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Label("다음에도 마지막 병동으로 바로 시작", 13, C.secondary, modifier = Modifier.weight(1f))
-            if (lastWard) {
-                Image(painterResource(R.drawable.figma_8_313_imgframe6),
-                    contentDescription = "마지막 병동으로 바로 시작 사용 중",
-                    modifier = Modifier.width(44.dp).height(24.dp).clickable { lastWard = false })
-            } else {
-                Box(Modifier.width(44.dp).height(24.dp)
-                    .background(C.borderStrong, RoundedCornerShape(99.dp)).clickable { lastWard = true }
-                    .padding(3.dp), contentAlignment = Alignment.CenterStart) {
-                    Box(Modifier.size(18.dp).background(Color.White, RoundedCornerShape(99.dp)))
-                }
-            }
-        }
-    }
 }
 
 @Composable
