@@ -27,7 +27,7 @@ CREATE TABLE IF NOT EXISTS shift_types (
     ward_id UUID NOT NULL REFERENCES wards(ward_id),
     code VARCHAR(32) NOT NULL,
     display_name VARCHAR(64) NOT NULL,
-    kind VARCHAR(10) NOT NULL CHECK (kind IN ('DAY', 'NIGHT', 'OTHER')),
+    kind VARCHAR(10) NOT NULL CHECK (kind IN ('DAY', 'EVENING', 'NIGHT', 'OTHER')),
     start_time TIME NOT NULL,
     end_time TIME NOT NULL,
     spans_midnight BOOLEAN NOT NULL,

@@ -1,53 +1,12 @@
-package com.nurseflow.roster.domain
+package com.nurseflow.roster.domain.rule
 
+import com.nurseflow.roster.domain.model.ApprovedAbsence
+import com.nurseflow.roster.domain.model.ApprovedAbsenceKind
+import com.nurseflow.roster.domain.model.RuleSeverity
+import com.nurseflow.roster.domain.model.RuleViolation
+import com.nurseflow.roster.domain.model.ShiftAssignment
+import com.nurseflow.roster.domain.model.ShiftKind
 import java.time.Instant
-import java.time.LocalDate
-import java.util.UUID
-
-enum class ShiftKind {
-    DAY,
-    NIGHT,
-    OTHER,
-}
-
-enum class ApprovedAbsenceKind {
-    APPROVED_LEAVE,
-    APPROVED_HALF_DAY,
-}
-
-enum class RuleSeverity {
-    HARD,
-    SOFT,
-}
-
-/**
- * shiftDate is the calendar date in the ward's configured timezone. The exact
- * ward timezone is supplied when shift instances are created; this validator
- * never guesses it from the server timezone.
- */
-data class ShiftAssignment(
-    val assignmentId: UUID?,
-    val nurseId: UUID,
-    val shiftDate: LocalDate,
-    val kind: ShiftKind,
-    val startsAt: Instant,
-    val endsAt: Instant,
-)
-
-/** Stores only the approved time interval and category, never a leave reason. */
-data class ApprovedAbsence(
-    val nurseId: UUID,
-    val kind: ApprovedAbsenceKind,
-    val startsAt: Instant,
-    val endsAt: Instant,
-)
-
-data class RuleViolation(
-    val code: String,
-    val severity: RuleSeverity,
-    val message: String,
-    val affectedDate: LocalDate? = null,
-)
 
 /**
  * Deterministic hard-rule validation for a single candidate assignment.
@@ -119,7 +78,7 @@ class RosterRuleValidator {
                         existing.kind == ShiftKind.DAY &&
                             candidate.shiftDate.plusDays(1) == existing.shiftDate
 
-                    ShiftKind.OTHER -> false
+                    ShiftKind.EVENING, ShiftKind.OTHER -> false
                 }
         }
 
@@ -128,6 +87,23 @@ class RosterRuleValidator {
                 code = "REST_AFTER_NIGHT",
                 severity = RuleSeverity.HARD,
                 message = "나이트 근무 다음 날에는 데이 근무를 배치할 수 없습니다.",
+                affectedDate = candidate.shiftDate,
+            )
+        }
+
+        val eveningToDayConflict = existingAssignments.any { existing ->
+            existing.nurseId == candidate.nurseId &&
+                ((candidate.kind == ShiftKind.DAY && existing.kind == ShiftKind.EVENING &&
+                    existing.shiftDate.plusDays(1) == candidate.shiftDate) ||
+                    (candidate.kind == ShiftKind.EVENING && existing.kind == ShiftKind.DAY &&
+                        candidate.shiftDate.plusDays(1) == existing.shiftDate))
+        }
+
+        if (eveningToDayConflict) {
+            violations += RuleViolation(
+                code = "REST_AFTER_EVENING",
+                severity = RuleSeverity.HARD,
+                message = "이브닝 근무 다음 날에는 데이 근무를 배치할 수 없습니다.",
                 affectedDate = candidate.shiftDate,
             )
         }

@@ -1,42 +1,43 @@
-# NurseFlow Git Branch and PR Policy
+# NurseFlow 브랜치와 PR 운영 정책
 
-This adapts the current branch runbook used in [TRI-BE](https://github.com/wingwogus/TRI-BE/blob/dev/docs/runbooks/git-flow.md) and the policy update in [TRI-BE PR #14](https://github.com/wingwogus/TRI-BE/pull/14). NurseFlow's `origin` is [gerrmang/NurseFlow](https://github.com/gerrmang/NurseFlow); GitHub PR enforcement remains a setup step until rules and checks are verified.
+이 정책은 [TRI-BE의 브랜치 운영 문서](https://github.com/wingwogus/TRI-BE/blob/dev/docs/runbooks/git-flow.md)와 [TRI-BE PR #14](https://github.com/wingwogus/TRI-BE/pull/14)를 참고한다. NurseFlow의 원격 저장소는 [gerrmang/NurseFlow](https://github.com/gerrmang/NurseFlow)다. GitHub의 브랜치 보호와 필수 검사는 실제 설정을 확인하기 전까지 강제된다고 표현하지 않는다.
 
-## Branch Roles
+## 브랜치 역할
 
-| Branch | Purpose | Start point | Merge target |
+| 브랜치 | 용도 | 시작점 | 병합 대상 |
 | --- | --- | --- | --- |
-| `main` | Production-ready/release baseline | Release or hotfix only | — |
-| `dev` | Integration branch for the next release | Current `main` baseline; then reviewed work PRs | `main` for release |
-| `feat/{issue}-{name}` | New feature | Latest `dev` | `dev` |
-| `fix/{issue}-{name}` | Ordinary bug fix | Latest `dev` | `dev` |
-| `chore/{name}` | Tooling, dependency, documentation, or maintenance | Latest `dev` | `dev` |
-| `hotfix/{issue}-{name}` | Urgent production fix | Latest `main` | `main`, then sync the same fix to `dev` |
+| `main` | 검증된 릴리스 기준 | 릴리스 또는 긴급 수정만 | — |
+| `dev` | 다음 릴리스의 개발 통합 | 현재 `main`, 이후 검토된 작업 PR | 릴리스할 때 `main` |
+| `feat/{issue}-{name}` | 새 기능 | 최신 `dev` | `dev` |
+| `fix/{issue}-{name}` | 일반 버그 수정 | 최신 `dev` | `dev` |
+| `chore/{name}` | 도구·문서·유지보수 | 최신 `dev` | `dev` |
+| `hotfix/{issue}-{name}` | 긴급 수정 | 최신 `main` | `main`, 그 뒤 `dev`에도 반영 |
 
-If there is no issue number, use a concise descriptive suffix, such as `feat/roster-rule-validator`.
+이슈 번호가 없으면 `feat/roster-rule-validator`처럼 짧고 구체적인 이름을 사용한다. 브랜치 이름은 Git 도구 호환을 위해 영문으로 유지한다.
 
-## Normal Work
+## 일반 작업 흐름
 
-1. Before writing, check the current branch and worktree status; preserve unrelated changes.
-2. Start each normal work branch from the latest reviewed `dev` state. Do not develop directly on `main` or `dev`.
-3. Keep branches short-lived and changes reviewable. Open a PR to `dev`; do not push directly to `main` or `dev`.
-4. Merge only after the required checks pass, review comments are resolved, and the PR checklist is complete. Use Squash Merge for ordinary feature, fix, and chore PRs; delete the merged work branch.
-5. Release through a reviewed `dev` → `main` PR. Record included work, checks, deployment impact, and rollback target.
-6. For production hotfixes, branch from `main`, merge the reviewed fix to `main`, then sync the same fix to `dev` through a PR.
+1. 편집 전에 현재 브랜치와 작업 폴더 상태를 확인하고 관련 없는 변경을 보존한다.
+2. 최신 `dev`에서 작업 브랜치를 만든다. `main`이나 `dev`에서 기능을 직접 개발하지 않는다.
+3. 변경을 작고 검토 가능하게 유지한다. 일반 작업은 `dev` 대상 PR을 열고 `main`·`dev`에 직접 푸시하지 않는다.
+4. 필요한 검사 통과, 검토 의견 해결, PR 확인표 작성 후 병합한다. 일반 기능·수정·문서 PR은 스쿼시 병합을 사용하고 병합된 작업 브랜치를 정리한다.
+5. 릴리스는 검증된 `dev → main` PR로 진행한다. 포함된 작업, 검사, 배포 영향과 되돌릴 기준 커밋을 적는다.
+6. 긴급 수정은 `main`에서 분기해 검토 후 병합하고, 같은 수정을 PR로 `dev`에도 반영한다.
 
-## Commit and PR Titles
+## 커밋·PR 언어와 제목
 
-Use Conventional Commit subjects, e.g. `feat(roster): 휴가 시간대 배치 검증`. Allowed types: `feat`, `fix`, `docs`, `refactor`, `test`, `chore`.
+- **커밋 제목·본문, PR 제목·설명, 검토 보고를 가능한 한 한글로 작성한다.** 코드 식별자, API 경로, 명령어, 라이브러리 이름과 Git 표준 접두사는 원문을 유지한다.
+- 커밋 제목은 Conventional Commit의 영문 유형만 유지하고 이유는 한글로 쓴다. 예: `fix(roster): 빈 근무표의 공개를 막기 위해 확정 차단`.
+- PR 제목도 같은 방식으로 쓴다. 본문의 요약·검증·미검증·API/DB 변경·배포 영향·되돌리기·위험은 한글로 작성한다.
+- 의사결정이 중요한 커밋에는 Lore 형식을 따른다. `Constraint:`, `Rejected:`, `Confidence:`, `Scope-risk:`, `Directive:`, `Tested:`, `Not-tested:` 같은 **Git trailer 키는 영문 그대로** 두고 값은 한글로 쓴다. 첫 줄에는 변경한 파일보다 변경 이유를 적는다.
+- 외부 도구가 자동 생성한 영문 로그나 코드 이름은 번역해 바꾸지 않는다. 이미 공유·병합된 커밋 메시지를 한글화하기 위해 이력을 다시 쓰지 않는다.
 
-For decision-heavy commits, follow the repository's Lore trailer format: intent line, context, then applicable `Constraint:`, `Rejected:`, `Confidence:`, `Scope-risk:`, `Reversibility:`, `Directive:`, `Tested:`, and `Not-tested:` trailers.
+## 검토와 검증
 
-## Review and Verification
+- 공동 작업 저장소라면 보통 변경에 승인 1건, 인증·권한·근무 규칙·개인정보·API/DB·배포 등 위험도가 높은 변경에 승인 2건과 CI 통과, 대화 해결을 요구하도록 설정한다.
+- 1인 저장소에서는 독립 승인을 받았다고 주장하지 않는다. 자체 검토 기록과 CI 검증을 남긴다.
+- PR에는 요약, 관련 이슈, 실행한 검사와 생략한 검사, API/DB/환경 변경, 배포 영향, 되돌리기, 남은 위험, 확인표를 적는다.
 
-- A shared team repository should require at least one approval for normal changes and two for high-risk changes, plus passing CI and resolved conversations.
-- High-risk changes include authentication/authorization, schedule rules, personal data, API/DB contracts, secrets, deployment, and production configuration.
-- For a solo repository, do not claim independent approval. Use a documented self-review and retain CI/verification requirements.
-- PRs should include a summary, related issue, verification and skipped checks, API/DB/environment changes, deployment impact, rollback, risks, and a completion checklist.
+## GitHub 강제 설정 상태
 
-## GitHub Enforcement Status
-
-The initial documentation baseline is committed, and `dev` and `main` exist locally and on `origin`. Configure `dev` and `main` protection, PR requirements, required CI checks, and approval rules in GitHub. Do not describe these server-side controls as active until verified.
+`dev`와 `main`은 로컬 및 원격에 존재한다. 두 브랜치의 보호·PR 필수·필수 CI·승인 규칙을 GitHub에서 설정해야 한다. 실제로 설정과 검사를 확인하기 전에는 서버가 이를 강제한다고 설명하지 않는다.
