@@ -41,6 +41,11 @@ class WardService(
         if (WardRole.WARD_ADMIN.name !in roles) throw BusinessException(ErrorCode.WARD_ADMIN_REQUIRED)
     }
 
+    @Transactional(readOnly = true)
+    fun requireMember(wardId: UUID, subject: String) {
+        if (repo.rolesIn(wardId, subject).isEmpty()) throw BusinessException(ErrorCode.WARD_NOT_FOUND)
+    }
+
     /**
      * Demo-only: creates a ward and makes the caller its first WARD_ADMIN when the configured
      * bootstrap code matches. Every other member must join through an invitation.

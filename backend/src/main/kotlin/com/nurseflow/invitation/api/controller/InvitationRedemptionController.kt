@@ -2,8 +2,10 @@ package com.nurseflow.invitation.api.controller
 
 import com.nurseflow.common.security.CurrentSubject
 import com.nurseflow.invitation.api.dto.request.InvitationTokenRequest
+import com.nurseflow.invitation.api.dto.request.RedeemInvitationRequest
 import com.nurseflow.invitation.api.dto.response.InvitationPreviewResponse
 import com.nurseflow.invitation.application.service.InvitationRedemptionService
+import com.nurseflow.staff.application.model.ProfileInput
 import com.nurseflow.ward.api.controller.toResponse
 import com.nurseflow.ward.api.dto.response.WardMembershipResponse
 import jakarta.validation.Valid
@@ -13,6 +15,7 @@ import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RestController
+import java.time.YearMonth
 
 /** Token travels in the body (never the URL) so it stays out of access logs. Login is required. */
 @RestController
@@ -31,9 +34,14 @@ class InvitationRedemptionController(private val redemption: InvitationRedemptio
 
     @PostMapping("/redeem")
     fun redeem(
-        @Valid @RequestBody request: InvitationTokenRequest,
+        @Valid @RequestBody request: RedeemInvitationRequest,
         @CurrentSubject subject: String,
-    ): ResponseEntity<WardMembershipResponse> = ResponseEntity.status(HttpStatus.CREATED)
-        .header("Cache-Control", "private, no-store")
-        .body(redemption.redeem(request.token, subject).toResponse())
+    ): ResponseEntity<WardMembershipResponse> {
+        val profile = request.careerStartedOn?.let { start ->
+            ProfileInput(YearMonth.parse(start), request.rank!!.trim())
+        }
+        return ResponseEntity.status(HttpStatus.CREATED)
+            .header("Cache-Control", "private, no-store")
+            .body(redemption.redeem(request.token, subject, profile).toResponse())
+    }
 }
