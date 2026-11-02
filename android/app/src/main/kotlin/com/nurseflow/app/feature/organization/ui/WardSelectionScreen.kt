@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -21,6 +22,11 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardCapitalization
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -59,7 +65,7 @@ private fun WardSelectionScreen(
     onSignOut: () -> Unit,
     onOpenDemo: () -> Unit,
 ) {
-    LazyColumn(Modifier.fillMaxSize().padding(horizontal = 16.dp), contentPadding = PaddingValues(vertical = 16.dp)) {
+    LazyColumn(Modifier.fillMaxSize().imePadding().padding(horizontal = 16.dp), contentPadding = PaddingValues(vertical = 16.dp)) {
         item {
             Label("서버 연결", 12, C.secondary)
             Label("병동 선택", 18, C.text, true)
@@ -73,7 +79,7 @@ private fun WardSelectionScreen(
             LoadState.Loading -> item { LoadingRow("병동 목록을 불러오는 중…") }
             is LoadState.Failed -> item { MessageCard(load.error.userMessage(), "다시 시도", actions::refresh, danger = true) }
             LoadState.Ready -> {
-                state.notice?.let { notice -> item { Notice(notice); Spacer(Modifier.height(12.dp)) } }
+                state.notice?.let { notice -> item { Notice(notice, error = state.noticeIsError); Spacer(Modifier.height(12.dp)) } }
                 state.selectedHospital?.let { hospital ->
                     item {
                         HospitalCard(hospital.name, state.hospitals.size > 1) {
@@ -183,21 +189,21 @@ private fun HospitalAdminSection(state: WardSelectionUiState, actions: WardSelec
         else -> CardBox(Modifier.fillMaxWidth()) {
             state.hospitalWards.forEachIndexed { index, ward ->
                 if (index > 0) Spacer(Modifier.height(10.dp))
-                HospitalWardRow(ward, member = state.isMember(ward.wardId), highlighted = ward.wardId == state.highlightedWardId)
+                HospitalWardRow(ward, member = state.isMember(ward.wardId), justCreated = ward.wardId == state.justCreatedWardId)
             }
         }
     }
 }
 
 @Composable
-private fun HospitalWardRow(ward: HospitalWard, member: Boolean, highlighted: Boolean) {
+private fun HospitalWardRow(ward: HospitalWard, member: Boolean, justCreated: Boolean) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f)) {
             Label(ward.name, 14, C.text, true)
             Label(ward.timeZone, 12, C.secondary)
         }
         val (text, bg, fg) = when {
-            highlighted -> Triple("방금 생성", C.brandSoft, C.brandDeep)
+            justCreated -> Triple("방금 생성", C.brandSoft, C.brandDeep)
             member -> Triple("내 병동", C.brandSoft, C.brandDeep)
             else -> Triple("소속 없음", C.subtle, C.secondary)
         }
@@ -216,12 +222,19 @@ private fun CreateWardCard(form: CreateWardForm, hospitalZone: String, actions: 
             value = form.name, onValueChange = actions::editName, enabled = !form.submitting, singleLine = true,
             label = { Text("병동 이름") }, isError = form.nameError != null,
             supportingText = form.nameError?.let { { Text(it) } },
+            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
             colors = fieldColors(), modifier = Modifier.fillMaxWidth(),
         )
         OutlinedTextField(
             value = form.timeZone, onValueChange = actions::editTimeZone, enabled = !form.submitting, singleLine = true,
             label = { Text("시간대 (선택)") }, placeholder = { Text("$hospitalZone (병원 기본값)") },
             isError = form.timeZoneError != null, supportingText = form.timeZoneError?.let { { Text(it) } },
+            // IANA 이름(예: Asia/Seoul)은 자동 수정·대문자 변환이 값을 망가뜨린다.
+            keyboardOptions = KeyboardOptions(
+                capitalization = KeyboardCapitalization.None, autoCorrectEnabled = false,
+                keyboardType = KeyboardType.Ascii, imeAction = ImeAction.Done,
+            ),
+            keyboardActions = KeyboardActions(onDone = { actions.submitCreate() }),
             colors = fieldColors(), modifier = Modifier.fillMaxWidth(),
         )
         form.failure?.let { error ->
@@ -288,11 +301,13 @@ internal fun MessageCard(message: String, action: String, onAction: () -> Unit, 
 }
 
 @Composable
-private fun Notice(text: String) {
-    Row(Modifier.fillMaxWidth().background(C.brandSoft, RoundedCornerShape(12.dp)).padding(horizontal = 14.dp, vertical = 10.dp),
+private fun Notice(text: String, error: Boolean) {
+    Row(Modifier.fillMaxWidth().background(if (error) C.dangerSoft else C.brandSoft, RoundedCornerShape(12.dp))
+        .padding(horizontal = 14.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically) {
-        Asset(R.drawable.figma_11_370_imgframe, 18)
+        // 시연 화면의 "⚠ 미충원"과 같은 경고 표기를 쓴다.
+        if (error) Label("⚠", 15, C.danger, true) else Asset(R.drawable.figma_11_370_imgframe, 18)
         Spacer(Modifier.width(8.dp))
-        Label(text, 13, C.brandDeep)
+        Label(text, 13, if (error) C.danger else C.brandDeep)
     }
 }

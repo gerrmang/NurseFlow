@@ -44,6 +44,7 @@ class WardSelectionViewModelTest {
         assertEquals(listOf("w1"), state.myWards.map { it.wardId })
         assertFalse(state.isHospitalAdmin)
         assertEquals("w1", state.highlightedWardId)
+        assertNull("기본 강조는 방금 생성 표시가 아니다", state.justCreatedWardId)
         assertEquals(0, repo.hospitalWardCalls)
 
         vm.choose("w1")
@@ -90,8 +91,10 @@ class WardSelectionViewModelTest {
         assertNull(state.form)
         assertEquals(listOf(CreateCall("h1", "신규 병동", null, "key-1")), repo.createCalls)
         assertEquals("new-1", state.chosenWardId)
+        assertEquals("new-1", state.justCreatedWardId)
         assertEquals(listOf("new-1"), state.hospitalWards.map { it.wardId })
         assertTrue(state.notice!!.contains("신규 병동"))
+        assertFalse(state.noticeIsError)
     }
 
     @Test
@@ -169,6 +172,9 @@ class WardSelectionViewModelTest {
         val state = vm.uiState.value
         assertFalse(state.isHospitalAdmin)
         assertNull(state.form)
+        // 양식이 닫혀도 이유를 알려준다(에뮬레이터 검증에서 발견한 조용한 실패 회귀 방지).
+        assertTrue(state.noticeIsError)
+        assertTrue(state.notice!!.startsWith("병원 관리자 권한이 없습니다."))
     }
 
     private fun ward(id: String, role: String) = MyWard(id, "병동 $id", "Asia/Seoul", "h1", "가상 병원", setOf(role), true)

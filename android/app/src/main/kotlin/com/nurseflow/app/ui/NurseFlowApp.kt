@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -558,7 +559,8 @@ private fun AbsencesScreen(roster: DemoRoster, onBack: () -> Unit) {
     var selectedType by rememberSaveable { mutableStateOf("휴가") }
     var dateText by rememberSaveable { mutableStateOf("2026-11-12") }
     var feedback by rememberSaveable { mutableStateOf("") }
-    Column(Modifier.fillMaxSize()) {
+    // MainActivity가 adjustResize를 쓰므로 키보드가 날짜 입력을 가리지 않도록 화면을 키보드 위로 줄인다.
+    Column(Modifier.fillMaxSize().imePadding()) {
         Header("휴가 · 반차", "7병동 · 2026년 11월", onBack)
         LazyColumn(Modifier.weight(1f).padding(horizontal = 16.dp)) {
             item { Label("승인된 일정만 등록합니다", 13, C.secondary, modifier = Modifier.padding(vertical = 12.dp)) }

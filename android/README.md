@@ -19,6 +19,8 @@ The design follows the [NurseFlow Figma file](https://www.figma.com/design/QtqAX
 
 Handled states are loading, empty lists, field errors (`INVALID_WARD_NAME`, `WARD_NAME_TAKEN`, `INVALID_TIME_ZONE`), session expiry (401, then sign out), permission (403), hidden resources (404), and network/5xx with retry. For a create whose outcome is unknown (network failure or 5xx), retrying the same input reuses the same `Idempotency-Key`. Changing the input or receiving a definite response starts a new key.
 
+Keyboard handling: `MainActivity` uses `windowSoftInputMode="adjustResize"`. With edge-to-edge (forced at targetSdk 35 on Android 15+), screens with inputs lower on the page apply `imePadding()`, so fields and buttons stay reachable above the keyboard. The debug token field is a password input, so the keyboard neither suggests nor learns the token.
+
 **Not yet available:** Kakao login and server session exchange, invitation acceptance, server-backed roster screens. There is no hardcoded token or admin account and no auth bypass.
 
 ## Build and test

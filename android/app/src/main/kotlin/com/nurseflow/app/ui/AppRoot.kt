@@ -22,6 +22,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.Role
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -105,7 +107,10 @@ private fun DeveloperTokenScreen(onSubmit: (String) -> Unit, onOpenDemo: () -> U
             Label("Kakao 로그인 연동 전 개발 확인용입니다. 서버가 설정한 OIDC 발급자의 토큰만 통과합니다. 토큰은 저장하지 않습니다.", 13, C.secondary)
             Spacer(Modifier.height(10.dp))
             OutlinedTextField(value, { value = it }, singleLine = true, label = { Text("access token") },
-                visualTransformation = PasswordVisualTransformation(), modifier = Modifier.fillMaxWidth())
+                visualTransformation = PasswordVisualTransformation(),
+                // 비밀번호 입력으로 알려 키보드가 토큰을 추천·학습하지 않게 한다(에뮬레이터 검증에서 추천 줄 노출 확인).
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, autoCorrectEnabled = false),
+                modifier = Modifier.fillMaxWidth())
         }
         Spacer(Modifier.height(16.dp))
         AppButton("연결", { onSubmit(value) }, Modifier.fillMaxWidth(), enabled = value.isNotBlank())
