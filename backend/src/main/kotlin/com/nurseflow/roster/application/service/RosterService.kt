@@ -2,7 +2,8 @@ package com.nurseflow.roster.application.service
 
 import tools.jackson.core.type.TypeReference
 import tools.jackson.databind.json.JsonMapper
-import com.nurseflow.common.error.ApiException
+import com.nurseflow.common.error.BusinessException
+import com.nurseflow.common.error.ErrorCode
 import com.nurseflow.roster.api.dto.request.*
 import com.nurseflow.roster.api.dto.response.*
 import com.nurseflow.roster.domain.model.ApprovedAbsence
@@ -18,7 +19,7 @@ import com.nurseflow.roster.persistence.entity.DbRoster
 import com.nurseflow.roster.persistence.entity.DbSlot
 import com.nurseflow.roster.persistence.entity.NewSlot
 import com.nurseflow.roster.persistence.repository.RosterJdbcRepository
-import org.springframework.http.HttpStatus
+import com.nurseflow.roster.persistence.repository.ReplayLookup
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.security.MessageDigest
@@ -39,7 +40,7 @@ class RosterService(
 
     fun currentEtag(rosterId: UUID): String {
         val roster = repo.findRoster(rosterId)
-            ?: fail(HttpStatus.NOT_FOUND, "ROSTER_NOT_FOUND", "근무표를 찾을 수 없습니다.")
+            ?: throw BusinessException(ErrorCode.ROSTER_NOT_FOUND)
         return etag(roster.id, roster.revision)
     }
 
@@ -54,11 +55,11 @@ class RosterService(
     fun createRoster(wardId: UUID, request: CreateRosterRequest, subject: String, idempotencyKey: UUID): RosterView {
         parseMonth(request.month)
         requireAdmin(wardId, subject)
-        repo.lockWard(wardId)
+        if (!repo.lockWard(wardId)) throw BusinessException(ErrorCode.WARD_NOT_FOUND)
         val action = "create-roster:$wardId"
         replay(idempotencyKey, action, request, RosterView::class.java)?.let { return it }
         if (repo.draftExistsForMonth(wardId, request.month)) {
-            fail(HttpStatus.CONFLICT, "DRAFT_EXISTS", "해당 월의 초안이 이미 있습니다.")
+            throw BusinessException(ErrorCode.DRAFT_EXISTS)
         }
         val publishedAbsences = repo.activePublished(wardId, request.month)?.let { repo.absences(it.id) }.orEmpty()
         val id = UUID.randomUUID()
@@ -84,29 +85,29 @@ class RosterService(
                 it.requiredCount !in 0..100 ||
                     it.requiredQualifications.size > 50 || it.requiredQualifications.any { q -> q.length !in 1..64 }
             }) {
-            fail(HttpStatus.BAD_REQUEST, "INVALID_REQUIREMENTS", "인력 수요 항목이 허용 범위를 벗어났습니다.")
+            throw BusinessException(ErrorCode.INVALID_REQUIREMENTS)
         }
         if (request.items.map { it.date to it.shiftTypeId }.toSet().size != request.items.size) {
-            fail(HttpStatus.BAD_REQUEST, "DUPLICATE_REQUIREMENT", "날짜와 근무 유형 조합이 중복되었습니다.")
+            throw BusinessException(ErrorCode.DUPLICATE_REQUIREMENT)
         }
         if (request.items.sumOf { it.requiredCount } > 10000) {
-            fail(HttpStatus.BAD_REQUEST, "TOO_MANY_SLOTS", "생성할 근무 칸이 너무 많습니다.")
+            throw BusinessException(ErrorCode.TOO_MANY_SLOTS)
         }
         if (repo.slots(roster.id).any { it.nurseId != null }) {
-            fail(HttpStatus.CONFLICT, "ASSIGNMENTS_EXIST", "배정을 해제한 뒤 인력 수요를 변경해 주세요.")
+            throw BusinessException(ErrorCode.ASSIGNMENTS_EXIST)
         }
         val month = parseMonth(roster.month)
         val newSlots = request.items.flatMap { item ->
             if (YearMonth.from(item.date) != month) {
-                fail(HttpStatus.BAD_REQUEST, "DATE_OUTSIDE_ROSTER", "근무 날짜가 해당 월에 속하지 않습니다.")
+                throw BusinessException(ErrorCode.DATE_OUTSIDE_ROSTER)
             }
             val shift = repo.findShiftDefinition(item.shiftTypeId, roster.wardId)
-                ?: fail(HttpStatus.BAD_REQUEST, "SHIFT_TYPE_NOT_FOUND", "근무 유형을 찾을 수 없습니다.")
+                ?: throw BusinessException(ErrorCode.SHIFT_TYPE_NOT_FOUND)
             val start = item.date.atTime(shift.start).atZone(roster.zone).toInstant()
             val endDate = if (shift.spansMidnight) item.date.plusDays(1) else item.date
             val end = endDate.atTime(shift.end).atZone(roster.zone).toInstant()
             if (!start.isBefore(end)) {
-                fail(HttpStatus.UNPROCESSABLE_CONTENT, "INVALID_SHIFT_INTERVAL", "근무 종료 시각은 시작 시각보다 뒤여야 합니다.")
+                throw BusinessException(ErrorCode.INVALID_SHIFT_INTERVAL)
             }
             List(item.requiredCount) {
                 NewSlot(item.date, item.shiftTypeId, start, end, item.requiredQualifications.distinct())
@@ -152,7 +153,7 @@ class RosterService(
     ): AbsenceMutation {
         val roster = lockedDraft(rosterId, ifMatch, subject)
         if (repo.absences(roster.id).none { it.id == absenceId }) {
-            fail(HttpStatus.NOT_FOUND, "ABSENCE_NOT_FOUND", "부재 일정을 찾을 수 없습니다.")
+            throw BusinessException(ErrorCode.ABSENCE_NOT_FOUND)
         }
         validateAbsence(roster, input)
         repo.updateAbsence(absenceId, roster.id, input.nurseId, input.kind, input.startsAt, input.endsAt)
@@ -167,7 +168,7 @@ class RosterService(
     fun deleteAbsence(rosterId: UUID, absenceId: UUID, ifMatch: String, subject: String): Int {
         val roster = lockedDraft(rosterId, ifMatch, subject)
         if (!repo.deleteAbsence(absenceId, roster.id)) {
-            fail(HttpStatus.NOT_FOUND, "ABSENCE_NOT_FOUND", "부재 일정을 찾을 수 없습니다.")
+            throw BusinessException(ErrorCode.ABSENCE_NOT_FOUND)
         }
         repo.increment(roster.id)
         return roster.revision + 1
@@ -177,9 +178,9 @@ class RosterService(
     fun validate(rosterId: UUID, ifMatch: String, input: ValidateAssignmentRequest, subject: String): AssignmentValidation {
         val roster = visibleToAdmin(rosterId, subject)
         checkRevision(roster, ifMatch)
-        if (roster.status != "DRAFT") fail(HttpStatus.CONFLICT, "NOT_DRAFT", "확정된 근무표는 수정할 수 없습니다.")
+        if (roster.status != "DRAFT") throw BusinessException(ErrorCode.NOT_DRAFT)
         val slot = repo.slots(roster.id).firstOrNull { it.id == input.slotId }
-            ?: fail(HttpStatus.NOT_FOUND, "SLOT_NOT_FOUND", "근무 칸을 찾을 수 없습니다.")
+            ?: throw BusinessException(ErrorCode.SLOT_NOT_FOUND)
         val violations = candidateViolations(roster, slot, input.nurseId)
         return AssignmentValidation(violations.isEmpty(), violations, rosterRevision = roster.revision)
     }
@@ -196,13 +197,10 @@ class RosterService(
         checkRevision(roster, ifMatch)
         ensureDraft(roster)
         val slot = repo.slots(roster.id).firstOrNull { it.id == slotId }
-            ?: fail(HttpStatus.NOT_FOUND, "SLOT_NOT_FOUND", "근무 칸을 찾을 수 없습니다.")
+            ?: throw BusinessException(ErrorCode.SLOT_NOT_FOUND)
         val violations = candidateViolations(roster, slot, input.nurseId)
         if (violations.isNotEmpty()) {
-            throw ApiException(
-                HttpStatus.UNPROCESSABLE_CONTENT, "RULE_VIOLATION", "배치할 수 없는 근무 칸입니다.",
-                ruleViolations = violations,
-            )
+            throw BusinessException(ErrorCode.RULE_VIOLATION, ruleViolations = violations)
         }
         repo.assignSlot(slotId, roster.id, input.nurseId, input.locked)
         repo.increment(roster.id)
@@ -213,7 +211,7 @@ class RosterService(
     fun unassign(rosterId: UUID, slotId: UUID, ifMatch: String, subject: String): Int {
         val roster = lockedDraft(rosterId, ifMatch, subject)
         if (!repo.unassignSlot(slotId, roster.id)) {
-            fail(HttpStatus.NOT_FOUND, "SLOT_NOT_FOUND", "근무 칸을 찾을 수 없습니다.")
+            throw BusinessException(ErrorCode.SLOT_NOT_FOUND)
         }
         repo.increment(roster.id)
         return roster.revision + 1
@@ -232,11 +230,11 @@ class RosterService(
         ensureDraft(roster)
         val currentSlots = repo.slots(roster.id)
         if (currentSlots.isEmpty()) {
-            fail(HttpStatus.UNPROCESSABLE_CONTENT, "ROSTER_REQUIREMENTS_REQUIRED", "필요 인원을 설정한 뒤 확정해 주세요.")
+            throw BusinessException(ErrorCode.ROSTER_REQUIREMENTS_REQUIRED)
         }
         val unfilled = currentSlots.count { it.nurseId == null }
         if (unfilled > 0 && request.acknowledgeUnfilledCount != unfilled) {
-            fail(HttpStatus.UNPROCESSABLE_CONTENT, "UNFILLED_ACK_REQUIRED", "미충원 인원 수를 확인해 주세요.")
+            throw BusinessException(ErrorCode.UNFILLED_ACK_REQUIRED)
         }
         val context = loadValidationContext(roster, currentSlots)
         val nursesById = mutableMapOf<UUID, DbNurse?>()
@@ -244,9 +242,9 @@ class RosterService(
             candidateViolations(roster, slot, slot.nurseId!!, context, nursesById)
         }.plus(draftAbsenceConflicts(roster)).distinctBy { it.code to it.affectedDate }
         if (violations.isNotEmpty()) {
-            throw ApiException(
-                HttpStatus.UNPROCESSABLE_CONTENT, "RULE_VIOLATION",
-                "확정 전에 근무 배치를 수정해 주세요.", ruleViolations = violations,
+            throw BusinessException(
+                ErrorCode.RULE_VIOLATION, ruleViolations = violations,
+                safeDetail = "확정 전에 근무 배치를 수정해 주세요.",
             )
         }
         repo.deactivatePublished(roster.wardId, roster.month)
@@ -266,15 +264,15 @@ class RosterService(
         checkRevision(roster, ifMatch)
         ensureDraft(roster)
         if (request.timeLimitSeconds !in 1..600) {
-            fail(HttpStatus.BAD_REQUEST, "INVALID_TIME_LIMIT", "자동배치 제한 시간은 1~600초여야 합니다.")
+            throw BusinessException(ErrorCode.INVALID_TIME_LIMIT)
         }
         if (repo.pendingGenerationCount(rosterId) > 0) {
-            fail(HttpStatus.TOO_MANY_REQUESTS, "GENERATION_ALREADY_RUNNING", "자동배치가 이미 진행 중입니다.")
+            throw BusinessException(ErrorCode.GENERATION_ALREADY_RUNNING)
         }
         val all = repo.slots(rosterId)
-        if (all.size > 2000) fail(HttpStatus.UNPROCESSABLE_CONTENT, "GENERATION_TOO_LARGE", "자동배치 한도는 2000칸입니다.")
+        if (all.size > 2000) throw BusinessException(ErrorCode.GENERATION_TOO_LARGE)
         if (repo.activeNurseCount(roster.wardId) > 200) {
-            fail(HttpStatus.UNPROCESSABLE_CONTENT, "GENERATION_TOO_LARGE", "자동배치 한도는 활성 간호사 200명입니다.")
+            throw BusinessException(ErrorCode.GENERATION_TOO_LARGE, safeDetail = "자동배치 한도는 활성 간호사 200명입니다.")
         }
         val job = GenerationJob(UUID.randomUUID(), rosterId, "QUEUED", roster.revision, Instant.now(), progressPercent = 0)
         repo.insertGenerationJob(
@@ -288,24 +286,24 @@ class RosterService(
     @Transactional(readOnly = true)
     fun getGenerationJob(jobId: UUID, subject: String): GenerationJob {
         val rosterId = repo.jobRosterId(jobId)
-            ?: fail(HttpStatus.NOT_FOUND, "GENERATION_JOB_NOT_FOUND", "자동배치 작업을 찾을 수 없습니다.")
+            ?: throw BusinessException(ErrorCode.GENERATION_JOB_NOT_FOUND)
         visibleToAdmin(rosterId, subject)
         return readGenerationJob(jobId)
-            ?: fail(HttpStatus.NOT_FOUND, "GENERATION_JOB_NOT_FOUND", "자동배치 작업을 찾을 수 없습니다.")
+            ?: throw BusinessException(ErrorCode.GENERATION_JOB_NOT_FOUND)
     }
 
     @Transactional
     fun cancelGeneration(jobId: UUID, idempotencyKey: UUID, subject: String): GenerationJob {
         val rosterId = repo.jobRosterId(jobId)
-            ?: fail(HttpStatus.NOT_FOUND, "GENERATION_JOB_NOT_FOUND", "자동배치 작업을 찾을 수 없습니다.")
+            ?: throw BusinessException(ErrorCode.GENERATION_JOB_NOT_FOUND)
         visibleToAdmin(rosterId, subject)
         val action = "cancel-generation:$jobId"
         replay(idempotencyKey, action, jobId, GenerationJob::class.java)?.let { return it }
         repo.lockGenerationJob(jobId)
         val job = readGenerationJob(jobId)
-            ?: fail(HttpStatus.NOT_FOUND, "GENERATION_JOB_NOT_FOUND", "자동배치 작업을 찾을 수 없습니다.")
+            ?: throw BusinessException(ErrorCode.GENERATION_JOB_NOT_FOUND)
         if (job.status !in setOf("QUEUED", "RUNNING")) {
-            fail(HttpStatus.CONFLICT, "GENERATION_NOT_CANCELLABLE", "이미 종료된 자동배치 작업입니다.")
+            throw BusinessException(ErrorCode.GENERATION_NOT_CANCELLABLE)
         }
         if (job.status == "QUEUED") repo.cancelQueuedJob(jobId) else repo.requestCancel(jobId)
         val result = readGenerationJob(jobId)!!
@@ -422,7 +420,7 @@ class RosterService(
         parseMonth(month)
         requireWardView(wardId, subject)
         val roster = repo.activePublished(wardId, month)
-            ?: fail(HttpStatus.NOT_FOUND, "PUBLISHED_ROSTER_NOT_FOUND", "공개된 근무표가 없습니다.")
+            ?: throw BusinessException(ErrorCode.PUBLISHED_ROSTER_NOT_FOUND)
         val v = view(roster)
         return PublishedWardCalendar(wardId, month, roster.revision, roster.zone.id, v.staffing, v.slots)
     }
@@ -432,9 +430,9 @@ class RosterService(
         parseMonth(month)
         requireMember(wardId, subject)
         val nurseId = repo.findNurseIdBySubject(wardId, subject)
-            ?: fail(HttpStatus.FORBIDDEN, "NURSE_IDENTITY_REQUIRED", "본인 근무표를 조회할 수 없습니다.")
+            ?: throw BusinessException(ErrorCode.NURSE_IDENTITY_REQUIRED)
         val roster = repo.activePublished(wardId, month)
-            ?: fail(HttpStatus.NOT_FOUND, "PUBLISHED_ROSTER_NOT_FOUND", "공개된 근무표가 없습니다.")
+            ?: throw BusinessException(ErrorCode.PUBLISHED_ROSTER_NOT_FOUND)
         val own = repo.slots(roster.id).filter { it.nurseId == nurseId }
             .map { PersonalAssignment(it.date, it.shiftCode, it.startsAt, it.endsAt) }
         return PublishedPersonalCalendar(wardId, month, roster.revision, roster.zone.id, own)
@@ -450,7 +448,7 @@ class RosterService(
         nursesById: MutableMap<UUID, DbNurse?> = mutableMapOf(),
     ): List<RuleDiagnostic> {
         val nurse = nursesById.getOrPut(nurseId) { repo.findNurse(nurseId, roster.wardId) }
-            ?: fail(HttpStatus.NOT_FOUND, "NURSE_NOT_FOUND", "병동 간호사를 찾을 수 없습니다.")
+            ?: throw BusinessException(ErrorCode.NURSE_NOT_FOUND)
         val extra = mutableListOf<RuleDiagnostic>()
         if (!nurse.active) extra += RuleDiagnostic("NURSE_INACTIVE", "HARD", "활성화되지 않은 간호사입니다.", slot.date)
         if (!nurse.qualifications.containsAll(slot.requiredQualifications)) {
@@ -472,23 +470,23 @@ class RosterService(
 
     private fun validateAbsence(roster: DbRoster, input: ApprovedAbsenceInput) {
         if (input.kind !in setOf("APPROVED_LEAVE", "APPROVED_HALF_DAY") || !input.startsAt.isBefore(input.endsAt)) {
-            fail(HttpStatus.BAD_REQUEST, "INVALID_ABSENCE", "부재 유형 또는 시간 구간이 올바르지 않습니다.")
+            throw BusinessException(ErrorCode.INVALID_ABSENCE)
         }
         val month = parseMonth(roster.month)
         val monthStart = month.atDay(1).atStartOfDay(roster.zone).toInstant()
         val nextMonthStart = month.plusMonths(1).atDay(1).atStartOfDay(roster.zone).toInstant()
         if (!(input.startsAt < nextMonthStart && monthStart < input.endsAt)) {
-            fail(HttpStatus.BAD_REQUEST, "ABSENCE_OUTSIDE_ROSTER", "부재 시간이 해당 월과 겹쳐야 합니다.")
+            throw BusinessException(ErrorCode.ABSENCE_OUTSIDE_ROSTER)
         }
         if (repo.findNurse(input.nurseId, roster.wardId) == null) {
-            fail(HttpStatus.NOT_FOUND, "NURSE_NOT_FOUND", "병동 간호사를 찾을 수 없습니다.")
+            throw BusinessException(ErrorCode.NURSE_NOT_FOUND)
         }
         val adjacentPublished = repo.adjacentPublishedRosterIds(roster.wardId, roster.month).flatMap { repo.slots(it) }
         val conflict = (repo.slots(roster.id) + adjacentPublished).any { slot ->
             slot.nurseId == input.nurseId && input.startsAt < slot.endsAt && slot.startsAt < input.endsAt
         }
         if (conflict) {
-            fail(HttpStatus.UNPROCESSABLE_CONTENT, "ABSENCE_ASSIGNMENT_OVERLAP", "기존 배정과 부재 시간이 겹칩니다.")
+            throw BusinessException(ErrorCode.ABSENCE_ASSIGNMENT_OVERLAP)
         }
     }
 
@@ -533,14 +531,14 @@ class RosterService(
 
     private fun visibleToAdmin(id: UUID, subject: String): DbRoster {
         val roster = repo.findRoster(id)
-            ?: fail(HttpStatus.NOT_FOUND, "ROSTER_NOT_FOUND", "근무표를 찾을 수 없습니다.")
+            ?: throw BusinessException(ErrorCode.ROSTER_NOT_FOUND)
         requireAdmin(roster.wardId, subject)
         return roster
     }
 
     private fun lockAuthorizedRoster(id: UUID, subject: String): DbRoster {
         val roster = visibleToAdmin(id, subject)
-        repo.lockWard(roster.wardId)
+        if (!repo.lockWard(roster.wardId)) throw BusinessException(ErrorCode.WARD_NOT_FOUND)
         repo.lockRoster(id)
         return repo.findRoster(id)!!
     }
@@ -552,7 +550,7 @@ class RosterService(
         }
 
     private fun ensureDraft(roster: DbRoster) {
-        if (roster.status != "DRAFT") fail(HttpStatus.CONFLICT, "NOT_DRAFT", "확정된 근무표는 수정할 수 없습니다.")
+        if (roster.status != "DRAFT") throw BusinessException(ErrorCode.NOT_DRAFT)
     }
 
     private fun absenceView(absence: DbAbsence) = ApprovedAbsenceView(
@@ -587,7 +585,11 @@ class RosterService(
     )
 
     private fun <T> replay(key: UUID, action: String, payload: Any, type: Class<T>): T? =
-        repo.replay(key, action, requestHash(payload), type)
+        when (val result = repo.replay(key, action, requestHash(payload), type)) {
+            ReplayLookup.Missing -> null
+            ReplayLookup.Conflict -> throw BusinessException(ErrorCode.IDEMPOTENCY_KEY_REUSED)
+            is ReplayLookup.Found -> result.value
+        }
 
     private fun recordReplay(key: UUID, action: String, payload: Any, response: Any) =
         repo.recordReplay(key, action, requestHash(payload), response)
@@ -598,29 +600,26 @@ class RosterService(
 
     private fun checkRevision(roster: DbRoster, ifMatch: String) {
         if (ifMatch != "\"${etag(roster.id, roster.revision)}\"") {
-            throw ApiException(
-                HttpStatus.PRECONDITION_FAILED, "STALE_ROSTER_REVISION",
-                "근무표가 변경되었습니다. 다시 불러와 주세요.", currentRevision = roster.revision,
-            )
+            throw BusinessException(ErrorCode.STALE_ROSTER_REVISION, currentRevision = roster.revision)
         }
     }
 
     private fun requireAdmin(wardId: UUID, subject: String) {
         val roles = repo.memberships(wardId, subject)
-        if (roles.isEmpty()) fail(HttpStatus.NOT_FOUND, "WARD_NOT_FOUND", "병동을 찾을 수 없습니다.")
-        if ("WARD_ADMIN" !in roles) fail(HttpStatus.FORBIDDEN, "WARD_ADMIN_REQUIRED", "관리자 권한이 필요합니다.")
+        if (roles.isEmpty()) throw BusinessException(ErrorCode.WARD_NOT_FOUND)
+        if ("WARD_ADMIN" !in roles) throw BusinessException(ErrorCode.WARD_ADMIN_REQUIRED)
     }
 
     private fun requireMember(wardId: UUID, subject: String) {
         if (repo.memberships(wardId, subject).isEmpty()) {
-            fail(HttpStatus.NOT_FOUND, "WARD_NOT_FOUND", "병동을 찾을 수 없습니다.")
+            throw BusinessException(ErrorCode.WARD_NOT_FOUND)
         }
     }
 
     private fun requireWardView(wardId: UUID, subject: String) {
         requireMember(wardId, subject)
         if (!repo.canViewWardCalendar(wardId, subject)) {
-            fail(HttpStatus.FORBIDDEN, "WARD_CALENDAR_VIEW_REQUIRED", "병동 전체 근무표 조회 권한이 없습니다.")
+            throw BusinessException(ErrorCode.WARD_CALENDAR_VIEW_REQUIRED)
         }
     }
 
@@ -628,11 +627,9 @@ class RosterService(
         if (!Regex("^\\d{4}-(0[1-9]|1[0-2])$").matches(value)) throw IllegalArgumentException()
         YearMonth.parse(value)
     } catch (_: Exception) {
-        fail(HttpStatus.BAD_REQUEST, "INVALID_MONTH", "월은 YYYY-MM 형식이어야 합니다.")
+        throw BusinessException(ErrorCode.INVALID_MONTH)
     }
 
-    private fun fail(status: HttpStatus, code: String, detail: String): Nothing =
-        throw ApiException(status, code, detail)
 
     private data class ValidationContext(
         val assignments: List<ShiftAssignment>,

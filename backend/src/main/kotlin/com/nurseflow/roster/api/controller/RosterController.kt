@@ -1,6 +1,7 @@
 package com.nurseflow.roster.api.controller
 
-import com.nurseflow.common.error.ApiException
+import com.nurseflow.common.error.BusinessException
+import com.nurseflow.common.error.ErrorCode
 import com.nurseflow.roster.api.dto.request.*
 import com.nurseflow.roster.api.dto.response.*
 import com.nurseflow.roster.application.generation.GenerationCoordinator
@@ -25,7 +26,7 @@ import java.util.UUID
 @RequestMapping("/api/v1")
 class RosterController(private val service: RosterService, private val generation: GenerationCoordinator) {
     private fun subject(jwt: Jwt): String = jwt.subject
-        ?: throw ApiException(HttpStatus.UNAUTHORIZED, "SUBJECT_REQUIRED", "사용자 식별 정보가 없습니다.")
+        ?: throw BusinessException(ErrorCode.SUBJECT_REQUIRED)
 
     @GetMapping("/wards/{wardId}/rosters")
     fun list(@PathVariable wardId: UUID, @RequestParam month: String, @AuthenticationPrincipal jwt: Jwt): Items<RosterSummary> =

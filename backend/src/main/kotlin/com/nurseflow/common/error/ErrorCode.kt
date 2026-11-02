@@ -1,0 +1,41 @@
+package com.nurseflow.common.error
+
+import org.springframework.http.HttpStatus
+
+enum class ErrorCode(val status: HttpStatus, val safeMessage: String) {
+    ABSENCE_ASSIGNMENT_OVERLAP(HttpStatus.UNPROCESSABLE_CONTENT, "기존 배정과 부재 시간이 겹칩니다."),
+    ABSENCE_NOT_FOUND(HttpStatus.NOT_FOUND, "부재 일정을 찾을 수 없습니다."),
+    ABSENCE_OUTSIDE_ROSTER(HttpStatus.BAD_REQUEST, "부재 시간이 해당 월과 겹쳐야 합니다."),
+    ASSIGNMENTS_EXIST(HttpStatus.CONFLICT, "배정을 해제한 뒤 인력 수요를 변경해 주세요."),
+    DATE_OUTSIDE_ROSTER(HttpStatus.BAD_REQUEST, "근무 날짜가 해당 월에 속하지 않습니다."),
+    DRAFT_EXISTS(HttpStatus.CONFLICT, "해당 월의 초안이 이미 있습니다."),
+    DUPLICATE_REQUIREMENT(HttpStatus.BAD_REQUEST, "날짜와 근무 유형 조합이 중복되었습니다."),
+    GENERATION_ALREADY_RUNNING(HttpStatus.TOO_MANY_REQUESTS, "자동배치가 이미 진행 중입니다."),
+    GENERATION_JOB_NOT_FOUND(HttpStatus.NOT_FOUND, "자동배치 작업을 찾을 수 없습니다."),
+    GENERATION_NOT_CANCELLABLE(HttpStatus.CONFLICT, "이미 종료된 자동배치 작업입니다."),
+    GENERATION_TOO_LARGE(HttpStatus.UNPROCESSABLE_CONTENT, "자동배치 한도는 2000칸입니다."),
+    IDEMPOTENCY_KEY_REUSED(HttpStatus.CONFLICT, "다른 요청에 이미 사용한 키입니다."),
+    INTERNAL_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "서버 오류가 발생했습니다."),
+    INVALID_ABSENCE(HttpStatus.BAD_REQUEST, "부재 유형 또는 시간 구간이 올바르지 않습니다."),
+    INVALID_MONTH(HttpStatus.BAD_REQUEST, "월은 YYYY-MM 형식이어야 합니다."),
+    INVALID_REQUEST(HttpStatus.BAD_REQUEST, "요청 형식 또는 필드 값이 올바르지 않습니다."),
+    INVALID_REQUIREMENTS(HttpStatus.BAD_REQUEST, "인력 수요 항목이 허용 범위를 벗어났습니다."),
+    INVALID_SHIFT_INTERVAL(HttpStatus.UNPROCESSABLE_CONTENT, "근무 종료 시각은 시작 시각보다 뒤여야 합니다."),
+    INVALID_TIME_LIMIT(HttpStatus.BAD_REQUEST, "자동배치 제한 시간은 1~600초여야 합니다."),
+    NOT_DRAFT(HttpStatus.CONFLICT, "확정된 근무표는 수정할 수 없습니다."),
+    NURSE_IDENTITY_REQUIRED(HttpStatus.FORBIDDEN, "본인 근무표를 조회할 수 없습니다."),
+    NURSE_NOT_FOUND(HttpStatus.NOT_FOUND, "병동 간호사를 찾을 수 없습니다."),
+    PUBLISHED_ROSTER_NOT_FOUND(HttpStatus.NOT_FOUND, "공개된 근무표가 없습니다."),
+    ROSTER_NOT_FOUND(HttpStatus.NOT_FOUND, "근무표를 찾을 수 없습니다."),
+    ROSTER_REQUIREMENTS_REQUIRED(HttpStatus.UNPROCESSABLE_CONTENT, "필요 인원을 설정한 뒤 확정해 주세요."),
+    RULE_VIOLATION(HttpStatus.UNPROCESSABLE_CONTENT, "배치할 수 없는 근무 칸입니다."),
+    SHIFT_TYPE_NOT_FOUND(HttpStatus.BAD_REQUEST, "근무 유형을 찾을 수 없습니다."),
+    SLOT_NOT_FOUND(HttpStatus.NOT_FOUND, "근무 칸을 찾을 수 없습니다."),
+    STALE_ROSTER_REVISION(HttpStatus.PRECONDITION_FAILED, "근무표가 변경되었습니다. 다시 불러와 주세요."),
+    SUBJECT_REQUIRED(HttpStatus.UNAUTHORIZED, "사용자 식별 정보가 없습니다."),
+    TOO_MANY_SLOTS(HttpStatus.BAD_REQUEST, "생성할 근무 칸이 너무 많습니다."),
+    UNFILLED_ACK_REQUIRED(HttpStatus.UNPROCESSABLE_CONTENT, "미충원 인원 수를 확인해 주세요."),
+    WARD_ADMIN_REQUIRED(HttpStatus.FORBIDDEN, "관리자 권한이 필요합니다."),
+    WARD_CALENDAR_VIEW_REQUIRED(HttpStatus.FORBIDDEN, "병동 전체 근무표 조회 권한이 없습니다."),
+    WARD_NOT_FOUND(HttpStatus.NOT_FOUND, "병동을 찾을 수 없습니다.");
+}

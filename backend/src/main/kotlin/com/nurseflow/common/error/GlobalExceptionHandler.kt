@@ -10,16 +10,16 @@ import org.springframework.web.method.annotation.MethodArgumentTypeMismatchExcep
 
 @RestControllerAdvice
 class GlobalExceptionHandler {
-    @ExceptionHandler(ApiException::class)
-    fun handle(ex: ApiException): ResponseEntity<ApiProblem> = ResponseEntity
-        .status(ex.status)
+    @ExceptionHandler(BusinessException::class)
+    fun handle(ex: BusinessException): ResponseEntity<ApiProblem> = ResponseEntity
+        .status(ex.errorCode.status)
         .contentType(MediaType.parseMediaType("application/problem+json"))
         .header("Cache-Control", "private, no-store")
         .body(
             ApiProblem(
-                title = ex.status.reasonPhrase,
-                status = ex.status.value(),
-                code = ex.code,
+                title = ex.errorCode.status.reasonPhrase,
+                status = ex.errorCode.status.value(),
+                code = ex.errorCode.name,
                 detail = ex.safeDetail,
                 currentRevision = ex.currentRevision,
                 ruleViolations = ex.ruleViolations,
@@ -34,12 +34,13 @@ class GlobalExceptionHandler {
     fun malformed(): ResponseEntity<ApiProblem> = ResponseEntity.status(400)
         .contentType(MediaType.parseMediaType("application/problem+json"))
         .header("Cache-Control", "private, no-store")
-        .body(
-            ApiProblem(
-                title = "Bad Request",
-                status = 400,
-                code = "INVALID_REQUEST",
-                detail = "요청 형식 또는 필드 값이 올바르지 않습니다.",
-            ),
-        )
+        .body(ApiProblem(title = "Bad Request", status = 400,
+            code = ErrorCode.INVALID_REQUEST.name, detail = ErrorCode.INVALID_REQUEST.safeMessage))
+
+    @ExceptionHandler(Exception::class)
+    fun unexpected(): ResponseEntity<ApiProblem> = ResponseEntity.status(500)
+        .contentType(MediaType.parseMediaType("application/problem+json"))
+        .header("Cache-Control", "private, no-store")
+        .body(ApiProblem(title = "Internal Server Error", status = 500,
+            code = ErrorCode.INTERNAL_ERROR.name, detail = ErrorCode.INTERNAL_ERROR.safeMessage))
 }

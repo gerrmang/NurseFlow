@@ -1,11 +1,8 @@
 package com.nurseflow.common.error
 
-import org.springframework.http.HttpStatus
-
-class ApiException(
-    val status: HttpStatus,
-    val code: String,
-    val safeDetail: String,
+class BusinessException(
+    val errorCode: ErrorCode,
     val currentRevision: Int? = null,
     val ruleViolations: List<Any> = emptyList(),
+    val safeDetail: String = errorCode.safeMessage,
 ) : RuntimeException(safeDetail)
