@@ -29,4 +29,6 @@ data class InvitationPreview(
     val role: WardRole,
     val expiresAt: Instant,
     val linksExistingNurse: Boolean,
+    /** Ward rank names for the join form; empty for WARD_ADMIN invitations. */
+    val ranks: List<String>,
 )

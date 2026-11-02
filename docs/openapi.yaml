@@ -1670,8 +1670,13 @@ components:
           maxLength: 30
     InvitationPreview:
       type: object
-      required: [wardId, wardName, role, expiresAt, linksExistingNurse]
+      required: [wardId, wardName, role, expiresAt, linksExistingNurse, ranks]
       properties:
+        ranks:
+          type: array
+          items:
+            type: string
+          description: 가입 화면 직급 선택지(병동 직급 목록). WARD_ADMIN 초대는 빈 배열
         wardId:
           type: string
           format: uuid

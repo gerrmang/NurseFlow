@@ -54,6 +54,7 @@ class InvitationRedemptionHttpTest : ApiTestBase() {
         assertEquals(200, preview.status, preview.body)
         assertEquals("가상 외과 병동", preview.json!!.get("wardName").asString())
         assertEquals("WARD_MEMBER", preview.json!!.get("role").asString())
+        assertEquals(listOf("팀장", "과장", "신규"), preview.json!!.get("ranks").values().map { it.asString() })
 
         val joined = redeem(token, nurse)
         assertEquals(201, joined.status, joined.body)

@@ -38,8 +38,10 @@ class InvitationRedemptionService(
         requireRedeemable(invitation, Instant.now())
         val wardName = wardRepo.findWardName(invitation.wardId)
             ?: throw BusinessException(ErrorCode.INVITATION_NOT_FOUND)
+        val role = WardRole.valueOf(invitation.role)
         return InvitationPreview(
-            invitation.wardId, wardName, WardRole.valueOf(invitation.role), invitation.expiresAt, invitation.nurseId != null,
+            invitation.wardId, wardName, role, invitation.expiresAt, invitation.nurseId != null,
+            ranks = if (role == WardRole.WARD_MEMBER) staff.ranksForInvitee(invitation.wardId) else emptyList(),
         )
     }
 

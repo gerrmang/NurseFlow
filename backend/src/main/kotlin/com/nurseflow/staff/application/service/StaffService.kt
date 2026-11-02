@@ -81,6 +81,10 @@ class StaffService(
         return policyResult(wardId)
     }
 
+    /** Rank names for an invitee who is not a member yet (shown on the join screen). */
+    @Transactional(readOnly = true)
+    fun ranksForInvitee(wardId: UUID): List<String> = policyResult(wardId).ranks
+
     /** Takes effect immediately: stages are computed from confirmed inputs and the current policy. */
     @Transactional
     fun updateCareerPolicy(wardId: UUID, thresholds: List<Int>, ranks: List<String>, actor: String): CareerPolicyResult {
