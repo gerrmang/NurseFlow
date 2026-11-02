@@ -5,6 +5,7 @@ import com.nurseflow.roster.api.dto.request.*
 import com.nurseflow.roster.api.dto.response.*
 import com.nurseflow.roster.application.generation.GenerationCoordinator
 import com.nurseflow.roster.application.service.RosterService
+import jakarta.validation.Valid
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.DeleteMapping
@@ -29,7 +30,7 @@ class RosterController(private val service: RosterService, private val generatio
     @PostMapping("/wards/{wardId}/rosters")
     fun create(
         @PathVariable wardId: UUID,
-        @RequestBody request: CreateRosterRequest,
+        @Valid @RequestBody request: CreateRosterRequest,
         @RequestHeader("Idempotency-Key") idempotencyKey: UUID,
         @CurrentSubject subject: String,
     ): ResponseEntity<RosterView> {
@@ -47,7 +48,7 @@ class RosterController(private val service: RosterService, private val generatio
     fun requirements(
         @PathVariable rosterId: UUID,
         @RequestHeader("If-Match") ifMatch: String,
-        @RequestBody request: ReplaceRequirementsRequest,
+        @Valid @RequestBody request: ReplaceRequirementsRequest,
         @CurrentSubject subject: String,
     ): ResponseEntity<RosterSummary> {
         val result = service.replaceRequirements(rosterId, ifMatch, request.toCommand(), subject)
@@ -63,7 +64,7 @@ class RosterController(private val service: RosterService, private val generatio
         @PathVariable rosterId: UUID,
         @RequestHeader("If-Match") ifMatch: String,
         @RequestHeader("Idempotency-Key") idempotencyKey: UUID,
-        @RequestBody request: ApprovedAbsenceInput,
+        @Valid @RequestBody request: ApprovedAbsenceInput,
         @CurrentSubject subject: String,
     ): ResponseEntity<ApprovedAbsenceView> {
         val result = service.addAbsence(rosterId, ifMatch, idempotencyKey, request.toCommand(), subject)
@@ -75,7 +76,7 @@ class RosterController(private val service: RosterService, private val generatio
         @PathVariable rosterId: UUID,
         @PathVariable absenceId: UUID,
         @RequestHeader("If-Match") ifMatch: String,
-        @RequestBody request: ApprovedAbsenceInput,
+        @Valid @RequestBody request: ApprovedAbsenceInput,
         @CurrentSubject subject: String,
     ): ResponseEntity<ApprovedAbsenceView> {
         val result = service.updateAbsence(rosterId, absenceId, ifMatch, request.toCommand(), subject)
@@ -97,7 +98,7 @@ class RosterController(private val service: RosterService, private val generatio
     fun validate(
         @PathVariable rosterId: UUID,
         @RequestHeader("If-Match") ifMatch: String,
-        @RequestBody request: ValidateAssignmentRequest,
+        @Valid @RequestBody request: ValidateAssignmentRequest,
         @CurrentSubject subject: String,
     ): AssignmentValidation = service.validate(rosterId, ifMatch, request.toCommand(), subject).toResponse()
 
@@ -107,7 +108,7 @@ class RosterController(private val service: RosterService, private val generatio
         @PathVariable slotId: UUID,
         @RequestHeader("If-Match") ifMatch: String,
         @RequestHeader("Idempotency-Key") idempotencyKey: UUID,
-        @RequestBody request: AssignNurseRequest,
+        @Valid @RequestBody request: AssignNurseRequest,
         @CurrentSubject subject: String,
     ): ResponseEntity<RosterView> {
         val result = service.assign(rosterId, slotId, ifMatch, idempotencyKey, request.toCommand(), subject)
@@ -130,7 +131,7 @@ class RosterController(private val service: RosterService, private val generatio
         @PathVariable rosterId: UUID,
         @RequestHeader("If-Match") ifMatch: String,
         @RequestHeader("Idempotency-Key") idempotencyKey: UUID,
-        @RequestBody request: ConfirmRosterRequest,
+        @Valid @RequestBody request: ConfirmRosterRequest,
         @CurrentSubject subject: String,
     ): ResponseEntity<RosterSummary> {
         val result = service.confirm(rosterId, ifMatch, idempotencyKey, request.toCommand(), subject)
@@ -142,7 +143,7 @@ class RosterController(private val service: RosterService, private val generatio
         @PathVariable rosterId: UUID,
         @RequestHeader("If-Match") ifMatch: String,
         @RequestHeader("Idempotency-Key") idempotencyKey: UUID,
-        @RequestBody request: StartGenerationRequest,
+        @Valid @RequestBody request: StartGenerationRequest,
         @CurrentSubject subject: String,
     ): ResponseEntity<GenerationJob> = ResponseEntity.status(HttpStatus.ACCEPTED)
         .body(generation.start(rosterId, ifMatch, idempotencyKey, request.toCommand(), subject).toResponse())
