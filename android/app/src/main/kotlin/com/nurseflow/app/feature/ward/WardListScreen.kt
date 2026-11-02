@@ -41,6 +41,7 @@ fun WardListScreen(
     onInvites: (MembershipDto) -> Unit,
     onMyProfile: (MembershipDto) -> Unit,
     onEnterInvite: () -> Unit,
+    onCreateWard: () -> Unit,
     onLogout: () -> Unit,
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -55,6 +56,7 @@ fun WardListScreen(
             TextButton({ menu = true }) { NfText("메뉴", 14, C.secondary, true) }
             DropdownMenu(menu, onDismissRequest = { menu = false }) {
                 DropdownMenuItem(text = { NfText("초대 코드 입력", 15) }, onClick = { menu = false; onEnterInvite() })
+                DropdownMenuItem(text = { NfText("새 병동 만들기", 15) }, onClick = { menu = false; onCreateWard() })
                 DropdownMenuItem(text = { NfText("새로고침", 15) }, onClick = { menu = false; viewModel.reload() })
                 DropdownMenuItem(text = { NfText("로그아웃", 15, C.danger) }, onClick = { menu = false; onLogout() })
             }
@@ -69,7 +71,7 @@ fun WardListScreen(
             is WardsUiState.Loaded -> {
                 val wards = current.user.memberships
                 if (wards.isEmpty()) {
-                    NoWardState(onEnterInvite)
+                    NoWardState(onCreateWard, onEnterInvite)
                 } else {
                     NfText("내 병동 ${wards.size}", 13, C.secondary, true)
                     wards.forEach { ward -> WardCard(ward, onOpenWard, onInvites, onMyProfile) }
@@ -102,16 +104,23 @@ private fun WardCard(
     }
 }
 
+/** First run: choose between starting a ward as its administrator or joining with an invitation. */
 @Composable
-private fun NoWardState(onEnterInvite: () -> Unit) {
-    NfCard {
-        NfText("아직 소속된 병동이 없어요", 17, C.text, true)
-        Spacer(Modifier.height(6.dp))
-        NfText("로그인만으로는 병동 근무표를 볼 수 없어요. 병동 관리자에게 초대 링크를 받아 가입해 주세요.", 14, C.secondary)
-        Spacer(Modifier.height(16.dp))
-        NfPrimaryButton("초대 코드 입력", onEnterInvite)
+private fun NoWardState(onCreateWard: () -> Unit, onEnterInvite: () -> Unit) {
+    NfText("어떻게 시작할까요?", 18, C.text, true)
+    NfText("로그인만으로는 병동 근무표를 볼 수 없어요. 병동을 만들거나 초대를 받아 가입해 주세요.", 14, C.secondary)
+    NfCard(onClick = onCreateWard) {
+        NfText("병동 관리자예요", 16, C.text, true)
+        Spacer(Modifier.height(4.dp))
+        NfText("병동을 만들고 간호사를 초대해 근무표를 관리해요.", 14, C.secondary)
+        Spacer(Modifier.height(12.dp))
+        NfPrimaryButton("병동 만들기", onCreateWard)
     }
-    Column(horizontalAlignment = Alignment.Start) {
-        Row { Spacer(Modifier.width(4.dp)); NfText("관리자라면 서버의 시연용 병동 생성 기능으로 첫 병동을 만들 수 있어요.", 12, C.muted) }
+    NfCard(onClick = onEnterInvite) {
+        NfText("초대를 받았어요", 16, C.text, true)
+        Spacer(Modifier.height(4.dp))
+        NfText("관리자에게 받은 초대 링크나 코드로 병동에 가입해요.", 14, C.secondary)
+        Spacer(Modifier.height(12.dp))
+        NfOutlinedButton("초대 코드 입력", onEnterInvite)
     }
 }
