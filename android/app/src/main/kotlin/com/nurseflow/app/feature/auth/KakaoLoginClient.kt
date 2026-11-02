@@ -1,6 +1,7 @@
 package com.nurseflow.app.feature.auth
 
 import android.content.Context
+import android.util.Log
 import com.kakao.sdk.auth.model.OAuthToken
 import com.kakao.sdk.common.model.ClientError
 import com.kakao.sdk.common.model.ClientErrorCause
@@ -20,6 +21,8 @@ class KakaoLoginFailed(message: String) : Exception(message)
  * a browser tab. Requests an OpenID Connect ID token bound to a fresh nonce, which the server
  * verifies. Kakao access/refresh tokens are not sent to NurseFlow.
  */
+private const val TAG = "NurseFlowKakao"
+
 class KakaoLoginClient {
     val isConfigured: Boolean get() = BuildConfig.KAKAO_NATIVE_APP_KEY.isNotBlank()
 
@@ -37,8 +40,9 @@ class KakaoLoginClient {
                 talkLogin(context, nonce)
             } catch (e: KakaoLoginCancelled) {
                 throw e
-            } catch (_: Exception) {
+            } catch (e: Exception) {
                 // KakaoTalk installed but not logged in, etc.: fall back to account login.
+                Log.w(TAG, "KakaoTalk login failed, trying account login", e)
                 accountLogin(context, nonce)
             }
         } else {
@@ -65,7 +69,12 @@ class KakaoLoginClient {
         if (!isActive) return
         when {
             error is ClientError && error.reason == ClientErrorCause.Cancelled -> resumeWithException(KakaoLoginCancelled())
-            error != null -> resumeWithException(KakaoLoginFailed("카카오 로그인에 실패했어요. 잠시 후 다시 시도해 주세요."))
+            error != null -> {
+                // Kakao SDK errors carry no tokens; the reason is needed to fix console settings (key hash etc.).
+                Log.e(TAG, "Kakao login failed", error)
+                val detail = if (BuildConfig.DEBUG) "\n[디버그] ${error::class.simpleName}: ${error.message}" else ""
+                resumeWithException(KakaoLoginFailed("카카오 로그인에 실패했어요. 잠시 후 다시 시도해 주세요.$detail"))
+            }
             token != null -> resume(token)
             else -> resumeWithException(KakaoLoginFailed("카카오 로그인 결과가 없어요."))
         }
