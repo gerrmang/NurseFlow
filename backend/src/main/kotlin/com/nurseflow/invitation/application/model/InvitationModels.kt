@@ -22,3 +22,11 @@ data class InvitationResult(
 
 /** Returned once at creation. The raw token is never stored and cannot be retrieved again. */
 data class IssuedInvitation(val invitation: InvitationResult, val token: String, val inviteUrl: String?)
+
+data class InvitationPreview(
+    val wardId: UUID,
+    val wardName: String,
+    val role: WardRole,
+    val expiresAt: Instant,
+    val linksExistingNurse: Boolean,
+)
