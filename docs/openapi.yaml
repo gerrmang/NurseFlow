@@ -1016,7 +1016,7 @@ components:
     ShiftType:
       type: object
       additionalProperties: false
-      required: [shiftTypeId, code, displayName, startTime, endTime, spansMidnight, active]
+      required: [shiftTypeId, code, displayName, kind, startTime, endTime, spansMidnight, active]
       properties:
         shiftTypeId:
           type: string
@@ -1027,6 +1027,9 @@ components:
         displayName:
           type: string
           maxLength: 64
+        kind:
+          type: string
+          enum: [DAY, EVENING, NIGHT, OTHER]
         startTime:
           type: string
           format: time
@@ -1042,7 +1045,7 @@ components:
     ShiftTypeInput:
       type: object
       additionalProperties: false
-      required: [code, displayName, startTime, endTime, spansMidnight]
+      required: [code, displayName, kind, startTime, endTime, spansMidnight]
       properties:
         code:
           type: string
@@ -1050,6 +1053,9 @@ components:
         displayName:
           type: string
           maxLength: 64
+        kind:
+          type: string
+          enum: [DAY, EVENING, NIGHT, OTHER]
         startTime:
           type: string
           format: time

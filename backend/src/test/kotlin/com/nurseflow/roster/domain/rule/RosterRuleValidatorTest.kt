@@ -27,6 +27,11 @@ class RosterRuleValidatorTest {
         Instant.parse("${date}T23:00:00Z"), Instant.parse("${date}T07:00:00Z".replace(date, nextDay(date))),
     )
 
+    private fun evening(date: String) = ShiftAssignment(
+        UUID.randomUUID(), nurse, LocalDate.parse(date), ShiftKind.EVENING,
+        Instant.parse("${date}T15:00:00Z"), Instant.parse("${date}T23:00:00Z"),
+    )
+
     private fun nextDay(date: String): String = LocalDate.parse(date).plusDays(1).toString()
 
     // ── Night→Day 금지 ──
@@ -65,6 +70,24 @@ class RosterRuleValidatorTest {
         val violations = validator.validate(candidate, existing, emptyList())
         assertEquals(1, violations.size)
         assertEquals("REST_AFTER_NIGHT", violations[0].code)
+    }
+
+    @Test
+    fun `day after evening across month boundary is rejected`() {
+        val violations = validator.validate(day("2026-11-01"), listOf(evening("2026-10-31")), emptyList())
+        assertEquals("REST_AFTER_EVENING", violations.single().code)
+        assertEquals(RuleSeverity.HARD, violations.single().severity)
+    }
+
+    @Test
+    fun `evening before an assigned day is rejected`() {
+        val violations = validator.validate(evening("2026-10-31"), listOf(day("2026-11-01")), emptyList())
+        assertEquals("REST_AFTER_EVENING", violations.single().code)
+    }
+
+    @Test
+    fun `day two days after evening is allowed`() {
+        assertTrue(validator.validate(day("2026-11-02"), listOf(evening("2026-10-31")), emptyList()).isEmpty())
     }
 
     // ── 시간 중복 금지 ──

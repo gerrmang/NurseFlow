@@ -78,7 +78,7 @@ class RosterRuleValidator {
                         existing.kind == ShiftKind.DAY &&
                             candidate.shiftDate.plusDays(1) == existing.shiftDate
 
-                    ShiftKind.OTHER -> false
+                    ShiftKind.EVENING, ShiftKind.OTHER -> false
                 }
         }
 
@@ -87,6 +87,23 @@ class RosterRuleValidator {
                 code = "REST_AFTER_NIGHT",
                 severity = RuleSeverity.HARD,
                 message = "나이트 근무 다음 날에는 데이 근무를 배치할 수 없습니다.",
+                affectedDate = candidate.shiftDate,
+            )
+        }
+
+        val eveningToDayConflict = existingAssignments.any { existing ->
+            existing.nurseId == candidate.nurseId &&
+                ((candidate.kind == ShiftKind.DAY && existing.kind == ShiftKind.EVENING &&
+                    existing.shiftDate.plusDays(1) == candidate.shiftDate) ||
+                    (candidate.kind == ShiftKind.EVENING && existing.kind == ShiftKind.DAY &&
+                        candidate.shiftDate.plusDays(1) == existing.shiftDate))
+        }
+
+        if (eveningToDayConflict) {
+            violations += RuleViolation(
+                code = "REST_AFTER_EVENING",
+                severity = RuleSeverity.HARD,
+                message = "이브닝 근무 다음 날에는 데이 근무를 배치할 수 없습니다.",
                 affectedDate = candidate.shiftDate,
             )
         }
