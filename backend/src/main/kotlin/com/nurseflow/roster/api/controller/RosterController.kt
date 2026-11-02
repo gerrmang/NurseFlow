@@ -1,15 +1,12 @@
 package com.nurseflow.roster.api.controller
 
-import com.nurseflow.common.error.BusinessException
-import com.nurseflow.common.error.ErrorCode
+import com.nurseflow.common.security.CurrentSubject
 import com.nurseflow.roster.api.dto.request.*
 import com.nurseflow.roster.api.dto.response.*
 import com.nurseflow.roster.application.generation.GenerationCoordinator
 import com.nurseflow.roster.application.service.RosterService
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
-import org.springframework.security.core.annotation.AuthenticationPrincipal
-import org.springframework.security.oauth2.jwt.Jwt
 import org.springframework.web.bind.annotation.DeleteMapping
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PathVariable
@@ -25,27 +22,24 @@ import java.util.UUID
 @RestController
 @RequestMapping("/api/v1")
 class RosterController(private val service: RosterService, private val generation: GenerationCoordinator) {
-    private fun subject(jwt: Jwt): String = jwt.subject
-        ?: throw BusinessException(ErrorCode.SUBJECT_REQUIRED)
-
     @GetMapping("/wards/{wardId}/rosters")
-    fun list(@PathVariable wardId: UUID, @RequestParam month: String, @AuthenticationPrincipal jwt: Jwt): Items<RosterSummary> =
-        Items(service.listRosters(wardId, month, subject(jwt)))
+    fun list(@PathVariable wardId: UUID, @RequestParam month: String, @CurrentSubject subject: String): Items<RosterSummary> =
+        Items(service.listRosters(wardId, month, subject))
 
     @PostMapping("/wards/{wardId}/rosters")
     fun create(
         @PathVariable wardId: UUID,
         @RequestBody request: CreateRosterRequest,
         @RequestHeader("Idempotency-Key") idempotencyKey: UUID,
-        @AuthenticationPrincipal jwt: Jwt,
+        @CurrentSubject subject: String,
     ): ResponseEntity<RosterView> {
-        val result = service.createRoster(wardId, request, subject(jwt), idempotencyKey)
+        val result = service.createRoster(wardId, request, subject, idempotencyKey)
         return ResponseEntity.status(HttpStatus.CREATED).eTag(service.etag(result.rosterId, result.revision)).body(result)
     }
 
     @GetMapping("/rosters/{rosterId}")
-    fun get(@PathVariable rosterId: UUID, @AuthenticationPrincipal jwt: Jwt): ResponseEntity<RosterView> {
-        val result = service.getRoster(rosterId, subject(jwt))
+    fun get(@PathVariable rosterId: UUID, @CurrentSubject subject: String): ResponseEntity<RosterView> {
+        val result = service.getRoster(rosterId, subject)
         return ResponseEntity.ok().eTag(service.etag(result.rosterId, result.revision)).body(result)
     }
 
@@ -54,15 +48,15 @@ class RosterController(private val service: RosterService, private val generatio
         @PathVariable rosterId: UUID,
         @RequestHeader("If-Match") ifMatch: String,
         @RequestBody request: ReplaceRequirementsRequest,
-        @AuthenticationPrincipal jwt: Jwt,
+        @CurrentSubject subject: String,
     ): ResponseEntity<RosterSummary> {
-        val result = service.replaceRequirements(rosterId, ifMatch, request, subject(jwt))
+        val result = service.replaceRequirements(rosterId, ifMatch, request, subject)
         return ResponseEntity.ok().eTag(service.etag(result.rosterId, result.revision)).body(result)
     }
 
     @GetMapping("/rosters/{rosterId}/absences")
-    fun absences(@PathVariable rosterId: UUID, @AuthenticationPrincipal jwt: Jwt): Items<ApprovedAbsenceView> =
-        Items(service.listAbsences(rosterId, subject(jwt)))
+    fun absences(@PathVariable rosterId: UUID, @CurrentSubject subject: String): Items<ApprovedAbsenceView> =
+        Items(service.listAbsences(rosterId, subject))
 
     @PostMapping("/rosters/{rosterId}/absences")
     fun addAbsence(
@@ -70,9 +64,9 @@ class RosterController(private val service: RosterService, private val generatio
         @RequestHeader("If-Match") ifMatch: String,
         @RequestHeader("Idempotency-Key") idempotencyKey: UUID,
         @RequestBody request: ApprovedAbsenceInput,
-        @AuthenticationPrincipal jwt: Jwt,
+        @CurrentSubject subject: String,
     ): ResponseEntity<ApprovedAbsenceView> {
-        val result = service.addAbsence(rosterId, ifMatch, idempotencyKey, request, subject(jwt))
+        val result = service.addAbsence(rosterId, ifMatch, idempotencyKey, request, subject)
         return ResponseEntity.status(HttpStatus.CREATED).eTag(service.etag(rosterId, result.rosterRevision)).body(result.absence)
     }
 
@@ -82,9 +76,9 @@ class RosterController(private val service: RosterService, private val generatio
         @PathVariable absenceId: UUID,
         @RequestHeader("If-Match") ifMatch: String,
         @RequestBody request: ApprovedAbsenceInput,
-        @AuthenticationPrincipal jwt: Jwt,
+        @CurrentSubject subject: String,
     ): ResponseEntity<ApprovedAbsenceView> {
-        val result = service.updateAbsence(rosterId, absenceId, ifMatch, request, subject(jwt))
+        val result = service.updateAbsence(rosterId, absenceId, ifMatch, request, subject)
         return ResponseEntity.ok().eTag(service.etag(rosterId, result.rosterRevision)).body(result.absence)
     }
 
@@ -93,9 +87,9 @@ class RosterController(private val service: RosterService, private val generatio
         @PathVariable rosterId: UUID,
         @PathVariable absenceId: UUID,
         @RequestHeader("If-Match") ifMatch: String,
-        @AuthenticationPrincipal jwt: Jwt,
+        @CurrentSubject subject: String,
     ): ResponseEntity<Void> {
-        val revision = service.deleteAbsence(rosterId, absenceId, ifMatch, subject(jwt))
+        val revision = service.deleteAbsence(rosterId, absenceId, ifMatch, subject)
         return ResponseEntity.noContent().eTag(service.etag(rosterId, revision)).build()
     }
 
@@ -104,8 +98,8 @@ class RosterController(private val service: RosterService, private val generatio
         @PathVariable rosterId: UUID,
         @RequestHeader("If-Match") ifMatch: String,
         @RequestBody request: ValidateAssignmentRequest,
-        @AuthenticationPrincipal jwt: Jwt,
-    ): AssignmentValidation = service.validate(rosterId, ifMatch, request, subject(jwt))
+        @CurrentSubject subject: String,
+    ): AssignmentValidation = service.validate(rosterId, ifMatch, request, subject)
 
     @PutMapping("/rosters/{rosterId}/slots/{slotId}/assignment")
     fun assign(
@@ -114,9 +108,9 @@ class RosterController(private val service: RosterService, private val generatio
         @RequestHeader("If-Match") ifMatch: String,
         @RequestHeader("Idempotency-Key") idempotencyKey: UUID,
         @RequestBody request: AssignNurseRequest,
-        @AuthenticationPrincipal jwt: Jwt,
+        @CurrentSubject subject: String,
     ): ResponseEntity<RosterView> {
-        val result = service.assign(rosterId, slotId, ifMatch, idempotencyKey, request, subject(jwt))
+        val result = service.assign(rosterId, slotId, ifMatch, idempotencyKey, request, subject)
         return ResponseEntity.ok().eTag(service.etag(result.rosterId, result.revision)).body(result)
     }
 
@@ -125,9 +119,9 @@ class RosterController(private val service: RosterService, private val generatio
         @PathVariable rosterId: UUID,
         @PathVariable slotId: UUID,
         @RequestHeader("If-Match") ifMatch: String,
-        @AuthenticationPrincipal jwt: Jwt,
+        @CurrentSubject subject: String,
     ): ResponseEntity<Void> {
-        val revision = service.unassign(rosterId, slotId, ifMatch, subject(jwt))
+        val revision = service.unassign(rosterId, slotId, ifMatch, subject)
         return ResponseEntity.noContent().eTag(service.etag(rosterId, revision)).build()
     }
 
@@ -137,9 +131,9 @@ class RosterController(private val service: RosterService, private val generatio
         @RequestHeader("If-Match") ifMatch: String,
         @RequestHeader("Idempotency-Key") idempotencyKey: UUID,
         @RequestBody request: ConfirmRosterRequest,
-        @AuthenticationPrincipal jwt: Jwt,
+        @CurrentSubject subject: String,
     ): ResponseEntity<RosterSummary> {
-        val result = service.confirm(rosterId, ifMatch, idempotencyKey, request, subject(jwt))
+        val result = service.confirm(rosterId, ifMatch, idempotencyKey, request, subject)
         return ResponseEntity.ok().eTag(service.etag(result.rosterId, result.revision)).body(result)
     }
 
@@ -149,31 +143,31 @@ class RosterController(private val service: RosterService, private val generatio
         @RequestHeader("If-Match") ifMatch: String,
         @RequestHeader("Idempotency-Key") idempotencyKey: UUID,
         @RequestBody request: StartGenerationRequest,
-        @AuthenticationPrincipal jwt: Jwt,
+        @CurrentSubject subject: String,
     ): ResponseEntity<GenerationJob> = ResponseEntity.status(HttpStatus.ACCEPTED)
-        .body(generation.start(rosterId, ifMatch, idempotencyKey, request, subject(jwt)))
+        .body(generation.start(rosterId, ifMatch, idempotencyKey, request, subject))
 
     @GetMapping("/generation-jobs/{jobId}")
-    fun generationJob(@PathVariable jobId: UUID, @AuthenticationPrincipal jwt: Jwt): GenerationJob =
-        service.getGenerationJob(jobId, subject(jwt))
+    fun generationJob(@PathVariable jobId: UUID, @CurrentSubject subject: String): GenerationJob =
+        service.getGenerationJob(jobId, subject)
 
     @PostMapping("/generation-jobs/{jobId}/cancel")
     fun cancelGeneration(
         @PathVariable jobId: UUID,
         @RequestHeader("Idempotency-Key") idempotencyKey: UUID,
-        @AuthenticationPrincipal jwt: Jwt,
+        @CurrentSubject subject: String,
     ): ResponseEntity<GenerationJob> = ResponseEntity.status(HttpStatus.ACCEPTED)
-        .body(service.cancelGeneration(jobId, idempotencyKey, subject(jwt)))
+        .body(service.cancelGeneration(jobId, idempotencyKey, subject))
 
     @GetMapping("/wards/{wardId}/published-rosters")
-    fun publishedWard(@PathVariable wardId: UUID, @RequestParam month: String, @AuthenticationPrincipal jwt: Jwt):
+    fun publishedWard(@PathVariable wardId: UUID, @RequestParam month: String, @CurrentSubject subject: String):
         ResponseEntity<PublishedWardCalendar> = ResponseEntity.ok()
             .header("Cache-Control", "private, no-store")
-            .body(service.publishedWard(wardId, month, subject(jwt)))
+            .body(service.publishedWard(wardId, month, subject))
 
     @GetMapping("/wards/{wardId}/published-rosters/mine")
-    fun publishedMine(@PathVariable wardId: UUID, @RequestParam month: String, @AuthenticationPrincipal jwt: Jwt):
+    fun publishedMine(@PathVariable wardId: UUID, @RequestParam month: String, @CurrentSubject subject: String):
         ResponseEntity<PublishedPersonalCalendar> = ResponseEntity.ok()
             .header("Cache-Control", "private, no-store")
-            .body(service.publishedMine(wardId, month, subject(jwt)))
+            .body(service.publishedMine(wardId, month, subject))
 }
