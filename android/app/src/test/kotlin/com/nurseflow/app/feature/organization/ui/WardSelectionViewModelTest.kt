@@ -1,0 +1,209 @@
+package com.nurseflow.app.feature.organization.ui
+
+import com.nurseflow.app.core.network.ApiError
+import com.nurseflow.app.core.network.ApiResult
+import com.nurseflow.app.feature.organization.domain.Hospital
+import com.nurseflow.app.feature.organization.domain.HospitalWard
+import com.nurseflow.app.feature.organization.domain.MyWard
+import com.nurseflow.app.feature.organization.domain.OrganizationRepository
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.resetMain
+import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.test.setMain
+import org.junit.After
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
+import org.junit.Before
+import org.junit.Test
+
+@OptIn(ExperimentalCoroutinesApi::class)
+class WardSelectionViewModelTest {
+    private val dispatcher = StandardTestDispatcher()
+    private val hospital = Hospital("h1", "가상 병원", "Asia/Seoul")
+    private var keyCounter = 0
+
+    @Before fun setUp() = Dispatchers.setMain(dispatcher)
+    @After fun tearDown() = Dispatchers.resetMain()
+
+    private fun vm(repo: FakeRepository) = WardSelectionViewModel(repo) { "key-${++keyCounter}" }
+
+    @Test
+    fun `member without hospital role sees own wards and no admin section`() = runTest(dispatcher) {
+        val repo = FakeRepository(myWards = mutableListOf(ward("w1", "WARD_MEMBER")))
+        val vm = vm(repo)
+        advanceUntilIdle()
+
+        val state = vm.uiState.value
+        assertEquals(LoadState.Ready, state.load)
+        assertEquals(listOf("w1"), state.myWards.map { it.wardId })
+        assertFalse(state.isHospitalAdmin)
+        assertEquals("w1", state.highlightedWardId)
+        assertEquals(0, repo.hospitalWardCalls)
+
+        vm.choose("w1")
+        assertEquals("w1", vm.uiState.value.chosenWard?.wardId)
+        vm.choose("not-mine")
+        assertEquals("w1", vm.uiState.value.chosenWardId)
+    }
+
+    @Test
+    fun `empty lists and load failure with retry`() = runTest(dispatcher) {
+        val repo = FakeRepository(failNext = ApiError.Network)
+        val vm = vm(repo)
+        advanceUntilIdle()
+        assertEquals(LoadState.Failed(ApiError.Network), vm.uiState.value.load)
+
+        vm.refresh()
+        advanceUntilIdle()
+        assertEquals(LoadState.Ready, vm.uiState.value.load)
+        assertTrue(vm.uiState.value.myWards.isEmpty())
+    }
+
+    @Test
+    fun `expired session is surfaced instead of a generic error`() = runTest(dispatcher) {
+        val vm = vm(FakeRepository(failNext = ApiError.SessionExpired))
+        advanceUntilIdle()
+        assertTrue(vm.uiState.value.sessionExpired)
+    }
+
+    @Test
+    fun `hospital admin creates a ward then lists refresh and the new ward is chosen`() = runTest(dispatcher) {
+        val repo = FakeRepository(hospitals = listOf(hospital))
+        val vm = vm(repo)
+        advanceUntilIdle()
+        assertTrue(vm.uiState.value.isHospitalAdmin)
+        assertEquals("h1", vm.uiState.value.selectedHospitalId)
+
+        vm.openCreateForm()
+        vm.editName("  신규 병동 ")
+        vm.submitCreate()
+        assertTrue(vm.uiState.value.form!!.submitting)
+        advanceUntilIdle()
+
+        val state = vm.uiState.value
+        assertNull(state.form)
+        assertEquals(listOf(CreateCall("h1", "신규 병동", null, "key-1")), repo.createCalls)
+        assertEquals("new-1", state.chosenWardId)
+        assertEquals(listOf("new-1"), state.hospitalWards.map { it.wardId })
+        assertTrue(state.notice!!.contains("신규 병동"))
+    }
+
+    @Test
+    fun `invalid input is caught before calling the server`() = runTest(dispatcher) {
+        val repo = FakeRepository(hospitals = listOf(hospital))
+        val vm = vm(repo)
+        advanceUntilIdle()
+        vm.openCreateForm()
+        vm.editName("   ")
+        vm.editTimeZone("Mars/Base")
+        vm.submitCreate()
+
+        val form = vm.uiState.value.form!!
+        assertEquals(WardSelectionViewModel.NAME_RULE, form.nameError)
+        assertEquals(WardSelectionViewModel.ZONE_RULE, form.timeZoneError)
+        assertTrue(repo.createCalls.isEmpty())
+    }
+
+    @Test
+    fun `server field errors map to the right input`() = runTest(dispatcher) {
+        val repo = FakeRepository(hospitals = listOf(hospital))
+        val vm = vm(repo)
+        advanceUntilIdle()
+        vm.openCreateForm()
+        vm.editName("중복 병동")
+        repo.createResult = ApiResult.Failure(ApiError.Rejected(409, "WARD_NAME_TAKEN"))
+        vm.submitCreate()
+        advanceUntilIdle()
+        assertEquals("같은 병원에 같은 이름의 병동이 있습니다.", vm.uiState.value.form!!.nameError)
+
+        // 확정된 거부 뒤의 재제출은 새 요청이므로 새 키를 쓴다.
+        repo.createResult = null
+        vm.submitCreate()
+        advanceUntilIdle()
+        assertEquals(listOf("key-1", "key-2"), repo.createCalls.map { it.key })
+    }
+
+    @Test
+    fun `uncertain failure retries with the same key and edited input gets a new key`() = runTest(dispatcher) {
+        val repo = FakeRepository(hospitals = listOf(hospital))
+        val vm = vm(repo)
+        advanceUntilIdle()
+        vm.openCreateForm()
+        vm.editName("재시도 병동")
+
+        repo.createResult = ApiResult.Failure(ApiError.Network)
+        vm.submitCreate()
+        advanceUntilIdle()
+        assertEquals(ApiError.Network, vm.uiState.value.form!!.failure)
+        repo.createResult = ApiResult.Failure(ApiError.Server(503))
+        vm.submitCreate()
+        advanceUntilIdle()
+        assertEquals(repo.createCalls[0].key, repo.createCalls[1].key)
+
+        vm.editName("다른 병동")
+        repo.createResult = null
+        vm.submitCreate()
+        advanceUntilIdle()
+        assertNotEquals(repo.createCalls[0].key, repo.createCalls[2].key)
+        assertNull(vm.uiState.value.form)
+    }
+
+    @Test
+    fun `losing hospital permission reloads lists from the server`() = runTest(dispatcher) {
+        val repo = FakeRepository(hospitals = listOf(hospital))
+        val vm = vm(repo)
+        advanceUntilIdle()
+        vm.openCreateForm()
+        vm.editName("권한 없음 병동")
+        repo.createResult = ApiResult.Failure(ApiError.Forbidden("HOSPITAL_ADMIN_REQUIRED"))
+        repo.hospitals = emptyList()
+        vm.submitCreate()
+        advanceUntilIdle()
+
+        val state = vm.uiState.value
+        assertFalse(state.isHospitalAdmin)
+        assertNull(state.form)
+    }
+
+    private fun ward(id: String, role: String) = MyWard(id, "병동 $id", "Asia/Seoul", "h1", "가상 병원", setOf(role), true)
+
+    private data class CreateCall(val hospitalId: String, val name: String, val timeZone: String?, val key: String)
+
+    private inner class FakeRepository(
+        val myWards: MutableList<MyWard> = mutableListOf(),
+        var hospitals: List<Hospital> = emptyList(),
+        var failNext: ApiError? = null,
+    ) : OrganizationRepository {
+        val hospitalWards = mutableListOf<HospitalWard>()
+        val createCalls = mutableListOf<CreateCall>()
+        var createResult: ApiResult<HospitalWard>? = null
+        var hospitalWardCalls = 0
+
+        override suspend fun myWards(): ApiResult<List<MyWard>> =
+            failNext?.let { failNext = null; ApiResult.Failure(it) } ?: ApiResult.Success(myWards.toList())
+
+        override suspend fun myHospitals(): ApiResult<List<Hospital>> = ApiResult.Success(hospitals)
+
+        override suspend fun hospitalWards(hospitalId: String): ApiResult<List<HospitalWard>> {
+            hospitalWardCalls++
+            return ApiResult.Success(hospitalWards.filter { it.hospitalId == hospitalId })
+        }
+
+        override suspend fun createWard(hospitalId: String, name: String, timeZone: String?, idempotencyKey: String): ApiResult<HospitalWard> {
+            createCalls += CreateCall(hospitalId, name, timeZone, idempotencyKey)
+            createResult?.let { return it }
+            val created = HospitalWard("new-${createCalls.size}", hospitalId, name, timeZone ?: "Asia/Seoul")
+            if (hospitalWards.none { it.wardId == created.wardId }) {
+                hospitalWards += created
+                myWards += MyWard(created.wardId, name, created.timeZone, hospitalId, "가상 병원", setOf("WARD_ADMIN"), true)
+            }
+            return ApiResult.Success(created)
+        }
+    }
+}
