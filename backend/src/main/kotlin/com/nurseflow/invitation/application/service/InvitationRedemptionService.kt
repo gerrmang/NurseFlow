@@ -9,6 +9,8 @@ import com.nurseflow.invitation.domain.InvitationStatus
 import com.nurseflow.invitation.domain.statusAt
 import com.nurseflow.invitation.persistence.entity.DbInvitation
 import com.nurseflow.invitation.persistence.repository.InvitationJdbcRepository
+import com.nurseflow.staff.application.model.ProfileInput
+import com.nurseflow.staff.application.service.StaffService
 import com.nurseflow.ward.application.model.WardMembershipResult
 import com.nurseflow.ward.application.model.WardRole
 import com.nurseflow.ward.persistence.repository.WardJdbcRepository
@@ -26,6 +28,7 @@ class InvitationRedemptionService(
     private val repo: InvitationJdbcRepository,
     private val wardRepo: WardJdbcRepository,
     private val audit: AuditLog,
+    private val staff: StaffService,
 ) {
     /** Lets the invitee confirm the ward and role before joining. Does not consume the invitation. */
     @Transactional(readOnly = true)
@@ -45,7 +48,7 @@ class InvitationRedemptionService(
      * in one transaction. Any failure rolls everything back and leaves the invitation usable.
      */
     @Transactional
-    fun redeem(token: String, subject: String): WardMembershipResult {
+    fun redeem(token: String, subject: String, profile: ProfileInput? = null): WardMembershipResult {
         val invitation = repo.lockByTokenHash(OpaqueToken.sha256Hex(token))
             ?: throw BusinessException(ErrorCode.INVITATION_NOT_FOUND)
         if (!wardRepo.lockWard(invitation.wardId)) throw BusinessException(ErrorCode.INVITATION_NOT_FOUND)
@@ -62,7 +65,11 @@ class InvitationRedemptionService(
             // Managers are excluded from rosters; do not leave an existing active nurse record schedulable.
             throw BusinessException(ErrorCode.ADMIN_NURSE_RECORD_CONFLICT)
         }
-        if (role == WardRole.WARD_MEMBER) linkNurse(invitation, subject)
+        if (role == WardRole.WARD_MEMBER) {
+            // Link or create the nurse record before submitting the optional profile in this transaction.
+            linkNurse(invitation, subject)
+            profile?.let { staff.submitForLinkedNurse(invitation.wardId, subject, it) }
+        }
         wardRepo.insertMembership(invitation.wardId, subject, role.name, canViewWardCalendar = true)
         if (!repo.markRedeemed(invitation.id, subject, now)) {
             throw BusinessException(ErrorCode.INVITATION_ALREADY_REDEEMED)
