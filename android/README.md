@@ -1,9 +1,35 @@
-# NurseFlow Android prototype
+# NurseFlow Android
 
-Kotlin + Jetpack Compose screen prototype based on the [NurseFlow Figma file](https://www.figma.com/design/QtqAXph795SVIVHujdZvHF/NurseFlow?node-id=7-221). It currently uses fictional `DemoRoster` data in the app process. Local edits and the “publish” action are **not shared with the Spring Boot server or other users**.
+Kotlin + Jetpack Compose app. It has two clearly separated parts:
 
-The prototype covers ward selection, administrator week/month roster views, candidate availability reasons, pre-collected leave/half-day entry, generation/review/confirmation screens, and personal/whole-ward published-calendar views. The Figma SVG icons are preserved under `app/src/main/assets/figma/`; PNG copies in `res/drawable-nodpi/` are used by Compose.
+1. **Server-backed hospital/ward selection (implemented).** It shows the signed-in user's own wards (`GET /api/v1/wards`). For a hospital admin, it also shows the hospital's wards (`GET /api/v1/hospitals`, `GET /api/v1/hospitals/{id}/wards`) and lets them create a ward (`POST /api/v1/hospitals/{id}/wards`). After a successful create, the lists are reloaded and the new ward is selected. A ward member only sees their own wards and gets no hospital permissions.
+2. **Figma prototype with fictional `DemoRoster` data.** It covers the ward picker, admin roster views, candidate reasons, absence entry, generation/review/confirmation, and published calendars. You open it explicitly with "가상 시연 데이터로 둘러보기", and it shows a banner saying the data is not shared with the server. **Server wards and demo data are never mixed.** A selected server ward shows a "roster integration pending" screen instead of demo rosters.
 
-The fictional published calendar has a separate snapshot of assignments and absences for November 2026. Other months show an empty published state. New administrator-entered absences stay in the local draft until the demo publish action, so the read-only nurse view does not display draft changes.
+The design follows the [NurseFlow Figma file](https://www.figma.com/design/QtqAXph795SVIVHujdZvHF/NurseFlow?node-id=7-221). Shared visual primitives live in `ui/Components.kt`. The Figma SVG icons are kept under `app/src/main/assets/figma/`, and PNG copies in `res/drawable-nodpi/` are used by Compose.
 
-From this directory, run `ANDROID_HOME=<Android SDK path> ./gradlew :app:assembleDebug`. Android SDK 35 and JDK 17 or newer are required by this project configuration. Before a release build, replace `DemoRoster` with the authenticated API repository described in [the initial MVP scope](../docs/mvp-scope.md), including Kakao invitation/membership checks and server-authoritative roster validation.
+## Code structure
+
+| Package | Responsibility |
+| --- | --- |
+| `core/network` | `HttpTransport` (`HttpURLConnection`), `ApiClient`: bearer header, JSON, mapping `application/problem+json` `code` and HTTP status to `ApiError` |
+| `core/session` | `SessionSource`. **Release**: no session (shows "login required"). **Debug only** (`src/debug`): a developer can paste an access token from the dev OIDC issuer. It is held in memory only and the server validates it normally. |
+| `feature/organization/data` | Request/response DTOs matching `docs/openapi.yaml`, `RemoteOrganizationRepository` |
+| `feature/organization/domain` | `MyWard`, `Hospital`, `HospitalWard`, repository interface, ward-name rules |
+| `feature/organization/ui` | `WardSelectionViewModel` (state, errors, idempotent create), `WardSelectionScreen` |
+
+Handled states are loading, empty lists, field errors (`INVALID_WARD_NAME`, `WARD_NAME_TAKEN`, `INVALID_TIME_ZONE`), session expiry (401, then sign out), permission (403), hidden resources (404), and network/5xx with retry. For a create whose outcome is unknown (network failure or 5xx), retrying the same input reuses the same `Idempotency-Key`. Changing the input or receiving a definite response starts a new key.
+
+**Not yet available:** Kakao login and server session exchange, invitation acceptance, server-backed roster screens. There is no hardcoded token or admin account and no auth bypass.
+
+## Build and test
+
+From this directory, with Android SDK 35 and JDK 17+:
+
+```sh
+ANDROID_HOME=<Android SDK path> ./gradlew :app:testDebugUnitTest :app:assembleDebug :app:assembleRelease
+```
+
+- The debug build calls `http://10.0.2.2:8080` (host machine from the emulator). Override it with `-Pnurseflow.apiBaseUrl=...`. Cleartext HTTP is allowed only in the debug build and only for `10.0.2.2`, `localhost`, and `127.0.0.1`.
+- The release build has no API base URL until the real login/environment setup exists.
+
+Local integration (app network layer ↔ real backend with real JWT validation, without Kakao or device UI): from the repository root, run `scripts/local-e2e/run-hospital-ward-e2e.sh`. It needs `node`, JDK 21, and `ANDROID_HOME`. It starts a 127.0.0.1-only throwaway OIDC issuer and the backend jar on a temporary H2 file DB with an operator-bootstrapped synthetic hospital. It then runs `LiveOrganizationApiTest`, which is skipped in normal unit-test runs.
