@@ -1,8 +1,10 @@
 package com.nurseflow.roster
 
-import com.nurseflow.roster.api.*
-import com.nurseflow.roster.application.GenerationCoordinator
-import com.nurseflow.roster.application.RosterService
+import com.nurseflow.common.error.ApiException
+import com.nurseflow.roster.api.dto.request.*
+import com.nurseflow.roster.api.dto.response.*
+import com.nurseflow.roster.application.generation.GenerationCoordinator
+import com.nurseflow.roster.application.service.RosterService
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertThrows
@@ -62,13 +64,13 @@ class RosterServiceIntegrationTest @Autowired constructor(
         val novemberAssigned = assign(november, nurseId)
 
         service.confirm(october.rosterId, tag(octoberAssigned), UUID.randomUUID(), ConfirmRosterRequest(), admin)
-        val conflict = assertThrows(RosterApiException::class.java) {
+        val conflict = assertThrows(ApiException::class.java) {
             service.confirm(november.rosterId, tag(novemberAssigned), UUID.randomUUID(), ConfirmRosterRequest(), admin)
         }
         assertEquals("RULE_VIOLATION", conflict.code)
-        assertTrue(conflict.ruleViolations.any { it.code == "REST_AFTER_NIGHT" })
+        assertTrue(conflict.ruleViolations.filterIsInstance<RuleDiagnostic>().any { it.code == "REST_AFTER_NIGHT" })
         assertEquals("DRAFT", service.getRoster(november.rosterId, admin).status)
-        assertThrows(RosterApiException::class.java) { service.publishedWard(wardId, "2026-11", admin) }
+        assertThrows(ApiException::class.java) { service.publishedWard(wardId, "2026-11", admin) }
     }
 
     @Test
@@ -84,7 +86,7 @@ class RosterServiceIntegrationTest @Autowired constructor(
                     try {
                         service.confirm(roster.rosterId, tag(roster), UUID.randomUUID(), ConfirmRosterRequest(), admin)
                         true
-                    } catch (ex: RosterApiException) {
+                    } catch (ex: ApiException) {
                         assertEquals("RULE_VIOLATION", ex.code)
                         false
                     }
@@ -110,11 +112,11 @@ class RosterServiceIntegrationTest @Autowired constructor(
         val octoberAssigned = assign(october, nurseId)
         service.confirm(october.rosterId, tag(octoberAssigned), UUID.randomUUID(), ConfirmRosterRequest(), admin)
 
-        val conflict = assertThrows(RosterApiException::class.java) {
+        val conflict = assertThrows(ApiException::class.java) {
             service.confirm(november.rosterId, "\"${service.etag(november.rosterId, added.rosterRevision)}\"",
                 UUID.randomUUID(), ConfirmRosterRequest(1), admin)
         }
-        assertTrue(conflict.ruleViolations.any { it.code == "APPROVED_ABSENCE_PUBLISHED_OVERLAP" })
+        assertTrue(conflict.ruleViolations.filterIsInstance<RuleDiagnostic>().any { it.code == "APPROVED_ABSENCE_PUBLISHED_OVERLAP" })
         assertEquals("DRAFT", service.getRoster(november.rosterId, admin).status)
     }
 
@@ -146,7 +148,7 @@ class RosterServiceIntegrationTest @Autowired constructor(
         assertEquals(1, generated.staffing.assigned)
         assertEquals(1, generated.staffing.unfilled)
         assertFalse(generated.slots.any { it.assignment?.nurseId == nurseId })
-        assertThrows(RosterApiException::class.java) { service.publishedWard(wardId, "2026-11", admin) }
+        assertThrows(ApiException::class.java) { service.publishedWard(wardId, "2026-11", admin) }
 
         service.confirm(draft.rosterId, tag(generated), UUID.randomUUID(), ConfirmRosterRequest(1), admin)
         val published = service.publishedWard(wardId, "2026-11", admin)
@@ -176,7 +178,7 @@ class RosterServiceIntegrationTest @Autowired constructor(
             ConfirmRosterRequest(), admin)
 
         val replacement = service.createRoster(wardId, CreateRosterRequest("2026-11"), admin, UUID.randomUUID())
-        val emptyConfirmation = assertThrows(RosterApiException::class.java) {
+        val emptyConfirmation = assertThrows(ApiException::class.java) {
             service.confirm(replacement.rosterId, tag(replacement), UUID.randomUUID(), ConfirmRosterRequest(), admin)
         }
         assertEquals("ROSTER_REQUIREMENTS_REQUIRED", emptyConfirmation.code)
@@ -194,15 +196,38 @@ class RosterServiceIntegrationTest @Autowired constructor(
                 StaffingRequirement(LocalDate.parse("2026-11-01"), dayTypeId, 1, emptyList()),
             )), admin)
         val slot = service.getRoster(replacement.rosterId, admin).slots.single()
-        val conflict = assertThrows(RosterApiException::class.java) {
+        val conflict = assertThrows(ApiException::class.java) {
             service.assign(replacement.rosterId, slot.slotId,
                 "\"${service.etag(replacement.rosterId, requirements.revision)}\"",
                 UUID.randomUUID(), AssignNurseRequest(nurseId), admin)
         }
         assertEquals("RULE_VIOLATION", conflict.code)
-        assertTrue(conflict.ruleViolations.any { it.code == "APPROVED_LEAVE_OVERLAP" })
+        assertTrue(conflict.ruleViolations.filterIsInstance<RuleDiagnostic>().any { it.code == "APPROVED_LEAVE_OVERLAP" })
         assertEquals("PUBLISHED", service.getRoster(original.rosterId, admin).status)
         assertEquals(1, service.listAbsences(original.rosterId, admin).size)
+    }
+
+    @Test
+    fun `assign replays the same idempotency key without a second mutation`() {
+        val secondNurse = UUID.randomUUID()
+        jdbc.update("INSERT INTO nurses(nurse_id,ward_id,subject,display_name,qualifications,active) VALUES(?,?,?,?,?,TRUE)",
+            secondNurse, wardId, "test-nurse-2", "간호사 2", "[]")
+        val draft = newRoster("2026-11", LocalDate.parse("2026-11-02"), dayTypeId)
+        val key = UUID.randomUUID()
+        val slotId = draft.slots.single().slotId
+
+        val first = service.assign(draft.rosterId, slotId, tag(draft), key, AssignNurseRequest(nurseId), admin)
+        val replayed = service.assign(draft.rosterId, slotId, tag(draft), key, AssignNurseRequest(nurseId), admin)
+        assertEquals(first, replayed)
+        assertEquals(draft.revision + 1, service.getRoster(draft.rosterId, admin).revision)
+
+        val reused = assertThrows(ApiException::class.java) {
+            service.assign(draft.rosterId, slotId, tag(draft), key, AssignNurseRequest(secondNurse), admin)
+        }
+        assertEquals("IDEMPOTENCY_KEY_REUSED", reused.code)
+        val current = service.getRoster(draft.rosterId, admin)
+        assertEquals(draft.revision + 1, current.revision)
+        assertEquals(nurseId, current.slots.single().assignment?.nurseId)
     }
 
     private fun newRoster(month: String, date: LocalDate, shiftTypeId: UUID): RosterView {

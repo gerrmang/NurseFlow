@@ -1,53 +1,12 @@
-package com.nurseflow.roster.domain
+package com.nurseflow.roster.domain.rule
 
+import com.nurseflow.roster.domain.model.ApprovedAbsence
+import com.nurseflow.roster.domain.model.ApprovedAbsenceKind
+import com.nurseflow.roster.domain.model.RuleSeverity
+import com.nurseflow.roster.domain.model.RuleViolation
+import com.nurseflow.roster.domain.model.ShiftAssignment
+import com.nurseflow.roster.domain.model.ShiftKind
 import java.time.Instant
-import java.time.LocalDate
-import java.util.UUID
-
-enum class ShiftKind {
-    DAY,
-    NIGHT,
-    OTHER,
-}
-
-enum class ApprovedAbsenceKind {
-    APPROVED_LEAVE,
-    APPROVED_HALF_DAY,
-}
-
-enum class RuleSeverity {
-    HARD,
-    SOFT,
-}
-
-/**
- * shiftDate is the calendar date in the ward's configured timezone. The exact
- * ward timezone is supplied when shift instances are created; this validator
- * never guesses it from the server timezone.
- */
-data class ShiftAssignment(
-    val assignmentId: UUID?,
-    val nurseId: UUID,
-    val shiftDate: LocalDate,
-    val kind: ShiftKind,
-    val startsAt: Instant,
-    val endsAt: Instant,
-)
-
-/** Stores only the approved time interval and category, never a leave reason. */
-data class ApprovedAbsence(
-    val nurseId: UUID,
-    val kind: ApprovedAbsenceKind,
-    val startsAt: Instant,
-    val endsAt: Instant,
-)
-
-data class RuleViolation(
-    val code: String,
-    val severity: RuleSeverity,
-    val message: String,
-    val affectedDate: LocalDate? = null,
-)
 
 /**
  * Deterministic hard-rule validation for a single candidate assignment.
