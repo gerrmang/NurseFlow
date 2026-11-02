@@ -77,7 +77,16 @@ private fun WardSelectionScreen(
         }
         when (val load = state.load) {
             LoadState.Loading -> item { LoadingRow("병동 목록을 불러오는 중…") }
-            is LoadState.Failed -> item { MessageCard(load.error.userMessage(), "다시 시도", actions::refresh, danger = true) }
+            is LoadState.Failed -> item {
+                val created = state.createdPendingRefresh
+                if (created != null) {
+                    // 생성은 끝났으므로 생성 요청이 아니라 목록 조회만 다시 시도한다.
+                    MessageCard("‘${created.name}’ 병동은 만들었지만 목록을 불러오지 못했습니다. ${load.error.userMessage()}",
+                        "목록 다시 불러오기", actions::refresh, danger = true)
+                } else {
+                    MessageCard(load.error.userMessage(), "다시 시도", actions::refresh, danger = true)
+                }
+            }
             LoadState.Ready -> {
                 state.notice?.let { notice -> item { Notice(notice, error = state.noticeIsError); Spacer(Modifier.height(12.dp)) } }
                 state.selectedHospital?.let { hospital ->
@@ -173,7 +182,8 @@ private fun HospitalAdminSection(state: WardSelectionUiState, actions: WardSelec
     Spacer(Modifier.height(12.dp))
     Row(verticalAlignment = Alignment.CenterVertically) {
         Label("${hospital.name} 병동 ${state.hospitalWards.size}", 13, C.secondary, true, Modifier.weight(1f))
-        if (state.form == null) {
+        // 생성 작업(요청·성공 뒤 목록 갱신)이 끝날 때까지 새 양식을 열 수 없다.
+        if (state.form == null && !state.isCreating) {
             Label("+ 병동 추가", 13, C.brandDeep, true, Modifier.clickable(role = Role.Button, onClick = actions::openCreateForm).padding(8.dp))
         }
     }
@@ -181,6 +191,9 @@ private fun HospitalAdminSection(state: WardSelectionUiState, actions: WardSelec
     state.form?.let { form ->
         CreateWardCard(form, hospital.timeZone, actions)
         Spacer(Modifier.height(12.dp))
+    }
+    if (state.form == null && state.createOperation is CreateOperation.Reconciling) {
+        LoadingRow("새 병동을 목록에 반영하는 중…")
     }
     when {
         state.hospitalWardsLoading -> LoadingRow("병원 병동을 불러오는 중…")
