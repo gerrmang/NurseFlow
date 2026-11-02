@@ -1,6 +1,5 @@
 package com.nurseflow.roster.persistence.repository
 
-import com.nurseflow.common.error.ApiException
 import com.nurseflow.roster.domain.model.ShiftKind
 import com.nurseflow.roster.persistence.entity.DbAbsence
 import com.nurseflow.roster.persistence.entity.DbGenerationJob
@@ -9,7 +8,6 @@ import com.nurseflow.roster.persistence.entity.DbRoster
 import com.nurseflow.roster.persistence.entity.DbSlot
 import com.nurseflow.roster.persistence.entity.NewSlot
 import com.nurseflow.roster.persistence.entity.ShiftDefinition
-import org.springframework.http.HttpStatus
 import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.stereotype.Repository
 import tools.jackson.core.type.TypeReference
@@ -78,15 +76,10 @@ class RosterJdbcRepository(
 
     // ── Ward ──
 
-    fun lockWard(wardId: UUID) {
-        if (jdbc.query(
+    fun lockWard(wardId: UUID): Boolean = jdbc.query(
                 "SELECT ward_id FROM wards WHERE ward_id=? FOR UPDATE",
                 { rs, _ -> rs.getString(1) }, wardId,
-            ).isEmpty()
-        ) {
-            fail(HttpStatus.NOT_FOUND, "WARD_NOT_FOUND", "병동을 찾을 수 없습니다.")
-        }
-    }
+            ).isNotEmpty()
 
     fun memberships(wardId: UUID, subject: String): Set<String> = jdbc.query(
         "SELECT role FROM ward_memberships WHERE ward_id=? AND subject=?",
@@ -334,16 +327,16 @@ class RosterJdbcRepository(
 
     // ── Idempotency Replay ──
 
-    fun <T> replay(key: UUID, action: String, requestHash: String, type: Class<T>): T? {
+    fun <T> replay(key: UUID, action: String, requestHash: String, type: Class<T>): ReplayLookup<T> {
         val saved = jdbc.query(
             "SELECT operation,request_hash,response_json FROM mutation_replays WHERE idempotency_key=?",
             { rs, _ -> Triple(rs.getString("operation"), rs.getString("request_hash"), rs.getString("response_json")) },
             key,
-        ).firstOrNull() ?: return null
+        ).firstOrNull() ?: return ReplayLookup.Missing
         if (saved.first != action || saved.second != requestHash) {
-            fail(HttpStatus.CONFLICT, "IDEMPOTENCY_KEY_REUSED", "다른 요청에 이미 사용한 키입니다.")
+            return ReplayLookup.Conflict
         }
-        return mapper.readValue(saved.third, type)
+        return ReplayLookup.Found(mapper.readValue(saved.third, type))
     }
 
     fun recordReplay(key: UUID, action: String, requestHash: String, response: Any) {
@@ -369,6 +362,4 @@ class RosterJdbcRepository(
 
     private fun uuid(rs: ResultSet, column: String): UUID = UUID.fromString(rs.getString(column))
 
-    private fun fail(status: HttpStatus, code: String, detail: String): Nothing =
-        throw ApiException(status, code, detail)
 }

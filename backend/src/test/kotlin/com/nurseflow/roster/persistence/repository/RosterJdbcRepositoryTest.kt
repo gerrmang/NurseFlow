@@ -1,6 +1,5 @@
 package com.nurseflow.roster.persistence.repository
 
-import com.nurseflow.common.error.ApiException
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNull
@@ -10,7 +9,6 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
-import org.springframework.http.HttpStatus
 import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.transaction.PlatformTransactionManager
 import org.springframework.transaction.support.TransactionTemplate
@@ -113,32 +111,22 @@ class RosterJdbcRepositoryTest @Autowired constructor(
     @Test
     fun `idempotency replay returns stored response only for the same operation and request`() {
         val key = UUID.randomUUID()
-        assertNull(repo.replay(key, "assign:roster", "hash-a", ReplayProbe::class.java))
+        assertEquals(ReplayLookup.Missing, repo.replay(key, "assign:roster", "hash-a", ReplayProbe::class.java))
 
         repo.recordReplay(key, "assign:roster", "hash-a", ReplayProbe("first", 2))
-        assertEquals(ReplayProbe("first", 2), repo.replay(key, "assign:roster", "hash-a", ReplayProbe::class.java))
-
-        val otherRequest = assertThrows(ApiException::class.java) {
-            repo.replay(key, "assign:roster", "hash-b", ReplayProbe::class.java)
-        }
-        assertEquals(HttpStatus.CONFLICT, otherRequest.status)
-        assertEquals("IDEMPOTENCY_KEY_REUSED", otherRequest.code)
-
-        val otherOperation = assertThrows(ApiException::class.java) {
-            repo.replay(key, "confirm:roster", "hash-a", ReplayProbe::class.java)
-        }
-        assertEquals("IDEMPOTENCY_KEY_REUSED", otherOperation.code)
+        assertEquals(ReplayLookup.Found(ReplayProbe("first", 2)),
+            repo.replay(key, "assign:roster", "hash-a", ReplayProbe::class.java))
+        assertEquals(ReplayLookup.Conflict,
+            repo.replay(key, "assign:roster", "hash-b", ReplayProbe::class.java))
+        assertEquals(ReplayLookup.Conflict,
+            repo.replay(key, "confirm:roster", "hash-a", ReplayProbe::class.java))
         val stored: Int = jdbc.queryForObject("SELECT COUNT(*) FROM mutation_replays", Int::class.java)!!
         assertEquals(1, stored)
     }
 
     @Test
-    fun `lockWard rejects unknown ward`() {
-        val missing = assertThrows(ApiException::class.java) {
-            tx.executeWithoutResult { repo.lockWard(UUID.randomUUID()) }
-        }
-        assertEquals(HttpStatus.NOT_FOUND, missing.status)
-        assertEquals("WARD_NOT_FOUND", missing.code)
+    fun `lockWard reports unknown ward`() {
+        tx.executeWithoutResult { assertFalse(repo.lockWard(UUID.randomUUID())) }
     }
 
     @Test

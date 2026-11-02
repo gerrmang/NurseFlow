@@ -1,6 +1,8 @@
 package com.nurseflow.common.security
 
 import jakarta.servlet.http.HttpServletResponse
+import com.nurseflow.common.error.ApiProblem
+import tools.jackson.databind.json.JsonMapper
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import org.springframework.http.HttpMethod
@@ -10,7 +12,7 @@ import org.springframework.security.config.http.SessionCreationPolicy
 import org.springframework.security.web.SecurityFilterChain
 
 @Configuration
-class SecurityConfig {
+class SecurityConfig(private val mapper: JsonMapper) {
     @Bean
     fun securityFilterChain(http: HttpSecurity): SecurityFilterChain = http
         .csrf { it.disable() }
@@ -32,9 +34,11 @@ class SecurityConfig {
         response.characterEncoding = "UTF-8"
         response.setHeader("Cache-Control", "private, no-store")
         val title = if (status == 401) "Unauthorized" else "Forbidden"
-        response.writer.write(
-            "{\"type\":\"about:blank\",\"title\":\"$title\",\"status\":$status," +
-                "\"code\":\"$code\",\"detail\":\"$detail\"}",
-        )
+        response.writer.write(mapper.writeValueAsString(ApiProblem(
+            title = title,
+            status = status,
+            code = code,
+            detail = detail,
+        )))
     }
 }
