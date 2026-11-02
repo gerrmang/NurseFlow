@@ -46,11 +46,15 @@ data class WardSelectionUiState(
     val hospitalWardsLoading: Boolean = false,
     val hospitalWardsError: ApiError? = null,
     val form: CreateWardForm? = null,
-    /** 목록에서 강조할 병동. 생성 직후에는 새 병동이다. */
+    /** 목록에서 강조할 병동. 소속 병동이 하나면 그 병동, 생성 직후에는 새 병동이다. */
     val highlightedWardId: String? = null,
+    /** 이 화면에서 방금 만든 병동. 강조와 별개로 "방금 생성" 표시에만 쓴다. */
+    val justCreatedWardId: String? = null,
     /** 사용자가 확정한 병동. 근무표 서버 연동 전까지는 선택 결과 화면만 보여준다. */
     val chosenWardId: String? = null,
     val notice: String? = null,
+    /** [notice]가 실패 안내인가. 권한이 사라져 생성 양식이 닫힌 경우처럼 이유를 알려야 할 때 쓴다. */
+    val noticeIsError: Boolean = false,
     val sessionExpired: Boolean = false,
 ) {
     val selectedHospital: Hospital? get() = hospitals.firstOrNull { it.hospitalId == selectedHospitalId }
@@ -76,7 +80,7 @@ class WardSelectionViewModel(
     }
 
     fun refresh() {
-        state.update { it.copy(load = LoadState.Loading, notice = null) }
+        state.update { it.copy(load = LoadState.Loading, notice = null, noticeIsError = false) }
         viewModelScope.launch { loadAll() }
     }
 
@@ -100,7 +104,7 @@ class WardSelectionViewModel(
 
     fun openCreateForm() {
         if (state.value.selectedHospital == null) return
-        state.update { it.copy(form = CreateWardForm(), notice = null) }
+        state.update { it.copy(form = CreateWardForm(), notice = null, noticeIsError = false) }
     }
 
     fun closeCreateForm() {
@@ -136,13 +140,14 @@ class WardSelectionViewModel(
             when (val result = repository.createWard(payload.hospitalId, payload.name, payload.timeZone, key)) {
                 is ApiResult.Success -> {
                     submission.settle()
-                    state.update { it.copy(form = null, highlightedWardId = result.value.wardId) }
+                    state.update { it.copy(form = null, highlightedWardId = result.value.wardId, justCreatedWardId = result.value.wardId) }
                     loadAll(preferredHospitalId = payload.hospitalId)
                     state.update { s ->
                         val chosen = result.value.wardId.takeIf { s.isMember(it) }
                         s.copy(
                             chosenWardId = chosen ?: s.chosenWardId,
                             notice = "‘${result.value.name}’ 병동을 만들었습니다.",
+                            noticeIsError = false,
                         )
                     }
                 }
@@ -167,8 +172,12 @@ class WardSelectionViewModel(
                 else -> form.copy(failure = error)
             })
         }
-        // 권한이 바뀌었을 수 있으므로 목록을 서버 기준으로 다시 맞춘다.
-        if (error is ApiError.Forbidden || error is ApiError.NotFound) viewModelScope.launch { loadAll() }
+        // 권한이 바뀌었을 수 있으므로 목록을 서버 기준으로 다시 맞춘다. 다시 읽은 결과 병원 관리 권한이 없어져
+        // 생성 양식이 닫히더라도 사용자가 이유를 알 수 있도록 안내를 남긴다.
+        if (error is ApiError.Forbidden || error is ApiError.NotFound) {
+            state.update { it.copy(notice = "${error.userMessage()} 병동 목록을 다시 불러왔습니다.", noticeIsError = true) }
+            viewModelScope.launch { loadAll() }
+        }
     }
 
     private suspend fun loadAll(preferredHospitalId: String? = state.value.selectedHospitalId) {
