@@ -28,6 +28,8 @@ sealed interface LoadState {
 }
 
 data class CreateWardForm(
+    /** 이 양식이 속한 병원. 생성 응답은 이 병원의 양식에만 반영한다. */
+    val hospitalId: String,
     val name: String = "",
     val timeZone: String = "",
     val nameError: String? = null,
@@ -59,6 +61,9 @@ data class WardSelectionUiState(
 ) {
     val selectedHospital: Hospital? get() = hospitals.firstOrNull { it.hospitalId == selectedHospitalId }
     val isHospitalAdmin: Boolean get() = hospitals.isNotEmpty()
+
+    /** 병동 생성 요청이 진행 중인가. 이 동안 병원 전환·양식 변경·병동 선택·재제출을 막는다. */
+    val isCreating: Boolean get() = form?.submitting == true
     val chosenWard: MyWard? get() = myWards.firstOrNull { it.wardId == chosenWardId }
     fun isMember(wardId: String) = myWards.any { it.wardId == wardId }
 }
@@ -80,11 +85,17 @@ class WardSelectionViewModel(
     }
 
     fun refresh() {
+        if (state.value.isCreating) return
         state.update { it.copy(load = LoadState.Loading, notice = null, noticeIsError = false) }
         viewModelScope.launch { loadAll() }
     }
 
+    /**
+     * 생성 요청 중에는 병원을 바꾸지 않는다. 바꾸면 진행 중인 요청의 응답이 다른 병원의 양식·선택 상태와
+     * 공용 멱등 키에 섞일 수 있다(PR #14 리뷰 P2). 화면도 같은 동안 병원 카드를 비활성화한다.
+     */
     fun selectHospital(hospitalId: String) {
+        if (state.value.isCreating) return
         if (state.value.hospitals.none { it.hospitalId == hospitalId }) return
         state.update { it.copy(selectedHospitalId = hospitalId, hospitalWards = emptyList(), form = null) }
         viewModelScope.launch { loadHospitalWards(hospitalId) }
@@ -97,30 +108,38 @@ class WardSelectionViewModel(
     fun highlight(wardId: String) = state.update { it.copy(highlightedWardId = wardId) }
 
     fun choose(wardId: String) {
+        if (state.value.isCreating) return
         if (state.value.isMember(wardId)) state.update { it.copy(chosenWardId = wardId, highlightedWardId = wardId) }
     }
 
     fun changeWard() = state.update { it.copy(chosenWardId = null) }
 
     fun openCreateForm() {
-        if (state.value.selectedHospital == null) return
-        state.update { it.copy(form = CreateWardForm(), notice = null, noticeIsError = false) }
+        if (state.value.isCreating) return
+        val hospital = state.value.selectedHospital ?: return
+        state.update { it.copy(form = CreateWardForm(hospitalId = hospital.hospitalId), notice = null, noticeIsError = false) }
     }
 
     fun closeCreateForm() {
-        if (state.value.form?.submitting == true) return
+        if (state.value.isCreating) return
         state.update { it.copy(form = null) }
     }
 
-    fun editName(value: String) = state.update { s -> s.copy(form = s.form?.copy(name = value, nameError = null, failure = null)) }
+    fun editName(value: String) {
+        if (state.value.isCreating) return
+        state.update { s -> s.copy(form = s.form?.copy(name = value, nameError = null, failure = null)) }
+    }
 
-    fun editTimeZone(value: String) = state.update { s -> s.copy(form = s.form?.copy(timeZone = value, timeZoneError = null, failure = null)) }
+    fun editTimeZone(value: String) {
+        if (state.value.isCreating) return
+        state.update { s -> s.copy(form = s.form?.copy(timeZone = value, timeZoneError = null, failure = null)) }
+    }
 
     fun submitCreate() {
         val current = state.value
         val form = current.form ?: return
         val hospital = current.selectedHospital ?: return
-        if (form.submitting) return
+        if (form.submitting || form.hospitalId != hospital.hospitalId) return
         val name = WardNameRules.normalize(form.name)
         val zone = form.timeZone.trim().ifEmpty { null }
         val zoneValid = zone == null || try { ZoneId.of(zone); true } catch (_: DateTimeException) { false }
@@ -133,14 +152,20 @@ class WardSelectionViewModel(
             }
             return
         }
-        val payload = CreatePayload(hospital.hospitalId, name, zone)
+        val payload = CreatePayload(form.hospitalId, name, zone)
         val key = submission.keyFor(payload)
         state.update { it.copy(form = form.copy(submitting = true, failure = null, nameError = null, timeZoneError = null)) }
         viewModelScope.launch {
             when (val result = repository.createWard(payload.hospitalId, payload.name, payload.timeZone, key)) {
                 is ApiResult.Success -> {
                     submission.settle()
-                    state.update { it.copy(form = null, highlightedWardId = result.value.wardId, justCreatedWardId = result.value.wardId) }
+                    state.update { s ->
+                        s.copy(
+                            form = s.form?.takeUnless { it.hospitalId == payload.hospitalId },
+                            highlightedWardId = result.value.wardId,
+                            justCreatedWardId = result.value.wardId,
+                        )
+                    }
                     loadAll(preferredHospitalId = payload.hospitalId)
                     state.update { s ->
                         val chosen = result.value.wardId.takeIf { s.isMember(it) }
@@ -151,20 +176,22 @@ class WardSelectionViewModel(
                         )
                     }
                 }
-                is ApiResult.Failure -> onCreateFailed(result.error)
+                is ApiResult.Failure -> onCreateFailed(result.error, payload.hospitalId)
             }
         }
     }
 
-    private fun onCreateFailed(error: ApiError) {
+    private fun onCreateFailed(error: ApiError, hospitalId: String) {
+        // 결과 불명(통신 실패·5xx·해석할 수 없는 2xx)이면 같은 입력의 재시도가 같은 키를 쓰도록 남긴다.
         if (!error.outcomeUnknown) submission.settle()
         if (error == ApiError.SessionExpired || error == ApiError.SignedOut) {
-            state.update { s -> s.copy(sessionExpired = true, form = s.form?.copy(submitting = false)) }
+            state.update { s -> s.copy(sessionExpired = true, form = s.form?.ownedBy(hospitalId)?.copy(submitting = false) ?: s.form) }
             return
         }
         val code = (error as? ApiError.Rejected)?.code
         state.update { s ->
-            val form = s.form?.copy(submitting = false) ?: return@update s
+            // 요청을 보낸 병원의 양식에만 결과를 반영한다.
+            val form = s.form?.ownedBy(hospitalId)?.copy(submitting = false) ?: return@update s
             s.copy(form = when (code) {
                 "INVALID_WARD_NAME" -> form.copy(nameError = NAME_RULE)
                 "WARD_NAME_TAKEN" -> form.copy(nameError = "같은 병원에 같은 이름의 병동이 있습니다.")
@@ -232,6 +259,8 @@ class WardSelectionViewModel(
         }
     }
 
+    private fun CreateWardForm.ownedBy(hospitalId: String): CreateWardForm? = takeIf { it.hospitalId == hospitalId }
+
     private data class CreatePayload(val hospitalId: String, val name: String, val timeZone: String?)
 
     companion object {
@@ -250,5 +279,5 @@ fun ApiError.userMessage(): String = when (this) {
     is ApiError.Rejected -> "요청을 처리할 수 없습니다. 입력을 확인해 주세요."
     ApiError.Network -> "서버에 연결하지 못했습니다. 네트워크를 확인한 뒤 다시 시도해 주세요."
     is ApiError.Server -> "서버에서 요청을 완료하지 못했습니다. 잠시 뒤 다시 시도해 주세요."
-    ApiError.UnexpectedResponse -> "서버 응답을 해석하지 못했습니다. 앱을 최신 버전으로 업데이트해 주세요."
+    ApiError.UnexpectedResponse -> "서버 응답을 확인하지 못했습니다."
 }

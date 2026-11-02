@@ -7,8 +7,10 @@ import com.nurseflow.app.feature.organization.domain.HospitalWard
 import com.nurseflow.app.feature.organization.domain.MyWard
 import com.nurseflow.app.feature.organization.domain.OrganizationRepository
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
@@ -177,6 +179,158 @@ class WardSelectionViewModelTest {
         assertTrue(state.notice!!.startsWith("병원 관리자 권한이 없습니다."))
     }
 
+    // ── PR #14 리뷰 P2-1: 생성 중 병원 전환으로 요청 상태가 섞이는 문제 ──
+
+    private val hospitalB = Hospital("h2", "가상 병원 B", "Asia/Seoul")
+
+    private fun TestScope.startDelayedCreate(repo: FakeRepository, name: String): Pair<WardSelectionViewModel, CompletableDeferred<ApiResult<HospitalWard>>> {
+        val vm = vm(repo)
+        advanceUntilIdle()
+        vm.openCreateForm()
+        vm.editName(name)
+        val gate = CompletableDeferred<ApiResult<HospitalWard>>()
+        repo.gate = gate
+        vm.submitCreate()
+        advanceUntilIdle()
+        assertTrue("요청이 진행 중이어야 함", vm.uiState.value.form!!.submitting)
+        return vm to gate
+    }
+
+
+    @Test
+    fun `while creating in hospital A, switching hospital, reopening, editing, choosing and resubmitting are blocked`() = runTest(dispatcher) {
+        val repo = FakeRepository(myWards = mutableListOf(ward("w1", "WARD_ADMIN")), hospitals = listOf(hospital, hospitalB))
+        val (vm, gate) = startDelayedCreate(repo, "A 병동")
+
+        vm.selectHospital("h2")
+        vm.openCreateForm()
+        vm.editName("바뀐 이름")
+        vm.editTimeZone("UTC")
+        vm.closeCreateForm()
+        vm.choose("w1")
+        vm.submitCreate()
+        advanceUntilIdle()
+
+        val during = vm.uiState.value
+        assertEquals("h1", during.selectedHospitalId)
+        assertEquals("A 병동", during.form!!.name)
+        assertEquals("", during.form!!.timeZone)
+        assertTrue(during.form!!.submitting)
+        assertNull(during.chosenWardId)
+        assertEquals(1, repo.createCalls.size)
+
+        // A병원의 확정 실패는 A병원 양식에만 반영된다.
+        gate.complete(ApiResult.Failure(ApiError.Rejected(409, "WARD_NAME_TAKEN")))
+        advanceUntilIdle()
+        val after = vm.uiState.value
+        assertEquals("h1", after.selectedHospitalId)
+        assertEquals("같은 병원에 같은 이름의 병동이 있습니다.", after.form!!.nameError)
+        assertFalse(after.form!!.submitting)
+
+        // 요청이 끝나면 병원 전환이 정상 동작한다.
+        vm.selectHospital("h2")
+        advanceUntilIdle()
+        assertEquals("h2", vm.uiState.value.selectedHospitalId)
+        assertNull(vm.uiState.value.form)
+    }
+
+    @Test
+    fun `delayed success applies to hospital A only and hospital switching works afterwards`() = runTest(dispatcher) {
+        val repo = FakeRepository(hospitals = listOf(hospital, hospitalB))
+        val (vm, gate) = startDelayedCreate(repo, "A 병동")
+        vm.selectHospital("h2")
+        assertEquals("진행 중에는 병원 전환이 막혀야 함", "h1", vm.uiState.value.selectedHospitalId)
+
+        val created = HospitalWard("a-1", "h1", "A 병동", "Asia/Seoul")
+        repo.hospitalWards += created
+        repo.myWards += MyWard("a-1", "A 병동", "Asia/Seoul", "h1", "가상 병원", setOf("WARD_ADMIN"), true)
+        gate.complete(ApiResult.Success(created))
+        advanceUntilIdle()
+
+        val state = vm.uiState.value
+        assertEquals("h1", state.selectedHospitalId)
+        assertNull(state.form)
+        assertEquals("a-1", state.justCreatedWardId)
+        assertEquals(listOf("a-1"), state.hospitalWards.map { it.wardId })
+
+        vm.changeWard()
+        vm.selectHospital("h2")
+        advanceUntilIdle()
+        assertEquals("h2", vm.uiState.value.selectedHospitalId)
+        assertTrue(vm.uiState.value.hospitalWards.isEmpty())
+    }
+
+    @Test
+    fun `retry after a lost delayed response keeps the same idempotency key`() = runTest(dispatcher) {
+        val repo = FakeRepository(hospitals = listOf(hospital, hospitalB))
+        val (vm, gate) = startDelayedCreate(repo, "A 병동")
+        gate.complete(ApiResult.Failure(ApiError.Network))
+        advanceUntilIdle()
+
+        val retryGate = CompletableDeferred<ApiResult<HospitalWard>>()
+        repo.gate = retryGate
+        vm.submitCreate()
+        advanceUntilIdle()
+        vm.selectHospital("h2")
+        assertEquals("h1", vm.uiState.value.selectedHospitalId)
+        retryGate.complete(ApiResult.Success(HospitalWard("a-1", "h1", "A 병동", "Asia/Seoul")))
+        advanceUntilIdle()
+
+        assertEquals(2, repo.createCalls.size)
+        assertEquals(repo.createCalls[0].key, repo.createCalls[1].key)
+        assertNull(vm.uiState.value.form)
+    }
+
+    // ── PR #14 리뷰 P2-2: 성공 응답 해석 실패 시 멱등 키를 버리는 문제 ──
+
+    @Test
+    fun `unreadable success response keeps the key for the same input and a new input gets a new key`() = runTest(dispatcher) {
+        val repo = FakeRepository(hospitals = listOf(hospital))
+        val vm = vm(repo)
+        advanceUntilIdle()
+        vm.openCreateForm()
+        vm.editName("해석 실패 병동")
+
+        repo.createResult = ApiResult.Failure(ApiError.UnexpectedResponse)
+        vm.submitCreate()
+        advanceUntilIdle()
+        assertEquals(ApiError.UnexpectedResponse, vm.uiState.value.form!!.failure)
+        vm.submitCreate()
+        advanceUntilIdle()
+        assertEquals("결과 불명 뒤 같은 입력 재시도는 같은 키", repo.createCalls[0].key, repo.createCalls[1].key)
+
+        // 정상 응답을 받으면 성공 처리하고 키를 정리한다.
+        repo.createResult = null
+        vm.submitCreate()
+        advanceUntilIdle()
+        assertEquals(repo.createCalls[0].key, repo.createCalls[2].key)
+        assertNull(vm.uiState.value.form)
+        vm.changeWard()
+        vm.openCreateForm()
+        vm.editName("해석 실패 병동")
+        vm.submitCreate()
+        advanceUntilIdle()
+        assertNotEquals("성공 뒤에는 새 요청", repo.createCalls[0].key, repo.createCalls[3].key)
+    }
+
+    @Test
+    fun `changing input after an unreadable response uses a new key`() = runTest(dispatcher) {
+        val repo = FakeRepository(hospitals = listOf(hospital))
+        val vm = vm(repo)
+        advanceUntilIdle()
+        vm.openCreateForm()
+        vm.editName("첫 이름")
+        repo.createResult = ApiResult.Failure(ApiError.UnexpectedResponse)
+        vm.submitCreate()
+        advanceUntilIdle()
+
+        vm.editName("다른 이름")
+        repo.createResult = null
+        vm.submitCreate()
+        advanceUntilIdle()
+        assertNotEquals(repo.createCalls[0].key, repo.createCalls[1].key)
+    }
+
     private fun ward(id: String, role: String) = MyWard(id, "병동 $id", "Asia/Seoul", "h1", "가상 병원", setOf(role), true)
 
     private data class CreateCall(val hospitalId: String, val name: String, val timeZone: String?, val key: String)
@@ -191,6 +345,9 @@ class WardSelectionViewModelTest {
         var createResult: ApiResult<HospitalWard>? = null
         var hospitalWardCalls = 0
 
+        /** 설정하면 다음 생성 요청이 테스트가 완료시킬 때까지 응답하지 않는다(진행 중 요청 재현). */
+        var gate: CompletableDeferred<ApiResult<HospitalWard>>? = null
+
         override suspend fun myWards(): ApiResult<List<MyWard>> =
             failNext?.let { failNext = null; ApiResult.Failure(it) } ?: ApiResult.Success(myWards.toList())
 
@@ -203,6 +360,7 @@ class WardSelectionViewModelTest {
 
         override suspend fun createWard(hospitalId: String, name: String, timeZone: String?, idempotencyKey: String): ApiResult<HospitalWard> {
             createCalls += CreateCall(hospitalId, name, timeZone, idempotencyKey)
+            gate?.let { pending -> gate = null; return pending.await() }
             createResult?.let { return it }
             val created = HospitalWard("new-${createCalls.size}", hospitalId, name, timeZone ?: "Asia/Seoul")
             if (hospitalWards.none { it.wardId == created.wardId }) {

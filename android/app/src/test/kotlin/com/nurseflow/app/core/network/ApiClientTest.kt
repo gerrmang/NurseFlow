@@ -77,6 +77,18 @@ class ApiClientTest {
     }
 
     @Test
+    fun `unreadable 2xx response to a create is an outcome-unknown error`() = runTest {
+        // 서버는 생성했지만(201) 앱이 응답을 해석하지 못한 경우. 같은 키로 재시도해야 하는 결과 불명 상태다.
+        val repo = repository { HttpResponse(201, """{"unexpected":true}""") }
+
+        val result = repo.createWard("h1", "병동", null, "key-1")
+
+        assertEquals(ApiResult.Failure(ApiError.UnexpectedResponse), result)
+        assertTrue(ApiError.UnexpectedResponse.outcomeUnknown)
+        assertEquals("key-1", requests.single().headers["Idempotency-Key"])
+    }
+
+    @Test
     fun `transport and configuration failures never reach the server or crash`() = runTest {
         assertEquals(ApiResult.Failure(ApiError.Network), repository { throw IOException("offline") }.myWards())
         assertEquals(ApiResult.Failure(ApiError.UnexpectedResponse), repository { HttpResponse(200, "<html>") }.myWards())
