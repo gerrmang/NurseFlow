@@ -5,6 +5,7 @@ import android.util.Log
 import com.kakao.sdk.auth.model.OAuthToken
 import com.kakao.sdk.common.model.ClientError
 import com.kakao.sdk.common.model.ClientErrorCause
+import com.kakao.sdk.common.util.Utility
 import com.kakao.sdk.user.UserApiClient
 import com.nurseflow.app.BuildConfig
 import kotlinx.coroutines.suspendCancellableCoroutine
@@ -58,21 +59,25 @@ class KakaoLoginClient {
     }
 
     private suspend fun talkLogin(context: Context, nonce: String): OAuthToken = suspendCancellableCoroutine { cont ->
-        UserApiClient.instance.loginWithKakaoTalk(context, nonce = nonce) { token, error -> cont.complete(token, error) }
+        UserApiClient.instance.loginWithKakaoTalk(context, nonce = nonce) { token, error -> cont.complete(context, token, error) }
     }
 
     private suspend fun accountLogin(context: Context, nonce: String): OAuthToken = suspendCancellableCoroutine { cont ->
-        UserApiClient.instance.loginWithKakaoAccount(context, nonce = nonce) { token, error -> cont.complete(token, error) }
+        UserApiClient.instance.loginWithKakaoAccount(context, nonce = nonce) { token, error -> cont.complete(context, token, error) }
     }
 
-    private fun kotlinx.coroutines.CancellableContinuation<OAuthToken>.complete(token: OAuthToken?, error: Throwable?) {
+    private fun kotlinx.coroutines.CancellableContinuation<OAuthToken>.complete(context: Context, token: OAuthToken?, error: Throwable?) {
         if (!isActive) return
         when {
             error is ClientError && error.reason == ClientErrorCause.Cancelled -> resumeWithException(KakaoLoginCancelled())
             error != null -> {
                 // Kakao SDK errors carry no tokens; the reason is needed to fix console settings (key hash etc.).
                 Log.e(TAG, "Kakao login failed", error)
-                val detail = if (BuildConfig.DEBUG) "\n[디버그] ${error::class.simpleName}: ${error.message}" else ""
+                if (BuildConfig.DEBUG) Log.i(TAG, "Key hash to register in Kakao Developers: ${Utility.getKeyHash(context)}")
+                val detail = if (BuildConfig.DEBUG) {
+                    // The hash Kakao expects for *this* build; register exactly this value in Kakao Developers.
+                    "\n[디버그] ${error::class.simpleName}: ${error.message}\n이 앱의 키 해시: ${Utility.getKeyHash(context)}"
+                } else ""
                 resumeWithException(KakaoLoginFailed("카카오 로그인에 실패했어요. 잠시 후 다시 시도해 주세요.$detail"))
             }
             token != null -> resume(token)
