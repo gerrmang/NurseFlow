@@ -1,9 +1,9 @@
 package com.nurseflow.hospital
 
-import com.nurseflow.common.error.ApiException
+import com.nurseflow.common.error.BusinessException
 import com.nurseflow.hospital.application.model.CreateWardCommand
 import com.nurseflow.hospital.application.service.HospitalWardService
-import com.nurseflow.roster.api.dto.request.CreateRosterRequest
+import com.nurseflow.roster.application.model.CreateRosterRequest
 import com.nurseflow.roster.application.service.RosterService
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertThrows
@@ -153,7 +153,7 @@ class HospitalWardServiceIntegrationTest @Autowired constructor(
         val results = concurrently(8) { service.createWard(admin, command(hospitalA, "동시 병동")) }
 
         assertEquals(1, results.count { it.isSuccess })
-        assertTrue(results.filter { it.isFailure }.all { (it.exceptionOrNull() as? ApiException)?.code == "WARD_NAME_TAKEN" })
+        assertTrue(results.filter { it.isFailure }.all { (it.exceptionOrNull() as? BusinessException)?.errorCode?.name == "WARD_NAME_TAKEN" })
         assertEquals(1, wardCount(hospitalA))
         assertEquals(1, jdbc.queryForObject("SELECT COUNT(*) FROM ward_memberships", Int::class.java))
     }
@@ -179,7 +179,7 @@ class HospitalWardServiceIntegrationTest @Autowired constructor(
     }
 
     private fun assertCode(code: String, block: () -> Unit) {
-        assertEquals(code, assertThrows(ApiException::class.java) { block() }.code)
+        assertEquals(code, assertThrows(BusinessException::class.java) { block() }.errorCode.name)
     }
 
     private fun <T> concurrently(threads: Int, task: () -> T): List<Result<T>> {
