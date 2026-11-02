@@ -1,18 +1,15 @@
 package com.nurseflow.hospital.api.controller
 
+import com.nurseflow.common.security.CurrentSubject
 import com.nurseflow.hospital.api.dto.request.CreateWardRequest
 import com.nurseflow.hospital.api.dto.response.HospitalResponse
 import com.nurseflow.hospital.api.dto.response.ItemsResponse
 import com.nurseflow.hospital.api.dto.response.WardResponse
-import com.nurseflow.hospital.application.error.HospitalErrorCode
-import com.nurseflow.hospital.application.error.fail
 import com.nurseflow.hospital.application.model.CreateWardCommand
 import com.nurseflow.hospital.application.model.HospitalResult
 import com.nurseflow.hospital.application.model.WardResult
 import com.nurseflow.hospital.application.service.HospitalWardService
 import org.springframework.http.ResponseEntity
-import org.springframework.security.core.annotation.AuthenticationPrincipal
-import org.springframework.security.oauth2.jwt.Jwt
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.PostMapping
@@ -28,38 +25,32 @@ import java.util.UUID
 class HospitalController(private val service: HospitalWardService) {
 
     @GetMapping
-    fun myHospitals(@AuthenticationPrincipal jwt: Jwt): ResponseEntity<ItemsResponse<HospitalResponse>> =
-        noStore(ItemsResponse(service.listMyHospitals(subject(jwt)).map(::hospitalResponse)))
+    fun myHospitals(@CurrentSubject subject: String): ResponseEntity<ItemsResponse<HospitalResponse>> =
+        noStore(ItemsResponse(service.listMyHospitals(subject).map(::hospitalResponse)))
 
     @GetMapping("/{hospitalId}/wards")
-    fun wards(@PathVariable hospitalId: UUID, @AuthenticationPrincipal jwt: Jwt): ResponseEntity<ItemsResponse<WardResponse>> =
-        noStore(ItemsResponse(service.listWards(subject(jwt), hospitalId).map(::wardResponse)))
+    fun wards(@PathVariable hospitalId: UUID, @CurrentSubject subject: String): ResponseEntity<ItemsResponse<WardResponse>> =
+        noStore(ItemsResponse(service.listWards(subject, hospitalId).map(::wardResponse)))
 
     @GetMapping("/{hospitalId}/wards/{wardId}")
     fun ward(
         @PathVariable hospitalId: UUID,
         @PathVariable wardId: UUID,
-        @AuthenticationPrincipal jwt: Jwt,
-    ): ResponseEntity<WardResponse> = noStore(wardResponse(service.getWard(subject(jwt), hospitalId, wardId)))
+        @CurrentSubject subject: String,
+    ): ResponseEntity<WardResponse> = noStore(wardResponse(service.getWard(subject, hospitalId, wardId)))
 
     @PostMapping("/{hospitalId}/wards")
     fun createWard(
         @PathVariable hospitalId: UUID,
         @RequestHeader("Idempotency-Key") idempotencyKey: UUID,
         @RequestBody request: CreateWardRequest,
-        @AuthenticationPrincipal jwt: Jwt,
+        @CurrentSubject subject: String,
     ): ResponseEntity<WardResponse> {
-        val result = service.createWard(
-            subject(jwt),
-            CreateWardCommand(hospitalId, request.name, request.timeZone, idempotencyKey),
-        )
+        val result = service.createWard(subject, CreateWardCommand(hospitalId, request.name, request.timeZone, idempotencyKey))
         return ResponseEntity.created(URI.create("/api/v1/hospitals/${result.hospitalId}/wards/${result.wardId}"))
             .header("Cache-Control", "private, no-store")
             .body(wardResponse(result))
     }
-
-    private fun subject(jwt: Jwt): String =
-        jwt.subject?.takeIf { it.isNotBlank() } ?: fail(HospitalErrorCode.SUBJECT_REQUIRED)
 
     private fun <T : Any> noStore(body: T): ResponseEntity<T> =
         ResponseEntity.ok().header("Cache-Control", "private, no-store").body(body)

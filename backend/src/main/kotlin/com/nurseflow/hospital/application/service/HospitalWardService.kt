@@ -1,7 +1,7 @@
 package com.nurseflow.hospital.application.service
 
-import com.nurseflow.hospital.application.error.HospitalErrorCode
-import com.nurseflow.hospital.application.error.fail
+import com.nurseflow.common.error.BusinessException
+import com.nurseflow.common.error.ErrorCode
 import com.nurseflow.hospital.application.model.CreateWardCommand
 import com.nurseflow.hospital.application.model.HospitalResult
 import com.nurseflow.hospital.application.model.WardResult
@@ -47,7 +47,7 @@ class HospitalWardService(
     @Transactional(readOnly = true)
     fun getWard(actor: String, hospitalId: UUID, wardId: UUID): WardResult {
         requireHospitalAdmin(hospitalId, actor)
-        return repo.findWardInHospital(hospitalId, wardId)?.let(::wardResult) ?: fail(HospitalErrorCode.WARD_NOT_FOUND)
+        return repo.findWardInHospital(hospitalId, wardId)?.let(::wardResult) ?: throw BusinessException(ErrorCode.WARD_NOT_FOUND)
     }
 
     /**
@@ -56,21 +56,21 @@ class HospitalWardService(
      */
     @Transactional
     fun createWard(actor: String, command: CreateWardCommand): WardResult {
-        val name = OrganizationNames.normalizeName(command.name) ?: fail(HospitalErrorCode.INVALID_WARD_NAME)
-        val requestedZone = command.timeZone?.let { OrganizationNames.parseZone(it) ?: fail(HospitalErrorCode.INVALID_TIME_ZONE) }
+        val name = OrganizationNames.normalizeName(command.name) ?: throw BusinessException(ErrorCode.INVALID_WARD_NAME)
+        val requestedZone = command.timeZone?.let { OrganizationNames.parseZone(it) ?: throw BusinessException(ErrorCode.INVALID_TIME_ZONE) }
 
         requireHospitalAdmin(command.hospitalId, actor)
-        val hospital: DbHospital = repo.lockHospital(command.hospitalId) ?: fail(HospitalErrorCode.HOSPITAL_NOT_FOUND)
+        val hospital: DbHospital = repo.lockHospital(command.hospitalId) ?: throw BusinessException(ErrorCode.HOSPITAL_NOT_FOUND)
 
         val operation = "create-ward:${hospital.id}"
         val requestHash = hash(CreateWardFingerprint(actor, command.name, command.timeZone))
         when (val saved = repo.findReplay(command.idempotencyKey, operation, requestHash)) {
             is ReplayLookup.Match -> return mapper.readValue(saved.responseJson, WardResult::class.java)
-            ReplayLookup.Mismatch -> fail(HospitalErrorCode.IDEMPOTENCY_KEY_REUSED)
+            ReplayLookup.Mismatch -> throw BusinessException(ErrorCode.IDEMPOTENCY_KEY_REUSED)
             ReplayLookup.Absent -> Unit
         }
 
-        if (repo.wardNameExists(hospital.id, name)) fail(HospitalErrorCode.WARD_NAME_TAKEN)
+        if (repo.wardNameExists(hospital.id, name)) throw BusinessException(ErrorCode.WARD_NAME_TAKEN)
         val ward = NewWard(
             id = UUID.randomUUID(),
             hospitalId = hospital.id,
@@ -82,7 +82,7 @@ class HospitalWardService(
         try {
             repo.insertWard(ward)
         } catch (_: DuplicateKeyException) {
-            fail(HospitalErrorCode.WARD_NAME_TAKEN)
+            throw BusinessException(ErrorCode.WARD_NAME_TAKEN)
         }
         repo.insertWardAdmin(ward.id, actor)
 
@@ -91,7 +91,7 @@ class HospitalWardService(
             repo.insertReplay(command.idempotencyKey, operation, requestHash, mapper.writeValueAsString(result))
         } catch (_: DuplicateKeyException) {
             // 같은 키가 다른 병원 요청에서 동시에 기록되었다. 이 트랜잭션의 병동·관리자 생성도 함께 되돌린다.
-            fail(HospitalErrorCode.IDEMPOTENCY_KEY_REUSED)
+            throw BusinessException(ErrorCode.IDEMPOTENCY_KEY_REUSED)
         }
         return result
     }
@@ -103,8 +103,8 @@ class HospitalWardService(
         )
         when (access) {
             HospitalAccess.ADMIN -> Unit
-            HospitalAccess.AFFILIATED -> fail(HospitalErrorCode.HOSPITAL_ADMIN_REQUIRED)
-            HospitalAccess.NONE -> fail(HospitalErrorCode.HOSPITAL_NOT_FOUND)
+            HospitalAccess.AFFILIATED -> throw BusinessException(ErrorCode.HOSPITAL_ADMIN_REQUIRED)
+            HospitalAccess.NONE -> throw BusinessException(ErrorCode.HOSPITAL_NOT_FOUND)
         }
     }
 

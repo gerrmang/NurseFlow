@@ -141,6 +141,38 @@ class HospitalControllerTest @Autowired constructor(
         assertEquals(1, jdbc.queryForObject("SELECT COUNT(*) FROM wards", Int::class.java))
     }
 
+    @Test
+    fun `ward members see only their own wards without gaining hospital access`() {
+        createWard("boot-admin", """{"name":"관리 병동"}""", UUID.randomUUID()).andExpect(status().isCreated)
+        val memberWard = HospitalTestFixtures.ward(jdbc, hospitalId, "간호사 병동")
+        HospitalTestFixtures.wardRole(jdbc, memberWard, "ward-nurse", "WARD_MEMBER")
+        val legacy = HospitalTestFixtures.ward(jdbc, null, "병원 미지정 병동")
+        HospitalTestFixtures.wardRole(jdbc, legacy, "ward-nurse", "WARD_MEMBER")
+
+        mvc.perform(get("/api/v1/wards").asUser("ward-nurse"))
+            .andExpect(status().isOk)
+            .andExpect(header().string("Cache-Control", "private, no-store"))
+            .andExpect(jsonPath("$.items.length()").value(2))
+            .andExpect(jsonPath("$.items[?(@.wardName=='간호사 병동')].hospitalName").value("부트스트랩 가상 병원"))
+            .andExpect(jsonPath("$.items[?(@.wardName=='간호사 병동')].roles[0]").value("WARD_MEMBER"))
+            .andExpect(jsonPath("$.items[?(@.wardName=='병원 미지정 병동')].hospitalId").value(org.hamcrest.Matchers.contains(null as Any?)))
+            .andExpect(jsonPath("$.items[?(@.wardName=='관리 병동')]").isEmpty)
+        mvc.perform(get("/api/v1/hospitals").asUser("ward-nurse"))
+            .andExpect(status().isOk).andExpect(jsonPath("$.items").isEmpty)
+        mvc.perform(get("/api/v1/hospitals/$hospitalId/wards").asUser("ward-nurse"))
+            .andExpect(status().isForbidden).andExpect(jsonPath("$.code").value("HOSPITAL_ADMIN_REQUIRED"))
+
+        // 병동을 만든 병원 관리자에게는 생성 시 부여된 병동 관리자 소속만 보인다.
+        mvc.perform(get("/api/v1/wards").asUser("boot-admin"))
+            .andExpect(jsonPath("$.items.length()").value(1))
+            .andExpect(jsonPath("$.items[0].wardName").value("관리 병동"))
+            .andExpect(jsonPath("$.items[0].roles[0]").value("WARD_ADMIN"))
+            .andExpect(jsonPath("$.items[0].canViewWardCalendar").value(true))
+        mvc.perform(get("/api/v1/wards").asUser("stranger"))
+            .andExpect(status().isOk).andExpect(jsonPath("$.items").isEmpty)
+        mvc.perform(get("/api/v1/wards")).andExpect(status().isUnauthorized)
+    }
+
     private fun createWard(subject: String, body: String, key: UUID): ResultActions = mvc.perform(
         post("/api/v1/hospitals/$hospitalId/wards").asUser(subject)
             .header("Idempotency-Key", key.toString())
