@@ -26,3 +26,11 @@ data class CreatedInvitationResponse(
 )
 
 data class InvitationItems(val items: List<InvitationResponse>)
+
+data class InvitationPreviewResponse(
+    val wardId: UUID,
+    val wardName: String,
+    val role: String,
+    val expiresAt: Instant,
+    val linksExistingNurse: Boolean,
+)

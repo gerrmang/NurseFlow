@@ -7,7 +7,7 @@ info:
     확정된 결정: 간호사는 병동 전체 공개표 또는 본인 공개표 조회, 미충원 표 공개 허용,
     관리자 확정 전 draft는 비공개, 관리자 confirm 성공 시 해당 revision을 활성 달력에 공개 적용.
     시연 MVP는 Kakao 로그인 후 관리자 초대 수락으로 병동 소속을 얻고 H2를 사용한다.
-    Kakao 세션(/auth/*), 시연용 첫 관리자 병동 생성(POST /wards)은 구현된 계약이다.
+    Kakao 세션(/auth/*), 시연용 첫 관리자 병동 생성(POST /wards), 초대 발급·철회·수락은 구현된 계약이다.
     클라이언트는 Kakao SDK/웹 로그인으로 받은 ID 토큰을 /auth/kakao/session에 보내고,
     이후 모든 요청에는 NurseFlow가 발급한 access token을 사용한다. Kakao 토큰은 API bearer로 받지 않는다.
     병동 내 팀별 편성 및 관리자 확인을 거친 근무연차·직급의 1~5 경력 단계 구성 목표도
@@ -297,6 +297,93 @@ paths:
                 $ref: '#/components/schemas/ApiProblem'
         '409':
           description: INVITATION_ALREADY_REDEEMED
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ApiProblem'
+
+  /invitations/preview:
+    post:
+      tags: [Invitations]
+      operationId: previewInvitation
+      summary: 초대 확인 — 병동·역할 미리보기 (초대를 소모하지 않음)
+      description: 로그인 필요. token은 URL이 아닌 본문으로 보낸다.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InvitationTokenRequest'
+      responses:
+        '200':
+          description: 수락 가능한 초대
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvitationPreview'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: INVITATION_NOT_FOUND
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ApiProblem'
+        '409':
+          description: INVITATION_ALREADY_REDEEMED
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ApiProblem'
+        '410':
+          description: INVITATION_EXPIRED 또는 INVITATION_REVOKED
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ApiProblem'
+
+  /invitations/redeem:
+    post:
+      tags: [Invitations]
+      operationId: redeemInvitation
+      summary: 초대 수락 — 병동 가입
+      description: |
+        초대 소진, 병동 소속 생성, (WARD_MEMBER) 간호사 기록 연결 또는 생성을 한 트랜잭션에서 처리한다.
+        역할은 초대에 저장된 값만 사용하며 요청에 역할 필드를 넣으면 400이다.
+        이미 그 병동 소속인 사용자는 409 ALREADY_WARD_MEMBER이고 초대는 그대로 남는다.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InvitationTokenRequest'
+      responses:
+        '201':
+          description: 생성된 병동 소속
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WardMembership'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: INVITATION_NOT_FOUND
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ApiProblem'
+        '409':
+          description: INVITATION_ALREADY_REDEEMED, ALREADY_WARD_MEMBER 또는 NURSE_ALREADY_LINKED
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ApiProblem'
+        '410':
+          description: INVITATION_EXPIRED 또는 INVITATION_REVOKED
           content:
             application/problem+json:
               schema:
@@ -1166,6 +1253,31 @@ components:
           schema:
             $ref: '#/components/schemas/ApiProblem'
   schemas:
+    InvitationTokenRequest:
+      type: object
+      additionalProperties: false
+      required: [token]
+      properties:
+        token:
+          type: string
+          pattern: '^[A-Za-z0-9_-]{43}$'
+    InvitationPreview:
+      type: object
+      required: [wardId, wardName, role, expiresAt, linksExistingNurse]
+      properties:
+        wardId:
+          type: string
+          format: uuid
+        wardName:
+          type: string
+        role:
+          type: string
+          enum: [WARD_ADMIN, WARD_MEMBER]
+        expiresAt:
+          type: string
+          format: date-time
+        linksExistingNurse:
+          type: boolean
     CreateInvitationRequest:
       type: object
       additionalProperties: false
