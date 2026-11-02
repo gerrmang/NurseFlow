@@ -6,6 +6,12 @@ Kotlin + Spring Boot API for drafting, manually editing, validating and publishi
 
 Java 21, an OIDC issuer and an API audience are required. Set `NURSEFLOW_OIDC_ISSUER_URI` to the issuer that signs access tokens and `NURSEFLOW_OIDC_AUDIENCE` to this API's audience. Spring Security validates both JWT claims; there is no anonymous development bypass. The service cannot serve scheduling requests until `wards`, `ward_memberships`, `nurses`, and `shift_types` have been provisioned in the local H2 database. Provisioning endpoints and production database migration are separate work.
 
+### Hospital bootstrap and ward creation
+
+A hospital and its first `HOSPITAL_ADMIN` are registered only by the server operator. Set `nurseflow.bootstrap.hospital.name`, `nurseflow.bootstrap.hospital.admin-subject` (the admin's validated JWT `sub`), and optionally `nurseflow.bootstrap.hospital.time-zone` (default `Asia/Seoul`). For example, use the `NURSEFLOW_BOOTSTRAP_HOSPITAL_NAME` and `NURSEFLOW_BOOTSTRAP_HOSPITAL_ADMIN_SUBJECT` environment variables, then start the server. Re-running with the same values changes nothing. The server refuses to add a different admin to an existing hospital. There is no HTTP endpoint for this step. The hospital admin can then call `POST /api/v1/hospitals/{hospitalId}/wards` with an `Idempotency-Key`. That call creates the ward and the caller's `WARD_ADMIN` membership in one transaction. A ward-admin role never grants hospital permissions. See [the design notes](../docs/hospital-ward-team-foundation.md).
+
+On startup, `schema.sql` upgrades an existing `nurseflow.mv.db` in place. It adds `wards.hospital_id`, `created_at`, and `created_by` with `ALTER TABLE ... IF NOT EXISTS`. Existing wards keep `hospital_id = NULL` and their roster behaviour is unchanged.
+
 `ward_memberships.subject` and `nurses.subject` must match the validated JWT `sub` exactly. Administrators need a `WARD_ADMIN` membership. The whole ward calendar also requires `can_view_ward_calendar=TRUE`. The personal calendar resolves its nurse ID from the authenticated subject and never accepts a nurse ID in the request.
 
 The API stores approved absence category and time range only. It does not store leave reasons or clinical details. Published calendar responses omit absence records and use `Cache-Control: private, no-store`.

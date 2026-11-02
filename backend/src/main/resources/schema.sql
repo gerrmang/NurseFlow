@@ -93,3 +93,28 @@ CREATE TABLE IF NOT EXISTS generation_jobs (
     finished_at VARCHAR(40)
 );
 CREATE INDEX IF NOT EXISTS ix_generation_jobs_roster ON generation_jobs(roster_id, status);
+
+-- 병원 → 병동 소속 기반. 기존 H2 파일 DB에서도 매 기동 시 반복 실행할 수 있는 변경만 사용한다.
+-- CREATE TABLE IF NOT EXISTS는 기존 wards 테이블을 갱신하지 않으므로 열·제약은 ALTER ... IF NOT EXISTS로 추가한다.
+CREATE TABLE IF NOT EXISTS hospitals (
+    hospital_id UUID PRIMARY KEY,
+    name VARCHAR(100) NOT NULL,
+    time_zone VARCHAR(100) NOT NULL,
+    created_at VARCHAR(40) NOT NULL,
+    CONSTRAINT uq_hospitals_name UNIQUE (name)
+);
+
+CREATE TABLE IF NOT EXISTS hospital_memberships (
+    hospital_id UUID NOT NULL REFERENCES hospitals(hospital_id),
+    subject VARCHAR(255) NOT NULL,
+    role VARCHAR(20) NOT NULL CHECK (role IN ('HOSPITAL_ADMIN')),
+    granted_at VARCHAR(40) NOT NULL,
+    PRIMARY KEY (hospital_id, subject, role)
+);
+CREATE INDEX IF NOT EXISTS ix_hospital_memberships_subject ON hospital_memberships(subject);
+
+ALTER TABLE wards ADD COLUMN IF NOT EXISTS hospital_id UUID;
+ALTER TABLE wards ADD COLUMN IF NOT EXISTS created_at VARCHAR(40);
+ALTER TABLE wards ADD COLUMN IF NOT EXISTS created_by VARCHAR(255);
+ALTER TABLE wards ADD CONSTRAINT IF NOT EXISTS fk_wards_hospital FOREIGN KEY (hospital_id) REFERENCES hospitals(hospital_id);
+CREATE UNIQUE INDEX IF NOT EXISTS ux_wards_hospital_name ON wards(hospital_id, name);
