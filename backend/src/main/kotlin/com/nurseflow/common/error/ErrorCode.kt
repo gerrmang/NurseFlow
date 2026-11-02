@@ -8,8 +8,6 @@ enum class ErrorCode(val status: HttpStatus, val safeMessage: String) {
     ABSENCE_OUTSIDE_ROSTER(HttpStatus.BAD_REQUEST, "부재 시간이 해당 월과 겹쳐야 합니다."),
     ALREADY_WARD_MEMBER(HttpStatus.CONFLICT, "이미 이 병동에 소속되어 있습니다."),
     ASSIGNMENTS_EXIST(HttpStatus.CONFLICT, "배정을 해제한 뒤 인력 수요를 변경해 주세요."),
-    BOOTSTRAP_CODE_INVALID(HttpStatus.FORBIDDEN, "병동 생성 코드가 올바르지 않습니다."),
-    BOOTSTRAP_DISABLED(HttpStatus.NOT_FOUND, "시연용 병동 생성이 비활성화되어 있습니다."),
     DATE_OUTSIDE_ROSTER(HttpStatus.BAD_REQUEST, "근무 날짜가 해당 월에 속하지 않습니다."),
     DRAFT_EXISTS(HttpStatus.CONFLICT, "해당 월의 초안이 이미 있습니다."),
     DUPLICATE_REQUIREMENT(HttpStatus.BAD_REQUEST, "날짜와 근무 유형 조합이 중복되었습니다."),

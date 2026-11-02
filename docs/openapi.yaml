@@ -7,7 +7,7 @@ info:
     확정된 결정: 간호사는 병동 전체 공개표 또는 본인 공개표 조회, 미충원 표 공개 허용,
     관리자 확정 전 draft는 비공개, 관리자 confirm 성공 시 해당 revision을 활성 달력에 공개 적용.
     시연 MVP는 Kakao 로그인 후 관리자 초대 수락으로 병동 소속을 얻고 H2를 사용한다.
-    Kakao 세션(/auth/*), 시연용 첫 관리자 병동 생성(POST /wards), 초대 발급·철회·수락은 구현된 계약이다.
+    Kakao 세션(/auth/*), 병동 생성(POST /wards, 생성자가 관리자), 초대 발급·철회·수락은 구현된 계약이다.
     클라이언트는 Kakao SDK/웹 로그인으로 받은 ID 토큰을 /auth/kakao/session에 보내고,
     이후 모든 요청에는 NurseFlow가 발급한 access token을 사용한다. Kakao 토큰은 API bearer로 받지 않는다.
     병동 내 팀별 편성 및 관리자 확인을 거친 근무연차·직급의 1~5 경력 단계 구성 목표도
@@ -161,17 +161,18 @@ paths:
           $ref: '#/components/responses/Unauthorized'
     post:
       tags: [Wards]
-      operationId: bootstrapWard
-      summary: 시연용 첫 병동과 관리자 생성
+      operationId: createWard
+      summary: 병동 생성 (호출자가 첫 WARD_ADMIN)
       description: |
-        서버의 NURSEFLOW_BOOTSTRAP_CODE와 일치할 때만 병동을 만들고 호출자를 WARD_ADMIN으로 등록한다.
-        코드가 설정되지 않으면 404 BOOTSTRAP_DISABLED. 다른 구성원은 초대로만 가입한다.
+        로그인한 사용자는 누구나 병동을 만들 수 있고 만든 사람이 관리자가 된다. 다른 병동 권한은 생기지 않으며,
+        기존 병동 가입은 초대로만 한다. 관리자 본인의 입사 년월·직급을 함께 받아 병동 소속 기록에 저장한다
+        (관리자는 근무 편성 대상 간호사가 아니므로 간호사 기록을 만들지 않는다).
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/BootstrapWardRequest'
+              $ref: '#/components/schemas/CreateWardRequest'
       responses:
         '201':
           description: 생성된 병동 소속
@@ -180,21 +181,13 @@ paths:
               schema:
                 $ref: '#/components/schemas/WardMembership'
         '400':
-          $ref: '#/components/responses/BadRequest'
+          description: INVALID_REQUEST(fieldErrors), INVALID_TIME_ZONE, INVALID_CAREER_START 또는 RANK_NOT_IN_POLICY
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ApiProblem'
         '401':
           $ref: '#/components/responses/Unauthorized'
-        '403':
-          description: BOOTSTRAP_CODE_INVALID
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ApiProblem'
-        '404':
-          description: BOOTSTRAP_DISABLED
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ApiProblem'
 
   /wards/{wardId}/invitations:
     parameters:
@@ -1802,10 +1795,10 @@ components:
               type: string
             newUser:
               type: boolean
-    BootstrapWardRequest:
+    CreateWardRequest:
       type: object
       additionalProperties: false
-      required: [name, bootstrapCode]
+      required: [name, careerStartedOn, rank]
       properties:
         name:
           type: string
@@ -1813,9 +1806,14 @@ components:
         timeZone:
           type: string
           default: Asia/Seoul
-        bootstrapCode:
+        careerStartedOn:
           type: string
-          maxLength: 200
+          pattern: '^\\d{4}-(0[1-9]|1[0-2])$'
+          description: 관리자 본인 입사 년월
+        rank:
+          type: string
+          maxLength: 30
+          description: 새 병동 기본 직급 목록(팀장·과장·신규) 중 하나
     CurrentUser:
       type: object
       required: [userId, displayName, memberships]

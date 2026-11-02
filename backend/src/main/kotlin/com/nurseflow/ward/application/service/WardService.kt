@@ -1,24 +1,23 @@
 package com.nurseflow.ward.application.service
 
 import com.nurseflow.common.audit.AuditLog
-import com.nurseflow.common.config.BootstrapProperties
 import com.nurseflow.common.error.BusinessException
 import com.nurseflow.common.error.ErrorCode
-import com.nurseflow.ward.application.model.BootstrapWardCommand
+import com.nurseflow.staff.domain.CareerPolicy
+import com.nurseflow.ward.application.model.CreateWardCommand
 import com.nurseflow.ward.application.model.WardMembershipResult
 import com.nurseflow.ward.application.model.WardRole
 import com.nurseflow.ward.persistence.repository.WardJdbcRepository
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
-import java.security.MessageDigest
 import java.time.DateTimeException
+import java.time.YearMonth
 import java.time.ZoneId
 import java.util.UUID
 
 @Service
 class WardService(
     private val repo: WardJdbcRepository,
-    private val bootstrap: BootstrapProperties,
     private val audit: AuditLog,
 ) {
     /** Only memberships stored on the server count; token claims never grant ward access. */
@@ -47,26 +46,27 @@ class WardService(
     }
 
     /**
-     * Demo-only: creates a ward and makes the caller its first WARD_ADMIN when the configured
-     * bootstrap code matches. Every other member must join through an invitation.
+     * Any signed-in user may create a ward and becomes its first WARD_ADMIN. This grants access
+     * to the new ward only; joining an existing ward still requires an invitation.
      */
     @Transactional
-    fun bootstrapWard(command: BootstrapWardCommand, subject: String): WardMembershipResult {
-        val expected = bootstrap.code
-        if (expected.isBlank()) throw BusinessException(ErrorCode.BOOTSTRAP_DISABLED)
-        if (!MessageDigest.isEqual(expected.toByteArray(), command.bootstrapCode.toByteArray())) {
-            throw BusinessException(ErrorCode.BOOTSTRAP_CODE_INVALID)
-        }
+    fun createWard(command: CreateWardCommand, subject: String): WardMembershipResult {
         val zone = try {
             ZoneId.of(command.timeZone)
         } catch (_: DateTimeException) {
             throw BusinessException(ErrorCode.INVALID_TIME_ZONE)
         }
+        // A new ward has the default career policy, so its ranks apply to the creator.
+        if (command.careerStartedOn.isAfter(YearMonth.now(zone)) || command.careerStartedOn.year < 1950) {
+            throw BusinessException(ErrorCode.INVALID_CAREER_START)
+        }
+        if (command.rank !in CareerPolicy.DEFAULT.ranks) throw BusinessException(ErrorCode.RANK_NOT_IN_POLICY)
         val wardId = UUID.randomUUID()
         val name = command.name.trim()
         repo.insertWard(wardId, name, zone.id)
         repo.insertMembership(wardId, subject, WardRole.WARD_ADMIN.name, canViewWardCalendar = true)
-        audit.record(wardId, subject, "WARD_BOOTSTRAPPED", wardId.toString())
+        repo.setMembershipProfile(wardId, subject, WardRole.WARD_ADMIN.name, command.careerStartedOn.toString(), command.rank)
+        audit.record(wardId, subject, "WARD_CREATED", wardId.toString())
         return WardMembershipResult(wardId, name, listOf(WardRole.WARD_ADMIN), canViewWardCalendar = true)
     }
 }

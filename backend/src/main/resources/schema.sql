@@ -173,3 +173,7 @@ ALTER TABLE nurses ADD COLUMN IF NOT EXISTS confirmed_career_started_on VARCHAR(
 ALTER TABLE nurses ADD COLUMN IF NOT EXISTS confirmed_rank_name VARCHAR(30);
 ALTER TABLE nurses ADD COLUMN IF NOT EXISTS profile_confirmed_at VARCHAR(40);
 ALTER TABLE nurses ADD COLUMN IF NOT EXISTS profile_confirmed_by VARCHAR(255);
+
+-- Ward administrators are not rostered nurses; their own career start and rank live on the membership.
+ALTER TABLE ward_memberships ADD COLUMN IF NOT EXISTS career_started_on VARCHAR(7);
+ALTER TABLE ward_memberships ADD COLUMN IF NOT EXISTS rank_name VARCHAR(30);

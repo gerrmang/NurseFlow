@@ -27,9 +27,6 @@ nurseflow:
   invitation:
     # Page that opens an invitation, e.g. https://<web-host>/invite. The token is appended as #token=...
     link-base-url: ${NURSEFLOW_INVITE_LINK_BASE:}
-  bootstrap:
-    # Demo-only first-admin ward creation. Empty disables POST /api/v1/wards.
-    code: ${NURSEFLOW_BOOTSTRAP_CODE:}
 
 server:
   port: 8080
