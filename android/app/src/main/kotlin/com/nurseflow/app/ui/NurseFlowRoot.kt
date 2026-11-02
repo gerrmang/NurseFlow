@@ -8,7 +8,6 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.mutableStateOf
@@ -87,9 +86,15 @@ private fun SignedInNavigation(container: AppContainer, userId: String) {
     val wardsVm: WardsViewModel = viewModel(key = "wards-$userId", factory = viewModelFactory {
         initializer { WardsViewModel(container.wards) }
     })
-    val startOnJoin = remember { container.session.pendingInviteCode != null }
+    // Invite link tapped (before or after login): go straight to the join screen for that ward.
+    val pendingInvite by container.session.pendingInvite.collectAsStateWithLifecycle()
+    LaunchedEffect(pendingInvite) {
+        if (pendingInvite != null && nav.currentDestination?.route != Routes.JOIN) {
+            nav.navigate(Routes.JOIN) { launchSingleTop = true }
+        }
+    }
 
-    NavHost(nav, startDestination = if (startOnJoin) Routes.JOIN else Routes.WARDS) {
+    NavHost(nav, startDestination = Routes.WARDS) {
         composable(Routes.WARDS) {
             WardListScreen(
                 viewModel = wardsVm,
@@ -111,13 +116,10 @@ private fun SignedInNavigation(container: AppContainer, userId: String) {
             })
             JoinWardScreen(
                 viewModel = vm,
-                onBack = {
-                    if (nav.previousBackStackEntry != null) nav.popBackStack()
-                    else nav.navigate(Routes.WARDS) { popUpTo(nav.graph.id) { inclusive = true } }
-                },
+                onBack = { nav.popBackStack() },
                 onJoined = {
                     wardsVm.reload()
-                    // Clear everything (JOIN may be the start destination) so Back cannot re-open it.
+                    // Back from the ward list must not re-open the consumed invitation.
                     nav.navigate(Routes.WARDS) { popUpTo(nav.graph.id) { inclusive = true } }
                 },
             )

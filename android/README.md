@@ -18,7 +18,8 @@ nurseflow.apiBaseUrl=http://10.0.2.2:8080/
 - `10.0.2.2` is the host computer from the Android emulator. On a physical device use the computer's LAN address, e.g. `http://192.168.0.10:8080/`, on the same Wi-Fi.
 - Cleartext HTTP is allowed only in debug builds (`src/debug/res/xml/network_security_config.xml`). Release builds are HTTPS-only.
 - Kakao Developers: register the Android platform with package `com.nurseflow.app` and this machine's debug key hash, enable Kakao Login and **OpenID Connect**, and add the native app key to the server's `NURSEFLOW_KAKAO_AUDIENCES`.
-- Start the backend first (see [backend README](../backend/README.md)). Without any ward, a signed-in user sees the invitation-required screen; create the first ward and admin with `POST /api/v1/wards` and `NURSEFLOW_BOOTSTRAP_CODE`.
+- Start the backend first (see [backend README](../backend/README.md)). After login without a ward the app offers **병동 만들기** (the creator becomes the ward admin and enters their own career start and rank) or **초대 코드 입력**.
+- Invitation links: set the server's `NURSEFLOW_INVITE_LINK_BASE=nurseflow://invite`. Tapping `nurseflow://invite#token=…` opens the app, asks for Kakao login if needed, and goes straight to the join screen. Test on the emulator with `adb shell am start -a android.intent.action.VIEW -d "nurseflow://invite#token=<code>"`.
 
 ## Structure
 

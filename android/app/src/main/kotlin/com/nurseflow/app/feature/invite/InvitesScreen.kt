@@ -79,8 +79,8 @@ private fun CreatedCard(created: CreatedInvitationDto, wardName: String, context
     val link = created.inviteUrl
     val shareText = buildString {
         append("[NurseFlow] $wardName 병동 초대\n")
-        if (link != null) append(link).append('\n')
-        append("앱에서 ‘초대 코드 입력’에 붙여 넣어 주세요.\n코드: ${created.token}\n")
+        if (link != null) append("아래 링크를 누르면 NurseFlow 앱에서 가입 화면이 열려요.\n").append(link).append('\n')
+        append("링크가 열리지 않으면 앱의 ‘초대 코드 입력’에 이 코드를 붙여 넣어 주세요.\n코드: ${created.token}\n")
         append("만료: ${formatInstant(created.invitation.expiresAt)}")
     }
     NfCard {

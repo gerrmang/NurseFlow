@@ -18,10 +18,21 @@
         <activity
             android:name=".MainActivity"
             android:exported="true"
+            android:launchMode="singleTask"
             android:windowSoftInputMode="adjustResize">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <!-- Invitation link: nurseflow://invite#token=… (server NURSEFLOW_INVITE_LINK_BASE=nurseflow://invite).
+                 Switch to a verified https App Link once a production domain exists. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data
+                    android:host="invite"
+                    android:scheme="nurseflow" />
             </intent-filter>
         </activity>
 

@@ -25,6 +25,13 @@ class LoginViewModel(
     private val _state = MutableStateFlow(LoginUiState(pendingInvite = session.pendingInviteCode != null))
     val state: StateFlow<LoginUiState> = _state.asStateFlow()
 
+    init {
+        // An invite link may arrive while the login screen is already showing.
+        viewModelScope.launch {
+            session.pendingInvite.collect { code -> _state.update { it.copy(pendingInvite = code != null) } }
+        }
+    }
+
     /** Session state switches to SignedIn on success; the root navigation reacts to that. */
     fun login(activityContext: Context) {
         if (_state.value.loading) return

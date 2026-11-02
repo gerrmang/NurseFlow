@@ -33,9 +33,17 @@ class SessionManager(private val authApi: AuthApi, private val store: SecureToke
     var accessToken: String? = null
         private set
 
-    /** Invitation code entered before signing in; consumed after login. */
-    @Volatile
-    var pendingInviteCode: String? = null
+    private val _pendingInvite = MutableStateFlow<String?>(null)
+
+    /**
+     * Invitation code from a tapped invite link or typed before signing in. The signed-in
+     * navigation opens the join screen for it and then clears it.
+     */
+    val pendingInvite: StateFlow<String?> = _pendingInvite.asStateFlow()
+
+    var pendingInviteCode: String?
+        get() = _pendingInvite.value
+        set(value) { _pendingInvite.value = value }
 
     suspend fun restore() {
         mutex.withLock {

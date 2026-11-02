@@ -71,7 +71,7 @@ fun LoginScreen(viewModel: LoginViewModel) {
         }
         Spacer(Modifier.weight(1f))
         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            if (state.pendingInvite) NfInfo("초대 코드를 받았어요. 로그인하면 병동 가입을 이어서 진행해요.")
+            if (state.pendingInvite) NfInfo("병동 초대를 받았어요. 카카오로 로그인하면 바로 가입 화면으로 이동해요.")
             NfError(state.error)
             KakaoButton(onClick = { viewModel.login(context) }, loading = state.loading)
         }

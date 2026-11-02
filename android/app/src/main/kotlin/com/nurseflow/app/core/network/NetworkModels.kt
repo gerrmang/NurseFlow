@@ -43,9 +43,14 @@ data class MembershipDto(
     val isAdmin: Boolean get() = "WARD_ADMIN" in roles
 }
 
-/** POST /wards: creates a ward and makes the caller its first WARD_ADMIN (server-side creation code). */
+/** POST /wards: creates a ward; the caller becomes its WARD_ADMIN with this career start and rank. */
 @Serializable
-data class CreateWardBody(val name: String, val timeZone: String = "Asia/Seoul", val bootstrapCode: String)
+data class CreateWardBody(
+    val name: String,
+    val timeZone: String = "Asia/Seoul",
+    val careerStartedOn: String,
+    val rank: String,
+)
 
 // ── Invitations ──
 
