@@ -5,7 +5,7 @@
 ## 먼저 읽을 자료
 
 1. `AGENTS.md`, `CLAUDE.md`: 저장소 규칙, 브랜치와 커밋 방식.
-2. `docs/mvp-scope.md`, [월간 편성 규칙·2인 분담](monthly-roster-rules-and-two-person-plan.md), 이 문서: 확정된 MVP 범위, 병원별 정책과 단계별 개발 순서. 오래된 기획과 충돌하면 MVP 범위와 사용자의 최신 결정이 우선한다.
+2. `docs/mvp-scope.md`, [월간 편성 규칙·2인 분담](monthly-roster-rules-and-two-person-plan.md), [병원·병동 정책 설정 명세](hospital-roster-policy-settings.md), 이 문서: 확정된 MVP 범위, 관리자 정책 입력 필드와 단계별 개발 순서. 오래된 기획과 충돌하면 MVP 범위와 사용자의 최신 결정이 우선한다.
 3. `docs/openapi.yaml`, `docs/test-plan.md`, [백엔드 예외·인증·DTO 규칙](backend-error-auth-dto-conventions.md): 서버 계약, 인수 기준과 코드 경계.
 4. `docs/runbooks/git-flow.md`, `docs/ai-development-review-workflow.md`: PR, 검증, Codex 리뷰 흐름.
 5. 현재 단계에 관련된 코드만 추가로 읽는다. 첫 단계에는 `backend/src/main/kotlin/com/nurseflow/roster/`, `backend/src/main/kotlin/com/nurseflow/SecurityConfig.kt`, `backend/src/main/resources/schema.sql`, `backend/src/test/kotlin/com/nurseflow/roster/`가 해당한다. Android 화면 단계에는 `android/README.md`와 `android/app/src/main/kotlin/com/nurseflow/app/ui/NurseFlowApp.kt`를 읽는다.
@@ -70,7 +70,8 @@ com.nurseflow
 | 5 | **팀·간호사 경력 프로필 API**: 관리자의 팀 소속 지정, 병동별 연차 구간·직급 정책, 간호사의 근무연차·직급 입력, 1~5단계 계산과 관리자 확인·수정, 간호사 목록·비활성화를 구현한다. 미확인 입력은 구성 점수에 넣지 않고 경계값·권한·정책 변경을 테스트한다. |
 | 6 | **Android 인증·초대·프로필 화면**: 서버 계약을 연결하고 초대 전/후 및 첫 프로필 입력·오류 상태를 확인한다. |
 | 7 | **웹 인증·초대·프로필 화면**: Android와 같은 서버 계약을 사용한다. 웹 프레임워크 선택을 설계 기록에 남긴다. |
-| 8 | **병원별 근무 유형·환산시간 API**: Day/Evening/Night 실제 시각과 환산시간을 분리해 설정하고 시간 겹침을 검증한다. |
+| 8a | **관리자 정책 설정 계약**: [정책 설정 명세](hospital-roster-policy-settings.md)의 입력을 병원 기본값·병동 예외·월별 설정으로 나누고, 설정 권한·유효성·정책 revision·오류 응답을 `docs/openapi.yaml`에 정의한다. 이 계약 PR에서는 편성 규칙을 아직 활성화하지 않는다. |
+| 8b | **근무 유형 설정 확장**: 시작/종료·자정 경과·휴게·실제/환산시간과 사용자 정의 특수 코드를 저장하고, 기존 API 동작을 보존하는 단위 기능 PR로 구현한다. |
 | 9 | **팀·날짜별 필요 인원·선임 기준**: 월·팀·날짜·근무 유형별 요구 인원, 자격, 병동이 설정한 선임 단계와 최소 인원을 입력·검증한다. |
 | 10 | **관리자 허용형 팀 간 지원근무**: 관리자가 간호사·대상 팀·근무 범위의 허용을 기록·철회한다. 후보·수동·자동·확정 경로의 동일한 거부 규칙과 허용 변경 후 재검증을 테스트한다. |
 | 11 | **휴일 달력·월 목표시간**: 주말/공휴일 중복 제거, 일반/전담 목표시간과 실제·환산·잔여·초과시간을 계산한다. 미달 확정 차단을 테스트한다. |
