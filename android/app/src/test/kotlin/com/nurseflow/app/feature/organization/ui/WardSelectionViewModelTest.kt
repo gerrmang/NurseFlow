@@ -281,6 +281,102 @@ class WardSelectionViewModelTest {
         assertNull(vm.uiState.value.form)
     }
 
+    // ── 1293bf7 재리뷰 P2: 생성 성공 뒤 목록 갱신 동안 잠금이 풀리는 문제 ──
+
+    @Test
+    fun `lock stays held while lists refresh after a successful create`() = runTest(dispatcher) {
+        val existing = ward("w1", "WARD_ADMIN")
+        val repo = FakeRepository(myWards = mutableListOf(existing), hospitals = listOf(hospital, hospitalB))
+        val vm = vm(repo)
+        advanceUntilIdle()
+        vm.openCreateForm()
+        vm.editName("A 병동")
+        val listGate = CompletableDeferred<Unit>()
+        repo.myWardsGate = listGate // POST는 즉시 성공, 뒤따르는 목록 조회만 지연
+        vm.submitCreate()
+        advanceUntilIdle()
+        assertEquals("POST는 끝났음", 1, repo.createCalls.size)
+        assertTrue("목록 갱신 중에도 작업 중이어야 함", vm.uiState.value.isCreating)
+
+        val callsBefore = repo.myWardsCalls
+        vm.selectHospital("h2")
+        vm.openCreateForm()
+        vm.editName("끼어든 이름")
+        vm.choose("w1")
+        vm.refresh()
+        vm.submitCreate()
+        advanceUntilIdle()
+        val during = vm.uiState.value
+        assertEquals("h1", during.selectedHospitalId)
+        assertNull("새 양식을 열 수 없음", during.form)
+        assertNull("병동 선택 차단", during.chosenWardId)
+        assertEquals("새로고침 차단", callsBefore, repo.myWardsCalls)
+        assertEquals("재제출 차단", 1, repo.createCalls.size)
+
+        listGate.complete(Unit)
+        advanceUntilIdle()
+        val after = vm.uiState.value
+        assertEquals("h1", after.selectedHospitalId)
+        assertEquals("새 병동이 선택됨", "new-1", after.chosenWardId)
+        assertFalse("잠금 해제", after.isCreating)
+        assertTrue(after.notice!!.contains("A 병동"))
+
+        vm.changeWard()
+        vm.selectHospital("h2")
+        advanceUntilIdle()
+        assertEquals("완료 뒤 병원 전환 가능", "h2", vm.uiState.value.selectedHospitalId)
+    }
+
+    @Test
+    fun `list refresh failure after a successful create releases the lock and retries only the lists`() = runTest(dispatcher) {
+        val repo = FakeRepository(hospitals = listOf(hospital, hospitalB))
+        val vm = vm(repo)
+        advanceUntilIdle()
+        vm.openCreateForm()
+        vm.editName("A 병동")
+        repo.failNext = ApiError.Network // 생성 뒤 목록 조회만 실패
+        vm.submitCreate()
+        advanceUntilIdle()
+
+        val failed = vm.uiState.value
+        assertEquals(LoadState.Failed(ApiError.Network), failed.load)
+        assertFalse("실패해도 잠금 해제", failed.isCreating)
+        assertEquals(1, repo.createCalls.size)
+
+        vm.refresh()
+        advanceUntilIdle()
+        val recovered = vm.uiState.value
+        assertEquals(LoadState.Ready, recovered.load)
+        assertEquals("생성 POST를 다시 보내지 않음", 1, repo.createCalls.size)
+        assertEquals("목록 재시도 뒤 새 병동 선택", "new-1", recovered.chosenWardId)
+        assertEquals("h1", recovered.selectedHospitalId)
+        assertFalse(recovered.isCreating)
+    }
+
+    @Test
+    fun `reload after a permission failure also holds the lock until it finishes`() = runTest(dispatcher) {
+        val repo = FakeRepository(hospitals = listOf(hospital, hospitalB))
+        val vm = vm(repo)
+        advanceUntilIdle()
+        vm.openCreateForm()
+        vm.editName("권한 없음")
+        repo.createResult = ApiResult.Failure(ApiError.Forbidden("HOSPITAL_ADMIN_REQUIRED"))
+        val listGate = CompletableDeferred<Unit>()
+        repo.myWardsGate = listGate
+        vm.submitCreate()
+        advanceUntilIdle()
+
+        assertTrue("권한 실패 뒤 목록 갱신 중에도 잠금", vm.uiState.value.isCreating)
+        vm.selectHospital("h2")
+        assertEquals("h1", vm.uiState.value.selectedHospitalId)
+
+        listGate.complete(Unit)
+        advanceUntilIdle()
+        assertFalse(vm.uiState.value.isCreating)
+        vm.selectHospital("h2")
+        assertEquals("h2", vm.uiState.value.selectedHospitalId)
+    }
+
     // ── PR #14 리뷰 P2-2: 성공 응답 해석 실패 시 멱등 키를 버리는 문제 ──
 
     @Test
@@ -348,8 +444,15 @@ class WardSelectionViewModelTest {
         /** 설정하면 다음 생성 요청이 테스트가 완료시킬 때까지 응답하지 않는다(진행 중 요청 재현). */
         var gate: CompletableDeferred<ApiResult<HospitalWard>>? = null
 
-        override suspend fun myWards(): ApiResult<List<MyWard>> =
-            failNext?.let { failNext = null; ApiResult.Failure(it) } ?: ApiResult.Success(myWards.toList())
+        /** 설정하면 다음 본인 병동 조회가 테스트가 완료시킬 때까지 응답하지 않는다(생성 뒤 목록 갱신 지연 재현). */
+        var myWardsGate: CompletableDeferred<Unit>? = null
+        var myWardsCalls = 0
+
+        override suspend fun myWards(): ApiResult<List<MyWard>> {
+            myWardsCalls++
+            myWardsGate?.let { pending -> myWardsGate = null; pending.await() }
+            return failNext?.let { failNext = null; ApiResult.Failure(it) } ?: ApiResult.Success(myWards.toList())
+        }
 
         override suspend fun myHospitals(): ApiResult<List<Hospital>> = ApiResult.Success(hospitals)
 

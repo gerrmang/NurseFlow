@@ -39,8 +39,24 @@ data class CreateWardForm(
     val failure: ApiError? = null,
 )
 
+/**
+ * 병동 생성 작업의 단계. POST부터 성공 뒤 목록 갱신·새 병동 선택까지 하나의 작업으로 묶어 잠근다.
+ * 양식(`CreateWardForm.submitting`)과 독립적이므로 성공 직후 양식이 닫혀도 잠금이 유지된다.
+ */
+sealed interface CreateOperation {
+    /** 생성 요청을 보내고 응답을 기다리는 중. */
+    data object Submitting : CreateOperation
+
+    /** 생성 응답 뒤 목록을 서버 기준으로 다시 맞추는 중. 성공했다면 [created]를 마지막에 선택한다. */
+    data class Reconciling(val created: HospitalWard?) : CreateOperation
+}
+
 data class WardSelectionUiState(
     val load: LoadState = LoadState.Loading,
+    /** 진행 중인 병동 생성 작업. null이면 작업이 없다. */
+    val createOperation: CreateOperation? = null,
+    /** 생성은 성공했지만 목록 갱신에 실패한 병동. [WardSelectionViewModel.refresh]가 생성 POST 없이 목록만 다시 읽고 선택한다. */
+    val createdPendingRefresh: HospitalWard? = null,
     val myWards: List<MyWard> = emptyList(),
     val hospitals: List<Hospital> = emptyList(),
     val selectedHospitalId: String? = null,
@@ -62,8 +78,11 @@ data class WardSelectionUiState(
     val selectedHospital: Hospital? get() = hospitals.firstOrNull { it.hospitalId == selectedHospitalId }
     val isHospitalAdmin: Boolean get() = hospitals.isNotEmpty()
 
-    /** 병동 생성 요청이 진행 중인가. 이 동안 병원 전환·양식 변경·병동 선택·재제출을 막는다. */
-    val isCreating: Boolean get() = form?.submitting == true
+    /**
+     * 병동 생성 작업(요청·성공 뒤 목록 갱신·선택)이 진행 중인가.
+     * 이 동안 병원 전환·양식 열기/닫기·입력 변경·병동 선택·새로고침·재제출을 막는다.
+     */
+    val isCreating: Boolean get() = createOperation != null
     val chosenWard: MyWard? get() = myWards.firstOrNull { it.wardId == chosenWardId }
     fun isMember(wardId: String) = myWards.any { it.wardId == wardId }
 }
@@ -84,10 +103,19 @@ class WardSelectionViewModel(
         refresh()
     }
 
+    /**
+     * 목록을 다시 읽는다. 생성은 성공했지만 목록 갱신에 실패한 병동이 있으면 생성 요청을 다시 보내지 않고
+     * 같은 잠금 아래에서 목록을 다시 읽은 뒤 그 병동을 선택한다.
+     */
     fun refresh() {
         if (state.value.isCreating) return
+        val pending = state.value.createdPendingRefresh
         state.update { it.copy(load = LoadState.Loading, notice = null, noticeIsError = false) }
-        viewModelScope.launch { loadAll() }
+        if (pending != null) {
+            launchCreateOperation(CreateOperation.Reconciling(pending)) { finishCreated(pending) }
+        } else {
+            viewModelScope.launch { loadAll() }
+        }
     }
 
     /**
@@ -137,6 +165,7 @@ class WardSelectionViewModel(
 
     fun submitCreate() {
         val current = state.value
+        if (current.isCreating) return
         val form = current.form ?: return
         val hospital = current.selectedHospital ?: return
         if (form.submitting || form.hospitalId != hospital.hospitalId) return
@@ -155,33 +184,69 @@ class WardSelectionViewModel(
         val payload = CreatePayload(form.hospitalId, name, zone)
         val key = submission.keyFor(payload)
         state.update { it.copy(form = form.copy(submitting = true, failure = null, nameError = null, timeZoneError = null)) }
-        viewModelScope.launch {
+        launchCreateOperation(CreateOperation.Submitting) {
             when (val result = repository.createWard(payload.hospitalId, payload.name, payload.timeZone, key)) {
                 is ApiResult.Success -> {
                     submission.settle()
+                    val created = result.value
+                    // 양식은 닫지만 잠금은 목록 갱신·선택이 끝날 때까지 유지한다.
                     state.update { s ->
                         s.copy(
+                            createOperation = CreateOperation.Reconciling(created),
                             form = s.form?.takeUnless { it.hospitalId == payload.hospitalId },
-                            highlightedWardId = result.value.wardId,
-                            justCreatedWardId = result.value.wardId,
+                            highlightedWardId = created.wardId,
+                            justCreatedWardId = created.wardId,
                         )
                     }
-                    loadAll(preferredHospitalId = payload.hospitalId)
-                    state.update { s ->
-                        val chosen = result.value.wardId.takeIf { s.isMember(it) }
-                        s.copy(
-                            chosenWardId = chosen ?: s.chosenWardId,
-                            notice = "‘${result.value.name}’ 병동을 만들었습니다.",
-                            noticeIsError = false,
-                        )
-                    }
+                    finishCreated(created)
                 }
                 is ApiResult.Failure -> onCreateFailed(result.error, payload.hospitalId)
             }
         }
     }
 
-    private fun onCreateFailed(error: ApiError, hospitalId: String) {
+    /**
+     * 생성 작업을 시작한다. 잠금은 코루틴이 시작되기 전에 걸고, 성공·실패·예외·취소 어떤 경로로 끝나도
+     * `finally`에서 해제한다.
+     */
+    private fun launchCreateOperation(operation: CreateOperation, block: suspend () -> Unit) {
+        state.update { it.copy(createOperation = operation) }
+        viewModelScope.launch {
+            var completed = false
+            try {
+                block()
+                completed = true
+            } finally {
+                state.update { s ->
+                    // 갱신 도중 예외로 끝났다면 이미 생성된 병동을 잊지 않고 목록 재시도로 마무리할 수 있게 남긴다.
+                    val unfinished = if (completed) null else (s.createOperation as? CreateOperation.Reconciling)?.created
+                    s.copy(
+                        createOperation = null,
+                        createdPendingRefresh = unfinished ?: s.createdPendingRefresh,
+                        form = s.form?.copy(submitting = false),
+                    )
+                }
+            }
+        }
+    }
+
+    /** 생성된 병동을 목록에 반영하고 선택한다. 목록 갱신에 실패하면 생성 POST 없이 목록만 다시 시도하도록 남긴다. */
+    private suspend fun finishCreated(created: HospitalWard) {
+        val loaded = loadAll(preferredHospitalId = created.hospitalId)
+        state.update { s ->
+            if (!loaded) return@update s.copy(createdPendingRefresh = created)
+            s.copy(
+                createdPendingRefresh = null,
+                chosenWardId = created.wardId.takeIf { s.isMember(it) } ?: s.chosenWardId,
+                highlightedWardId = created.wardId,
+                justCreatedWardId = created.wardId,
+                notice = "‘${created.name}’ 병동을 만들었습니다.",
+                noticeIsError = false,
+            )
+        }
+    }
+
+    private suspend fun onCreateFailed(error: ApiError, hospitalId: String) {
         // 결과 불명(통신 실패·5xx·해석할 수 없는 2xx)이면 같은 입력의 재시도가 같은 키를 쓰도록 남긴다.
         if (!error.outcomeUnknown) submission.settle()
         if (error == ApiError.SessionExpired || error == ApiError.SignedOut) {
@@ -201,13 +266,21 @@ class WardSelectionViewModel(
         }
         // 권한이 바뀌었을 수 있으므로 목록을 서버 기준으로 다시 맞춘다. 다시 읽은 결과 병원 관리 권한이 없어져
         // 생성 양식이 닫히더라도 사용자가 이유를 알 수 있도록 안내를 남긴다.
+        // 이 목록 갱신도 같은 생성 작업 잠금 아래에서 끝까지 기다린다(늦게 끝난 갱신이 사용자의 전환을 덮지 않게).
         if (error is ApiError.Forbidden || error is ApiError.NotFound) {
-            state.update { it.copy(notice = "${error.userMessage()} 병동 목록을 다시 불러왔습니다.", noticeIsError = true) }
-            viewModelScope.launch { loadAll() }
+            state.update {
+                it.copy(
+                    createOperation = CreateOperation.Reconciling(null),
+                    notice = "${error.userMessage()} 병동 목록을 다시 불러왔습니다.",
+                    noticeIsError = true,
+                )
+            }
+            loadAll(preferredHospitalId = hospitalId)
         }
     }
 
-    private suspend fun loadAll(preferredHospitalId: String? = state.value.selectedHospitalId) {
+    /** 본인 병동·병원 목록을 다시 읽는다. 둘 다 성공하면 true. 실패 내용은 [LoadState.Failed]로 남긴다. */
+    private suspend fun loadAll(preferredHospitalId: String? = state.value.selectedHospitalId): Boolean {
         val (wards, hospitals) = coroutineScope {
             val wards = async { repository.myWards() }
             val hospitals = async { repository.myHospitals() }
@@ -221,7 +294,7 @@ class WardSelectionViewModel(
                     sessionExpired = failure == ApiError.SessionExpired || failure == ApiError.SignedOut,
                 )
             }
-            return
+            return false
         }
         val myWards = (wards as ApiResult.Success).value
         val myHospitals = (hospitals as ApiResult.Success).value
@@ -241,6 +314,7 @@ class WardSelectionViewModel(
             )
         }
         hospitalId?.let { loadHospitalWards(it) }
+        return true
     }
 
     private suspend fun loadHospitalWards(hospitalId: String) {
