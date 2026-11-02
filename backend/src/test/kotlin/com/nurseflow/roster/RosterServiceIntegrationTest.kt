@@ -22,8 +22,6 @@ import java.util.concurrent.TimeUnit
 
 @SpringBootTest(properties = [
     "spring.datasource.url=jdbc:h2:mem:roster_integration;DB_CLOSE_DELAY=-1",
-    "spring.security.oauth2.resourceserver.jwt.issuer-uri=https://issuer.example.invalid",
-    "spring.security.oauth2.resourceserver.jwt.audiences=nurseflow-api",
 ])
 class RosterServiceIntegrationTest @Autowired constructor(
     private val jdbc: JdbcTemplate,

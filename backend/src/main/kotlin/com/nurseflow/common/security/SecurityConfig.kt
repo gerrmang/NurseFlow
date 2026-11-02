@@ -19,6 +19,8 @@ class SecurityConfig(private val mapper: JsonMapper) {
         .sessionManagement { it.sessionCreationPolicy(SessionCreationPolicy.STATELESS) }
         .authorizeHttpRequests {
             it.requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
+                .requestMatchers(HttpMethod.POST, "/api/v1/auth/kakao/session", "/api/v1/auth/session/refresh",
+                    "/api/v1/auth/logout").permitAll()
                 .anyRequest().authenticated()
         }
         .exceptionHandling {
