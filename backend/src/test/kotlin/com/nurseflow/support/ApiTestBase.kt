@@ -27,7 +27,7 @@ abstract class ApiTestBase {
     @BeforeEach
     fun resetDatabase() {
         http = HttpTestClient(port, mapper)
-        listOf("audit_events", "auth_refresh_tokens", "mutation_replays", "generation_jobs", "approved_absences",
+        listOf("audit_events", "ward_invitations", "auth_refresh_tokens", "mutation_replays", "generation_jobs", "approved_absences",
             "roster_slots", "rosters", "shift_types", "nurses", "ward_memberships", "users", "wards",
         ).forEach { table -> runCatching { jdbc.update("DELETE FROM $table") } }
         jdbc.update("UPDATE bootstrap_state SET consumed=FALSE WHERE state_id=1")
@@ -51,6 +51,12 @@ abstract class ApiTestBase {
         jdbc.update("INSERT INTO ward_memberships(ward_id,subject,role,can_view_ward_calendar) VALUES(?,?,?,?)",
             wardId, userId.toString(), role, canView)
     }
+
+    protected fun insertNurse(wardId: UUID, name: String = "가상 간호사", subject: String? = null, active: Boolean = true): UUID =
+        UUID.randomUUID().also {
+            jdbc.update("INSERT INTO nurses(nurse_id,ward_id,subject,display_name,qualifications,active) VALUES(?,?,?,?,'[]',?)",
+                it, wardId, subject, name, active)
+        }
 
     protected fun idem() = mapOf("Idempotency-Key" to UUID.randomUUID().toString())
 

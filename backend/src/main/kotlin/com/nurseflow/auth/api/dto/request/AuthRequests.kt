@@ -1,5 +1,6 @@
 package com.nurseflow.auth.api.dto.request
 
+import com.nurseflow.common.security.OpaqueToken
 import jakarta.validation.constraints.NotBlank
 import jakarta.validation.constraints.Pattern
 import jakarta.validation.constraints.Size
@@ -23,4 +24,4 @@ data class LogoutRequest(
 )
 
 /** 32 random bytes, base64url without padding. */
-const val REFRESH_TOKEN_PATTERN = "^[A-Za-z0-9_-]{43}$"
+const val REFRESH_TOKEN_PATTERN = OpaqueToken.PATTERN
