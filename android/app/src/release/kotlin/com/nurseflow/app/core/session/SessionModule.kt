@@ -9,8 +9,8 @@ import kotlinx.coroutines.flow.asStateFlow
  * Kakao 로그인 기능이 들어오면 이 구현을 교체한다.
  */
 fun createSessionSource(): SessionSource = object : SessionSource {
-    private val state = MutableStateFlow<String?>(null)
-    override val token: StateFlow<String?> = state.asStateFlow()
+    private val state = MutableStateFlow<ActiveSession?>(null)
+    override val activeSession: StateFlow<ActiveSession?> = state.asStateFlow()
     override val acceptsDeveloperToken: Boolean = false
     override fun useDeveloperToken(token: String) = Unit
     override fun signOut() {

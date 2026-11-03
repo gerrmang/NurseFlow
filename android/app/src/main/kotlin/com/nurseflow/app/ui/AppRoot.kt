@@ -14,6 +14,8 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -26,7 +28,10 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.ViewModelStore
+import androidx.lifecycle.ViewModelStoreOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.LocalViewModelStoreOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.nurseflow.app.core.network.ApiClient
 import com.nurseflow.app.core.network.UrlConnectionTransport
@@ -35,6 +40,7 @@ import com.nurseflow.app.feature.organization.data.RemoteOrganizationRepository
 import com.nurseflow.app.feature.organization.ui.WardSelectionRoute
 import com.nurseflow.app.feature.organization.ui.WardSelectionViewModel
 import com.nurseflow.app.ui.theme.NurseFlowColors as C
+import java.util.UUID
 
 /**
  * 앱 진입점. 서버 연동 화면과 가상 시연(DemoRoster) 화면을 분리한다.
@@ -43,7 +49,7 @@ import com.nurseflow.app.ui.theme.NurseFlowColors as C
 @Composable
 fun AppRoot(session: SessionSource, apiBaseUrl: String) {
     var demo by rememberSaveable { mutableStateOf(false) }
-    val token by session.token.collectAsStateWithLifecycle()
+    val activeSession by session.activeSession.collectAsStateWithLifecycle()
     val repository = remember(apiBaseUrl) {
         RemoteOrganizationRepository(ApiClient(apiBaseUrl, session, UrlConnectionTransport()))
     }
@@ -56,19 +62,44 @@ fun AppRoot(session: SessionSource, apiBaseUrl: String) {
                 body = "이 빌드에는 NurseFlow 서버 주소와 로그인이 아직 없습니다. Kakao 로그인 연동 뒤 사용할 수 있습니다.",
                 onOpenDemo = { demo = true },
             )
-            token == null && session.acceptsDeveloperToken -> DeveloperTokenScreen(session::useDeveloperToken, onOpenDemo = { demo = true })
-            token == null -> GateScreen(
+            activeSession == null && session.acceptsDeveloperToken -> DeveloperTokenScreen(session::useDeveloperToken, onOpenDemo = { demo = true })
+            activeSession == null -> GateScreen(
                 title = "로그인이 필요합니다",
                 body = "Kakao 로그인 연동은 준비 중입니다. 로그인 후 초대받은 병동만 볼 수 있습니다.",
                 onOpenDemo = { demo = true },
             )
             else -> {
-                // 토큰이 바뀌면(다시 로그인) 이전 사용자의 화면 상태를 쓰지 않도록 새 ViewModel을 만든다.
-                val vm = viewModel(key = "wards-${token.hashCode()}") { WardSelectionViewModel(repository) }
-                WardSelectionRoute(vm, onSignOut = session::signOut, onOpenDemo = { demo = true })
+                SessionWardRoute(
+                    sessionId = requireNotNull(activeSession).id,
+                    repository = repository,
+                    onSignOut = session::signOut,
+                    onOpenDemo = { demo = true },
+                )
             }
         }
     }
+}
+
+/** 세션별 ViewModelStore를 사용해 계정이 바뀌거나 로그아웃하면 이전 화면 캐시와 작업을 폐기한다. */
+@Composable
+private fun SessionWardRoute(
+    sessionId: UUID,
+    repository: RemoteOrganizationRepository,
+    onSignOut: () -> Unit,
+    onOpenDemo: () -> Unit,
+) {
+    val owner = remember(sessionId) { SessionViewModelStoreOwner() }
+    DisposableEffect(owner) {
+        onDispose { owner.viewModelStore.clear() }
+    }
+    CompositionLocalProvider(LocalViewModelStoreOwner provides owner) {
+        val vm = viewModel { WardSelectionViewModel(repository) }
+        WardSelectionRoute(vm, onSignOut = onSignOut, onOpenDemo = onOpenDemo)
+    }
+}
+
+private class SessionViewModelStoreOwner : ViewModelStoreOwner {
+    override val viewModelStore = ViewModelStore()
 }
 
 @Composable
