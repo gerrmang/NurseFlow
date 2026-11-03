@@ -4,6 +4,7 @@ import org.springframework.http.MediaType
 import org.springframework.http.ResponseEntity
 import org.springframework.http.converter.HttpMessageNotReadableException
 import org.springframework.validation.FieldError
+import tools.jackson.databind.JsonMappingException
 import org.springframework.web.bind.MethodArgumentNotValidException
 import org.springframework.web.bind.MissingRequestHeaderException
 import org.springframework.web.bind.annotation.ExceptionHandler
@@ -21,12 +22,33 @@ class GlobalExceptionHandler {
         ruleViolations = ex.ruleViolations,
     )
 
-    @ExceptionHandler(
-        HttpMessageNotReadableException::class,
-        MissingRequestHeaderException::class,
-        MethodArgumentTypeMismatchException::class,
+    @ExceptionHandler(HttpMessageNotReadableException::class)
+    fun unreadableBody(ex: HttpMessageNotReadableException): ResponseEntity<ApiProblem> {
+        val mappingError = generateSequence(ex as Throwable) { it.cause }
+            .filterIsInstance<JsonMappingException>()
+            .firstOrNull()
+        val path = mappingError?.path.orEmpty().mapNotNull { reference ->
+            reference.fieldName?.takeIf(String::isNotBlank)
+                ?: reference.index.takeIf { it >= 0 }?.let { "[$it]" }
+        }.joinToString(".").replace(".[", "[")
+        val field = path.ifBlank { "requestBody" }
+        return problem(
+            ErrorCode.INVALID_REQUEST,
+            fieldErrors = listOf(FieldErrorView(field, "요청 본문의 필수 값 또는 형식을 확인해 주세요.")),
+        )
+    }
+
+    @ExceptionHandler(MissingRequestHeaderException::class)
+    fun missingHeader(ex: MissingRequestHeaderException): ResponseEntity<ApiProblem> = problem(
+        ErrorCode.INVALID_REQUEST,
+        fieldErrors = listOf(FieldErrorView(ex.headerName, "필수 값입니다.")),
     )
-    fun malformed(): ResponseEntity<ApiProblem> = problem(ErrorCode.INVALID_REQUEST)
+
+    @ExceptionHandler(MethodArgumentTypeMismatchException::class)
+    fun invalidParameter(ex: MethodArgumentTypeMismatchException): ResponseEntity<ApiProblem> = problem(
+        ErrorCode.INVALID_REQUEST,
+        fieldErrors = listOf(FieldErrorView(ex.name, "형식이 올바르지 않습니다.")),
+    )
 
     /** `@Valid @RequestBody` failures. Field names are returned, rejected values are not. */
     @ExceptionHandler(MethodArgumentNotValidException::class)
