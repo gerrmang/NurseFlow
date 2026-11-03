@@ -309,7 +309,7 @@ class WardSelectionViewModel(
                 hospitalWards = if (hospitalId == null) emptyList() else s.hospitalWards,
                 chosenWardId = s.chosenWardId?.takeIf { id -> myWards.any { it.wardId == id } },
                 highlightedWardId = s.highlightedWardId ?: myWards.singleOrNull()?.wardId,
-                form = if (hospitalId == null) null else s.form,
+                form = s.form?.takeIf { it.hospitalId == hospitalId },
                 sessionExpired = false,
             )
         }
