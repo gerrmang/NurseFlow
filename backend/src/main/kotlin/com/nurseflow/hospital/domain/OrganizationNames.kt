@@ -19,6 +19,7 @@ object OrganizationNames {
     fun parseZone(raw: String?): ZoneId? {
         val value = raw?.trim() ?: return null
         if (value.isEmpty() || value.length > MAX_ZONE_LENGTH) return null
+        if (value !in ZoneId.getAvailableZoneIds()) return null
         return try {
             ZoneId.of(value)
         } catch (_: DateTimeException) {

@@ -66,6 +66,7 @@ class HospitalWardServiceIntegrationTest @Autowired constructor(
     fun `ward time zone may be overridden but must be valid`() {
         assertEquals("UTC", service.createWard(admin, command(hospitalA, "외과", "UTC")).timeZone)
         assertCode("INVALID_TIME_ZONE") { service.createWard(admin, command(hospitalA, "소아과", "Mars/Base")) }
+        assertCode("INVALID_TIME_ZONE") { service.createWard(admin, command(hospitalA, "정형외과", "+09:00")) }
         listOf("", "   ", "가".repeat(101), "줄\n바꿈").forEach { name ->
             assertCode("INVALID_WARD_NAME") { service.createWard(admin, command(hospitalA, name)) }
         }
