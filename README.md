@@ -18,6 +18,6 @@ Choose the branch that contains the work you need when cloning. New feature work
 
 1. Open `backend/` in IntelliJ IDEA with JDK 21. Run `./gradlew test` in that directory. Configure `NURSEFLOW_SESSION_SECRET` and `NURSEFLOW_KAKAO_AUDIENCES` (see [backend README](backend/README.md)) before starting `bootRun`.
 2. Open `android/` separately in Android Studio with Android SDK 35. Sync Gradle and run the `app` configuration on an emulator. See [Android prototype notes](android/README.md).
-3. When API integration is added, the emulator reaches a backend running on the development computer through `10.0.2.2:8080`; physical devices use the computer's reachable network address. Keep local HTTP restricted to debug builds and use HTTPS for deployed environments.
+3. The emulator reaches a backend running on the development computer through `10.0.2.2:8080`. For a USB-connected physical device, use `adb reverse tcp:8080 tcp:8080` and set the debug API URL to `http://127.0.0.1:8080`. Keep local HTTP restricted to debug builds and use HTTPS for deployed environments.
 
 Create feature branches from `dev`, submit feature PRs to `dev`, and release `dev` to `main` through a reviewed PR. See [Git policy](docs/runbooks/git-flow.md).

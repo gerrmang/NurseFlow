@@ -18,6 +18,8 @@ enum class ErrorCode(val status: HttpStatus, val safeMessage: String) {
     GENERATION_JOB_NOT_FOUND(HttpStatus.NOT_FOUND, "자동배치 작업을 찾을 수 없습니다."),
     GENERATION_NOT_CANCELLABLE(HttpStatus.CONFLICT, "이미 종료된 자동배치 작업입니다."),
     GENERATION_TOO_LARGE(HttpStatus.UNPROCESSABLE_CONTENT, "자동배치 한도는 2000칸입니다."),
+    HOSPITAL_ADMIN_REQUIRED(HttpStatus.FORBIDDEN, "병원 관리자 권한이 필요합니다."),
+    HOSPITAL_NOT_FOUND(HttpStatus.NOT_FOUND, "병원을 찾을 수 없습니다."),
     IDEMPOTENCY_KEY_REUSED(HttpStatus.CONFLICT, "다른 요청에 이미 사용한 키입니다."),
     IDENTITY_PROVIDER_NOT_CONFIGURED(HttpStatus.SERVICE_UNAVAILABLE, "로그인 설정이 완료되지 않았습니다."),
     IDENTITY_PROVIDER_UNAVAILABLE(HttpStatus.SERVICE_UNAVAILABLE, "로그인 서비스에 일시적으로 연결할 수 없습니다."),
@@ -39,6 +41,7 @@ enum class ErrorCode(val status: HttpStatus, val safeMessage: String) {
     INVITATION_EXPIRED(HttpStatus.GONE, "만료된 초대입니다. 관리자에게 새 초대를 요청해 주세요."),
     INVITATION_NOT_FOUND(HttpStatus.NOT_FOUND, "초대를 찾을 수 없습니다."),
     INVITATION_REVOKED(HttpStatus.GONE, "철회된 초대입니다. 관리자에게 문의해 주세요."),
+    INVALID_WARD_NAME(HttpStatus.BAD_REQUEST, "병동 이름은 1~100자여야 합니다."),
     NOT_DRAFT(HttpStatus.CONFLICT, "확정된 근무표는 수정할 수 없습니다."),
     NURSE_ALREADY_LINKED(HttpStatus.CONFLICT, "이미 다른 계정과 연결된 간호사입니다."),
     NURSE_IDENTITY_REQUIRED(HttpStatus.FORBIDDEN, "본인 근무표를 조회할 수 없습니다."),
@@ -61,5 +64,6 @@ enum class ErrorCode(val status: HttpStatus, val safeMessage: String) {
     USER_NOT_FOUND(HttpStatus.UNAUTHORIZED, "사용자 정보를 찾을 수 없습니다. 다시 로그인해 주세요."),
     WARD_ADMIN_REQUIRED(HttpStatus.FORBIDDEN, "관리자 권한이 필요합니다."),
     WARD_CALENDAR_VIEW_REQUIRED(HttpStatus.FORBIDDEN, "병동 전체 근무표 조회 권한이 없습니다."),
+    WARD_NAME_TAKEN(HttpStatus.CONFLICT, "같은 병원에 같은 이름의 병동이 있습니다."),
     WARD_NOT_FOUND(HttpStatus.NOT_FOUND, "병동을 찾을 수 없습니다.");
 }
