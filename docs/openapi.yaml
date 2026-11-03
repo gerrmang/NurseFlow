@@ -379,7 +379,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiProblem'
         '409':
-          description: INVITATION_ALREADY_REDEEMED, ALREADY_WARD_MEMBER 또는 NURSE_ALREADY_LINKED
+          description: INVITATION_ALREADY_REDEEMED, ALREADY_WARD_MEMBER, NURSE_ALREADY_LINKED 또는 ADMIN_NURSE_RECORD_CONFLICT
           content:
             application/problem+json:
               schema:

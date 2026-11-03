@@ -107,6 +107,38 @@ class InvitationRedemptionHttpTest : ApiTestBase() {
     }
 
     @Test
+    fun `admin invitation is rejected while the user has an active nurse record`() {
+        val (userId, nurse) = kakaoLogin("가상 간호사 겸 관리자")
+        insertNurse(wardId, "가상 간호사", subject = userId.toString())
+        val token = issue("WARD_ADMIN")
+
+        val response = redeem(token, nurse)
+
+        assertEquals(409, response.status)
+        assertEquals("ADMIN_NURSE_RECORD_CONFLICT", response.code)
+        assertEquals(0, http.get("/api/v1/me", nurse).json!!.get("memberships").size())
+        assertEquals(listOf("PENDING"), invitationStatus())
+        assertEquals(1, jdbc.queryForObject(
+            "SELECT COUNT(*) FROM nurses WHERE ward_id=? AND subject=? AND active=TRUE",
+            Int::class.java, wardId, userId.toString()))
+    }
+
+    @Test
+    fun `admin invitation can be accepted when the user's existing nurse record is inactive`() {
+        val (userId, adminInvitee) = kakaoLogin("가상 부관리자")
+        insertNurse(wardId, "비활성 간호사", subject = userId.toString(), active = false)
+        val token = issue("WARD_ADMIN")
+
+        assertEquals(201, redeem(token, adminInvitee).status)
+        assertEquals(1, jdbc.queryForObject(
+            "SELECT COUNT(*) FROM ward_memberships WHERE subject=? AND role='WARD_ADMIN'",
+            Int::class.java, userId.toString()))
+        assertEquals(0, jdbc.queryForObject(
+            "SELECT COUNT(*) FROM nurses WHERE ward_id=? AND subject=? AND active=TRUE",
+            Int::class.java, wardId, userId.toString()))
+    }
+
+    @Test
     fun `invitation is single use`() {
         val token = issue("WARD_MEMBER")
         val (_, first) = kakaoLogin("첫 사용자")

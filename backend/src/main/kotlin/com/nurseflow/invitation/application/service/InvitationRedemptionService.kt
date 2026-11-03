@@ -58,6 +58,10 @@ class InvitationRedemptionService(
             throw BusinessException(ErrorCode.ALREADY_WARD_MEMBER)
         }
         val role = WardRole.valueOf(invitation.role)
+        if (role == WardRole.WARD_ADMIN && repo.hasActiveNurseRecord(invitation.wardId, subject)) {
+            // Managers are excluded from rosters; do not leave an existing active nurse record schedulable.
+            throw BusinessException(ErrorCode.ADMIN_NURSE_RECORD_CONFLICT)
+        }
         if (role == WardRole.WARD_MEMBER) linkNurse(invitation, subject)
         wardRepo.insertMembership(invitation.wardId, subject, role.name, canViewWardCalendar = true)
         if (!repo.markRedeemed(invitation.id, subject, now)) {

@@ -29,6 +29,8 @@ A `WARD_ADMIN` issues invitations with `POST /api/v1/wards/{wardId}/invitations 
 
 The invitee signs in with Kakao, opens the link, and calls `POST /api/v1/invitations/preview {token}` to see the ward and role, then `POST /api/v1/invitations/redeem {token}`. Redemption consumes the invitation, creates the ward membership and, for `WARD_MEMBER`, links the invited nurse record (or creates one with the user's display name) in one transaction. The role always comes from the invitation; extra fields such as `role` are rejected. A user who already belongs to the ward gets `409 ALREADY_WARD_MEMBER` and the invitation stays usable. Role changes for existing members are not implemented yet.
 
+WARD_ADMIN invitation redemption returns 409 `ADMIN_NURSE_RECORD_CONFLICT` if the user has an active nurse record in that ward. This keeps managers out of the roster population without silently deactivating existing schedule data.
+
 | Role | Access |
 | --- | --- |
 | Signed in, no membership | `/me`, `/wards` (empty), invitation preview/redeem. Every ward endpoint returns `404 WARD_NOT_FOUND`. |

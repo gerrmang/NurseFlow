@@ -7,6 +7,7 @@ enum class ErrorCode(val status: HttpStatus, val safeMessage: String) {
     ABSENCE_NOT_FOUND(HttpStatus.NOT_FOUND, "부재 일정을 찾을 수 없습니다."),
     ABSENCE_OUTSIDE_ROSTER(HttpStatus.BAD_REQUEST, "부재 시간이 해당 월과 겹쳐야 합니다."),
     ALREADY_WARD_MEMBER(HttpStatus.CONFLICT, "이미 이 병동에 소속되어 있습니다."),
+    ADMIN_NURSE_RECORD_CONFLICT(HttpStatus.CONFLICT, "활성 간호사 기록이 연결된 계정은 관리자 초대를 수락할 수 없습니다."),
     ASSIGNMENTS_EXIST(HttpStatus.CONFLICT, "배정을 해제한 뒤 인력 수요를 변경해 주세요."),
     BOOTSTRAP_CODE_INVALID(HttpStatus.FORBIDDEN, "병동 생성 코드가 올바르지 않습니다."),
     BOOTSTRAP_DISABLED(HttpStatus.NOT_FOUND, "시연용 병동 생성이 비활성화되어 있습니다."),

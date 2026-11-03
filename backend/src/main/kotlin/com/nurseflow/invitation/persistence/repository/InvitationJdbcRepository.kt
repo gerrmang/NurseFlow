@@ -84,6 +84,12 @@ class InvitationJdbcRepository(private val jdbc: JdbcTemplate) {
         "SELECT COUNT(*) FROM nurses WHERE ward_id=? AND subject=?", Int::class.java, wardId, subject,
     ) ?: 0) > 0
 
+    /** Managers must not retain an active roster record in the same ward. */
+    fun hasActiveNurseRecord(wardId: UUID, subject: String): Boolean = (jdbc.queryForObject(
+        "SELECT COUNT(*) FROM nurses WHERE ward_id=? AND subject=? AND active=TRUE",
+        Int::class.java, wardId, subject,
+    ) ?: 0) > 0
+
     fun userDisplayName(subject: String): String? = runCatching { UUID.fromString(subject) }.getOrNull()?.let { id ->
         jdbc.query("SELECT display_name FROM users WHERE user_id=?", { rs, _ -> rs.getString(1) }, id).firstOrNull()
     }
