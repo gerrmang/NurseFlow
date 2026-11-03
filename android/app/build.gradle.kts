@@ -6,7 +6,8 @@ plugins {
 }
 
 // 디버그 빌드의 API 주소. 에뮬레이터 기본값은 호스트의 8080 포트다.
-// 실제 기기는 -Pnurseflow.apiBaseUrl=http://<개발 PC 주소>:8080 으로 바꾼다. 릴리스 빌드는 주소가 없어 서버 연결을 하지 않는다.
+// 실제 기기는 adb reverse tcp:8080 tcp:8080 후 -Pnurseflow.apiBaseUrl=http://127.0.0.1:8080 으로 빌드한다.
+// 릴리스 빌드는 주소가 없어 서버 연결을 하지 않는다.
 val debugApiBaseUrl = (project.findProperty("nurseflow.apiBaseUrl") as String?) ?: "http://10.0.2.2:8080"
 
 android {

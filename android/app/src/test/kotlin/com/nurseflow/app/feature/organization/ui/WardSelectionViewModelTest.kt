@@ -106,12 +106,18 @@ class WardSelectionViewModelTest {
         advanceUntilIdle()
         vm.openCreateForm()
         vm.editName("   ")
-        vm.editTimeZone("Mars/Base")
+        vm.editTimeZone("+09:00")
         vm.submitCreate()
 
         val form = vm.uiState.value.form!!
         assertEquals(WardSelectionViewModel.NAME_RULE, form.nameError)
         assertEquals(WardSelectionViewModel.ZONE_RULE, form.timeZoneError)
+        assertTrue(repo.createCalls.isEmpty())
+
+        vm.editName("신규 병동")
+        vm.editTimeZone("Mars/Base")
+        vm.submitCreate()
+        assertEquals(WardSelectionViewModel.ZONE_RULE, vm.uiState.value.form!!.timeZoneError)
         assertTrue(repo.createCalls.isEmpty())
     }
 

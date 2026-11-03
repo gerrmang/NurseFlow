@@ -171,7 +171,10 @@ class WardSelectionViewModel(
         if (form.submitting || form.hospitalId != hospital.hospitalId) return
         val name = WardNameRules.normalize(form.name)
         val zone = form.timeZone.trim().ifEmpty { null }
-        val zoneValid = zone == null || try { ZoneId.of(zone); true } catch (_: DateTimeException) { false }
+        val zoneValid = zone == null || (
+            zone in ZoneId.getAvailableZoneIds() &&
+                try { ZoneId.of(zone); true } catch (_: DateTimeException) { false }
+            )
         if (name == null || !zoneValid) {
             state.update { s ->
                 s.copy(form = form.copy(

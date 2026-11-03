@@ -31,7 +31,7 @@ From this directory, with Android SDK 35 and JDK 17+:
 ANDROID_HOME=<Android SDK path> ./gradlew :app:testDebugUnitTest :app:assembleDebug :app:assembleRelease
 ```
 
-- The debug build calls `http://10.0.2.2:8080` (host machine from the emulator). Override it with `-Pnurseflow.apiBaseUrl=...`. Cleartext HTTP is allowed only in the debug build and only for `10.0.2.2`, `localhost`, and `127.0.0.1`.
+- The debug build calls `http://10.0.2.2:8080` (host machine from the emulator). For a USB-connected physical device, run `adb reverse tcp:8080 tcp:8080` and build with `-Pnurseflow.apiBaseUrl=http://127.0.0.1:8080`. Cleartext HTTP is allowed only in the debug build and only for `10.0.2.2`, `localhost`, and `127.0.0.1`.
 - The release build has no API base URL until the real login/environment setup exists.
 
 Local integration (app network layer ↔ real backend with real JWT validation, without Kakao or device UI): from the repository root, run `scripts/local-e2e/run-hospital-ward-e2e.sh`. It needs `node`, JDK 21, and `ANDROID_HOME`. It starts a 127.0.0.1-only throwaway OIDC issuer and the backend jar on a temporary H2 file DB with an operator-bootstrapped synthetic hospital. It then runs `LiveOrganizationApiTest`, which is skipped in normal unit-test runs.
