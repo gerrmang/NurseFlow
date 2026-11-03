@@ -30,6 +30,7 @@ abstract class ApiTestBase {
         listOf("audit_events", "auth_refresh_tokens", "mutation_replays", "generation_jobs", "approved_absences",
             "roster_slots", "rosters", "shift_types", "nurses", "ward_memberships", "users", "wards",
         ).forEach { table -> runCatching { jdbc.update("DELETE FROM $table") } }
+        jdbc.update("UPDATE bootstrap_state SET consumed=FALSE WHERE state_id=1")
     }
 
     /** Creates a user row and returns a valid NurseFlow access token for it. */

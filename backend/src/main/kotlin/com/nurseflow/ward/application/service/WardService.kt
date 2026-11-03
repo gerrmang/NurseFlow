@@ -52,6 +52,12 @@ class WardService(
         if (!MessageDigest.isEqual(expected.toByteArray(), command.bootstrapCode.toByteArray())) {
             throw BusinessException(ErrorCode.BOOTSTRAP_CODE_INVALID)
         }
+        // Lock a stable singleton row so even concurrent requests on different app instances
+        // can create at most one bootstrap ward. Keep the existing-ward check for pre-upgrade DBs.
+        if (repo.lockBootstrapState() || repo.hasAnyWard()) {
+            throw BusinessException(ErrorCode.BOOTSTRAP_DISABLED)
+        }
+        repo.markBootstrapConsumed()
         val zone = try {
             ZoneId.of(command.timeZone)
         } catch (_: DateTimeException) {

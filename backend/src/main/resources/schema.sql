@@ -4,6 +4,14 @@ CREATE TABLE IF NOT EXISTS wards (
     time_zone VARCHAR(100) NOT NULL
 );
 
+-- A single locked row makes demo bootstrap a one-time operation across app instances.
+CREATE TABLE IF NOT EXISTS bootstrap_state (
+    state_id INT PRIMARY KEY CHECK (state_id = 1),
+    consumed BOOLEAN NOT NULL DEFAULT FALSE
+);
+INSERT INTO bootstrap_state(state_id, consumed)
+SELECT 1, FALSE WHERE NOT EXISTS (SELECT 1 FROM bootstrap_state WHERE state_id = 1);
+
 CREATE TABLE IF NOT EXISTS ward_memberships (
     ward_id UUID NOT NULL REFERENCES wards(ward_id),
     subject VARCHAR(255) NOT NULL,

@@ -3,6 +3,9 @@ package com.nurseflow.ward.api
 import com.nurseflow.support.ApiTestBase
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 
 class WardBootstrapHttpTest : ApiTestBase() {
     @Test
@@ -38,5 +41,55 @@ class WardBootstrapHttpTest : ApiTestBase() {
         assertEquals("INVALID_TIME_ZONE", zone.code)
         assertEquals(listOf("name"), blank.fieldNames)
         assertEquals(0, jdbc.queryForObject("SELECT COUNT(*) FROM wards", Int::class.java))
+    }
+
+    @Test
+    fun `bootstrap code cannot be reused after the first ward`() {
+        val (_, token) = userToken()
+        val request = mapOf(
+            "name" to "가상 내과 병동",
+            "timeZone" to "Asia/Seoul",
+            "bootstrapCode" to "test-bootstrap-code",
+        )
+
+        val first = http.post("/api/v1/wards", request, token)
+        val replay = http.post("/api/v1/wards", request, token)
+
+        assertEquals(201, first.status)
+        assertEquals(404, replay.status)
+        assertEquals("BOOTSTRAP_DISABLED", replay.code)
+        assertEquals(1, jdbc.queryForObject("SELECT COUNT(*) FROM wards", Int::class.java))
+        assertEquals(1, jdbc.queryForObject(
+            "SELECT COUNT(*) FROM audit_events WHERE action='WARD_BOOTSTRAPPED'", Int::class.java))
+    }
+
+    @Test
+    fun `concurrent bootstrap requests create only one ward`() {
+        val (_, token) = userToken()
+        val request = mapOf(
+            "name" to "가상 내과 병동",
+            "timeZone" to "Asia/Seoul",
+            "bootstrapCode" to "test-bootstrap-code",
+        )
+        val start = CountDownLatch(1)
+        val executor = Executors.newFixedThreadPool(2)
+
+        try {
+            val results = (1..2).map {
+                executor.submit<Int> {
+                    start.await()
+                    http.post("/api/v1/wards", request, token).status
+                }
+            }
+            start.countDown()
+            val statuses = results.map { it.get(15, TimeUnit.SECONDS) }.sorted()
+
+            assertEquals(listOf(201, 404), statuses)
+            assertEquals(1, jdbc.queryForObject("SELECT COUNT(*) FROM wards", Int::class.java))
+            assertEquals(1, jdbc.queryForObject(
+                "SELECT COUNT(*) FROM audit_events WHERE action='WARD_BOOTSTRAPPED'", Int::class.java))
+        } finally {
+            executor.shutdownNow()
+        }
     }
 }

@@ -8,6 +8,20 @@ data class DbMembershipRow(val wardId: UUID, val wardName: String, val role: Str
 
 @Repository
 class WardJdbcRepository(private val jdbc: JdbcTemplate) {
+    /** Must be called inside a transaction; serializes bootstrap requests across app instances. */
+    fun lockBootstrapState(): Boolean = jdbc.query(
+        "SELECT consumed FROM bootstrap_state WHERE state_id=1 FOR UPDATE",
+        { rs, _ -> rs.getBoolean("consumed") },
+    ).singleOrNull() ?: error("Bootstrap state row is missing")
+
+    fun hasAnyWard(): Boolean = jdbc.queryForObject("SELECT COUNT(*) FROM wards", Int::class.java)!! > 0
+
+    fun markBootstrapConsumed() {
+        check(jdbc.update("UPDATE bootstrap_state SET consumed=TRUE WHERE state_id=1") == 1) {
+            "Bootstrap state row is missing"
+        }
+    }
+
     fun membershipsOf(subject: String): List<DbMembershipRow> = jdbc.query(
         """SELECT m.ward_id, w.name, m.role, m.can_view_ward_calendar
            FROM ward_memberships m JOIN wards w ON w.ward_id = m.ward_id
