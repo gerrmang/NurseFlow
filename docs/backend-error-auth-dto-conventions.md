@@ -83,3 +83,11 @@ data class Actor(val subject: String)
 - [Spring Security 필터의 인증·접근 거부 처리](https://docs.spring.io/spring-security/reference/servlet/architecture.html)
 - [SecurityContext의 스레드 경계](https://docs.spring.io/spring-security/reference/features/integrations/concurrency.html)
 - [Kotlin 어노테이션 use-site target](https://docs.spring.io/spring-framework/reference/languages/kotlin/annotations.html)
+
+## 입력 검증 적용 상태 (1c)
+
+- `spring-boot-starter-validation`을 추가하고 roster Request DTO에 OpenAPI와 같은 제약(`month` 형식, 인원 0~100, 자격 1~64자·최대 50개, 항목 최대 1000개, 부재 유형, 미충원 확인 0 이상, 자동배치 1~600초)을 `@field:` 대상으로 선언했다. Controller의 모든 `@RequestBody`에 `@Valid`를 적용한다.
+- `List<@Size(...) String>` 같은 원소 제약이 동작하도록 Kotlin 컴파일러에 `-Xemit-jvm-type-annotations`를 켰다.
+- 검증 실패는 `GlobalExceptionHandler`가 `application/problem+json` 400으로 바꾸고 `fieldErrors[{field, message}]`를 채운다. 메시지는 제약 종류별 고정 문구이며 **거부된 값은 응답에 넣지 않는다.**
+- 검증이 Controller 경계로 올라오면서 공개 오류 코드가 바뀌지 않도록, 기존에 전용 코드가 있던 요청은 클래스에 `@InvalidRequestCode`를 붙인다: `CreateRosterRequest`→`INVALID_MONTH`, `ReplaceRequirementsRequest`→`INVALID_REQUIREMENTS`, `ApprovedAbsenceInput`→`INVALID_ABSENCE`, `StartGenerationRequest`→`INVALID_TIME_LIMIT`. 그 밖의 요청은 `INVALID_REQUEST`다.
+- 서비스의 같은 검사는 HTTP를 거치지 않는 호출(테스트·자동배치)을 위해 유지한다. 형식 검증은 권한 검사보다 먼저 실행되므로 잘못된 본문은 권한과 무관하게 400을 받는다.
