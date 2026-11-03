@@ -46,11 +46,13 @@ class InvitationRedemptionService(
      */
     @Transactional
     fun redeem(token: String, subject: String): WardMembershipResult {
-        val now = Instant.now()
         val invitation = repo.lockByTokenHash(OpaqueToken.sha256Hex(token))
             ?: throw BusinessException(ErrorCode.INVITATION_NOT_FOUND)
-        requireRedeemable(invitation, now)
         if (!wardRepo.lockWard(invitation.wardId)) throw BusinessException(ErrorCode.INVITATION_NOT_FOUND)
+        // Re-check expiry after acquiring both locks; waiting for either lock must not let a
+        // request that started before expiration redeem the invitation after its deadline.
+        val now = Instant.now()
+        requireRedeemable(invitation, now)
         if (wardRepo.rolesIn(invitation.wardId, subject).isNotEmpty()) {
             // Role changes for existing members are an admin action, not a second invitation.
             throw BusinessException(ErrorCode.ALREADY_WARD_MEMBER)
@@ -58,7 +60,9 @@ class InvitationRedemptionService(
         val role = WardRole.valueOf(invitation.role)
         if (role == WardRole.WARD_MEMBER) linkNurse(invitation, subject)
         wardRepo.insertMembership(invitation.wardId, subject, role.name, canViewWardCalendar = true)
-        repo.markRedeemed(invitation.id, subject, now)
+        if (!repo.markRedeemed(invitation.id, subject, now)) {
+            throw BusinessException(ErrorCode.INVITATION_ALREADY_REDEEMED)
+        }
         audit.record(invitation.wardId, subject, "INVITATION_REDEEMED", invitation.id.toString())
         val wardName = wardRepo.findWardName(invitation.wardId)!!
         return WardMembershipResult(invitation.wardId, wardName, listOf(role), canViewWardCalendar = true)

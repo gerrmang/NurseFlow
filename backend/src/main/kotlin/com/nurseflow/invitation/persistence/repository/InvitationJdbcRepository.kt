@@ -62,12 +62,10 @@ class InvitationJdbcRepository(private val jdbc: JdbcTemplate) {
         { rs, _ -> map(rs) }, tokenHash,
     ).firstOrNull()
 
-    fun markRedeemed(invitationId: UUID, subject: String, now: Instant) {
-        jdbc.update(
-            "UPDATE ward_invitations SET redeemed_at=?, redeemed_by=? WHERE invitation_id=? AND redeemed_at IS NULL",
-            now.toString(), subject, invitationId,
-        )
-    }
+    fun markRedeemed(invitationId: UUID, subject: String, now: Instant): Boolean = jdbc.update(
+        "UPDATE ward_invitations SET redeemed_at=?, redeemed_by=? WHERE invitation_id=? AND redeemed_at IS NULL",
+        now.toString(), subject, invitationId,
+    ) == 1
 
     /** Links an unclaimed, active nurse record to the user. Returns false if it was taken meanwhile. */
     fun linkNurse(wardId: UUID, nurseId: UUID, subject: String): Boolean = jdbc.update(
