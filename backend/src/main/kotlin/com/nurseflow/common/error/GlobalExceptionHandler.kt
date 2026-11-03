@@ -4,7 +4,7 @@ import org.springframework.http.MediaType
 import org.springframework.http.ResponseEntity
 import org.springframework.http.converter.HttpMessageNotReadableException
 import org.springframework.validation.FieldError
-import tools.jackson.databind.JsonMappingException
+import tools.jackson.core.JacksonException
 import org.springframework.web.bind.MethodArgumentNotValidException
 import org.springframework.web.bind.MissingRequestHeaderException
 import org.springframework.web.bind.annotation.ExceptionHandler
@@ -25,10 +25,10 @@ class GlobalExceptionHandler {
     @ExceptionHandler(HttpMessageNotReadableException::class)
     fun unreadableBody(ex: HttpMessageNotReadableException): ResponseEntity<ApiProblem> {
         val mappingError = generateSequence(ex as Throwable) { it.cause }
-            .filterIsInstance<JsonMappingException>()
+            .filterIsInstance<JacksonException>()
             .firstOrNull()
         val path = mappingError?.path.orEmpty().mapNotNull { reference ->
-            reference.fieldName?.takeIf(String::isNotBlank)
+            reference.propertyName?.takeIf(String::isNotBlank)
                 ?: reference.index.takeIf { it >= 0 }?.let { "[$it]" }
         }.joinToString(".").replace(".[", "[")
         val field = path.ifBlank { "requestBody" }
