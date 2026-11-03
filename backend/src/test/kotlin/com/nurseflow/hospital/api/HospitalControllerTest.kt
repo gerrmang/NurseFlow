@@ -11,6 +11,7 @@ import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.boot.test.context.TestConfiguration
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Import
+import org.springframework.context.annotation.Primary
 import org.springframework.http.MediaType
 import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.security.oauth2.jwt.BadJwtException
@@ -52,6 +53,7 @@ class HospitalControllerTest @Autowired constructor(
 
     @TestConfiguration
     class TestJwt {
+        @Primary
         @Bean
         fun jwtDecoder(): JwtDecoder = JwtDecoder { token ->
             if (!token.startsWith("test-")) throw BadJwtException("invalid test token")
