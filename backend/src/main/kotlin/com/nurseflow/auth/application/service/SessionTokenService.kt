@@ -3,17 +3,14 @@ package com.nurseflow.auth.application.service
 import com.nurseflow.auth.application.model.IssuedAccessToken
 import com.nurseflow.auth.config.AuthProperties
 import com.nurseflow.auth.config.SessionTokenClaims
+import com.nurseflow.common.security.OpaqueToken
 import org.springframework.security.oauth2.jose.jws.MacAlgorithm
 import org.springframework.security.oauth2.jwt.JwsHeader
 import org.springframework.security.oauth2.jwt.JwtClaimsSet
 import org.springframework.security.oauth2.jwt.JwtEncoder
 import org.springframework.security.oauth2.jwt.JwtEncoderParameters
 import org.springframework.stereotype.Component
-import java.security.MessageDigest
-import java.security.SecureRandom
 import java.time.Instant
-import java.util.Base64
-import java.util.HexFormat
 import java.util.UUID
 
 @Component
@@ -21,8 +18,6 @@ class SessionTokenService(
     private val encoder: JwtEncoder,
     private val properties: AuthProperties,
 ) {
-    private val random = SecureRandom()
-
     /** Short-lived API token. `sub` is the NurseFlow user id used by ward memberships. */
     fun issueAccessToken(userId: UUID, sessionId: UUID, now: Instant = Instant.now()): IssuedAccessToken {
         val session = properties.session
@@ -42,11 +37,7 @@ class SessionTokenService(
     }
 
     /** 256-bit opaque refresh token. Only its hash is persisted. */
-    fun newOpaqueToken(): String {
-        val bytes = ByteArray(32).also(random::nextBytes)
-        return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes)
-    }
+    fun newOpaqueToken(): String = OpaqueToken.generate()
 
-    fun hash(token: String): String =
-        HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(token.toByteArray(Charsets.UTF_8)))
+    fun hash(token: String): String = OpaqueToken.sha256Hex(token)
 }

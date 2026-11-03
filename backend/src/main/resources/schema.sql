@@ -135,3 +135,20 @@ CREATE TABLE IF NOT EXISTS audit_events (
     created_at VARCHAR(40) NOT NULL
 );
 CREATE INDEX IF NOT EXISTS ix_audit_events_ward ON audit_events(ward_id, created_at);
+
+-- ── Ward invitations: single-use, expiring, revocable. Only the token hash is stored. ──
+CREATE TABLE IF NOT EXISTS ward_invitations (
+    invitation_id UUID PRIMARY KEY,
+    ward_id UUID NOT NULL REFERENCES wards(ward_id),
+    role VARCHAR(20) NOT NULL CHECK (role IN ('WARD_ADMIN', 'WARD_MEMBER')),
+    nurse_id UUID REFERENCES nurses(nurse_id),
+    token_hash VARCHAR(64) NOT NULL UNIQUE,
+    created_by VARCHAR(255) NOT NULL,
+    created_at VARCHAR(40) NOT NULL,
+    expires_at VARCHAR(40) NOT NULL,
+    revoked_at VARCHAR(40),
+    redeemed_at VARCHAR(40),
+    redeemed_by VARCHAR(255),
+    CHECK (role = 'WARD_MEMBER' OR nurse_id IS NULL)
+);
+CREATE INDEX IF NOT EXISTS ix_ward_invitations_ward ON ward_invitations(ward_id, created_at);
