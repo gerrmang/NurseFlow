@@ -34,7 +34,8 @@ class TeamController(private val staff: StaffService) {
         @Valid @RequestBody request: TeamRequest,
         @CurrentSubject subject: String,
     ): ResponseEntity<TeamResponse> =
-        ResponseEntity.status(HttpStatus.CREATED).body(staff.createTeam(wardId, request.name, subject).toResponse())
+        ResponseEntity.status(HttpStatus.CREATED)
+            .body(staff.createTeam(wardId, request.name, request.sortOrder, subject).toResponse())
 
     @PutMapping("/teams/{teamId}")
     fun updateTeam(

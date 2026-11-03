@@ -42,11 +42,11 @@ class StaffService(
     }
 
     @Transactional
-    fun createTeam(wardId: UUID, name: String, actor: String): TeamResult {
+    fun createTeam(wardId: UUID, name: String, sortOrder: Int?, actor: String): TeamResult {
         wards.requireAdmin(wardId, actor)
         val clean = name.trim()
         requireUniqueTeamName(wardId, clean, except = null)
-        val team = DbTeam(UUID.randomUUID(), wardId, clean, repo.nextTeamOrder(wardId), true)
+        val team = DbTeam(UUID.randomUUID(), wardId, clean, sortOrder ?: repo.nextTeamOrder(wardId), true)
         repo.insertTeam(team)
         audit.record(wardId, actor, "TEAM_CREATED", team.id.toString())
         return team.toResult()
