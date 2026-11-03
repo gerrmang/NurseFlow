@@ -152,3 +152,32 @@ CREATE TABLE IF NOT EXISTS ward_invitations (
     CHECK (role = 'WARD_MEMBER' OR nurse_id IS NULL)
 );
 CREATE INDEX IF NOT EXISTS ix_ward_invitations_ward ON ward_invitations(ward_id, created_at);
+
+-- ── Teams, career policy and nurse career profiles ──
+CREATE TABLE IF NOT EXISTS ward_teams (
+    team_id UUID PRIMARY KEY,
+    ward_id UUID NOT NULL REFERENCES wards(ward_id),
+    name VARCHAR(50) NOT NULL,
+    sort_order INT NOT NULL,
+    active BOOLEAN NOT NULL DEFAULT TRUE
+);
+CREATE INDEX IF NOT EXISTS ix_ward_teams_ward ON ward_teams(ward_id, sort_order);
+
+-- Absent row = defaults (12/36/72/120 months, ranks 팀장·과장·신규). Values are ward settings, not code.
+CREATE TABLE IF NOT EXISTS ward_career_policies (
+    ward_id UUID PRIMARY KEY REFERENCES wards(ward_id),
+    stage_threshold_months VARCHAR(200) NOT NULL,
+    ranks VARCHAR(2000) NOT NULL,
+    updated_by VARCHAR(255) NOT NULL,
+    updated_at VARCHAR(40) NOT NULL
+);
+
+-- Submitted values come from the nurse; confirmed_* are the admin-checked copy used for scoring.
+ALTER TABLE nurses ADD COLUMN IF NOT EXISTS team_id UUID REFERENCES ward_teams(team_id);
+ALTER TABLE nurses ADD COLUMN IF NOT EXISTS career_started_on VARCHAR(7);
+ALTER TABLE nurses ADD COLUMN IF NOT EXISTS rank_name VARCHAR(30);
+ALTER TABLE nurses ADD COLUMN IF NOT EXISTS profile_submitted_at VARCHAR(40);
+ALTER TABLE nurses ADD COLUMN IF NOT EXISTS confirmed_career_started_on VARCHAR(7);
+ALTER TABLE nurses ADD COLUMN IF NOT EXISTS confirmed_rank_name VARCHAR(30);
+ALTER TABLE nurses ADD COLUMN IF NOT EXISTS profile_confirmed_at VARCHAR(40);
+ALTER TABLE nurses ADD COLUMN IF NOT EXISTS profile_confirmed_by VARCHAR(255);

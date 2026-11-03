@@ -37,7 +37,15 @@ WARD_ADMIN invitation redemption returns 409 `ADMIN_NURSE_RECORD_CONFLICT` if th
 | `WARD_MEMBER` | Published ward calendar and own published calendar. Drafts, absences, generation, confirmation and invitations return `403 WARD_ADMIN_REQUIRED`. |
 | `WARD_ADMIN` | Everything above plus drafts, absences, assignments, generation, confirmation and invitations. Not part of the rostered nurse pool. |
 
-The service cannot serve scheduling requests until `nurses` and `shift_types` have been provisioned in the local H2 database. Provisioning endpoints and production database migration are separate work.
+### Teams and career profiles
+
+- Teams: `GET/POST /api/v1/wards/{wardId}/teams`, `PUT/DELETE .../teams/{teamId}`. Members read; admins change. A team with active nurses cannot be deleted.
+- Career policy: `GET/PUT /api/v1/wards/{wardId}/career-policy`. `stageThresholdMonths` are the lower bounds of stages 2–5 in months; the default `[12, 36, 72, 120]` gives <1y = 1, 1–3y = 2, 3–6y = 3, 6–10y = 4, 10y+ = 5. `ranks` default to 팀장·과장·신규 and are names only (they do not change the stage yet). Changes apply immediately.
+- A nurse submits the career start month (`YYYY-MM`) and rank with `PUT /api/v1/wards/{wardId}/my-profile`, or while joining via `POST /api/v1/invitations/redeem {token, careerStartedOn, rank}`.
+- Admins confirm with `POST .../staff/{nurseId}/profile/confirm` or set values directly with `PUT .../staff/{nurseId}/profile`. `scoringStage` is present only while the profile is `CONFIRMED`; an edit returns it to `PENDING` and excludes it from scoring until re-confirmed.
+- `GET /api/v1/wards/{wardId}/staff` (admin) lists nurses by team order, then most experienced first, then name. `POST`/`PUT .../staff` create fictional nurse records and change name, qualifications or `active`; `PUT .../staff/{nurseId}/team` assigns a team. Nurses cannot change their own team.
+
+The service cannot serve scheduling requests until `shift_types` has been provisioned in the local H2 database. Provisioning endpoints and production database migration are separate work.
 
 `ward_memberships.subject` and `nurses.subject` hold the NurseFlow `userId` (the access token `sub`). Administrators need a `WARD_ADMIN` membership. The whole ward calendar also requires `can_view_ward_calendar=TRUE`. The personal calendar resolves its nurse ID from the authenticated subject and never accepts a nurse ID in the request.
 
@@ -54,7 +62,7 @@ The API stores approved absence category and time range only. It does not store 
 7. `POST /api/v1/rosters/{rosterId}/confirm` revalidates the draft and atomically switches the active published calendar. An unfilled roster requires an exact `acknowledgeUnfilledCount`.
 8. Published ward and personal calendars read only the active published roster. A new draft stays private until confirmed.
 
-Writes require the current strong `If-Match` ETag. Mutations that require `Idempotency-Key` retain their original response in H2, so a retry with the same key and payload returns the prior result. The generator is a heuristic and does not claim optimality. Membership role changes, staff/shift configuration APIs, Android/web API integration, production database migrations, and full contract coverage remain to be built; see the [MVP scope](../docs/mvp-scope.md).
+Writes require the current strong `If-Match` ETag. Mutations that require `Idempotency-Key` retain their original response in H2, so a retry with the same key and payload returns the prior result. The generator is a heuristic and does not claim optimality. Membership role changes, shift-type configuration APIs, Android/web API integration, production database migrations, and full contract coverage remain to be built; see the [MVP scope](../docs/mvp-scope.md).
 
 ## Build
 
