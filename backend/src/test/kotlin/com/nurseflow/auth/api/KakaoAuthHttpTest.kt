@@ -66,6 +66,8 @@ class KakaoAuthHttpTest : ApiTestBase() {
                 issuedAt = Instant.now().minusSeconds(7200), expiresAt = Instant.now().minusSeconds(3600)),
             "too old" to FakeOidcProvider.idToken(subject,
                 issuedAt = Instant.now().minusSeconds(3600), expiresAt = Instant.now().plusSeconds(3600)),
+            "issued too far in the future" to FakeOidcProvider.idToken(subject,
+                issuedAt = Instant.now().plusSeconds(120), expiresAt = Instant.now().plusSeconds(600)),
             "not a jwt" to "not-a-jwt",
         )
         cases.forEach { (case, token) ->

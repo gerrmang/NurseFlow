@@ -15,6 +15,7 @@ import org.springframework.security.oauth2.jwt.JwtValidators
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder
 import org.springframework.stereotype.Component
 import java.security.MessageDigest
+import java.time.Duration
 import java.time.Instant
 
 /**
@@ -36,7 +37,11 @@ class KakaoIdTokenVerifier(private val properties: AuthProperties) {
                     jwtCheck("audience") { jwt -> jwt.audience.orEmpty().any { it in kakao.audiences } },
                     jwtCheck("subject") { jwt -> jwt.subject.let { !it.isNullOrBlank() && it.length <= 255 } },
                     jwtCheck("issued_at") { jwt ->
-                        jwt.issuedAt?.isAfter(Instant.now().minus(kakao.maxIdTokenAge)) == true
+                        val now = Instant.now()
+                        jwt.issuedAt?.let { issuedAt ->
+                            issuedAt.isAfter(now.minus(kakao.maxIdTokenAge)) &&
+                                !issuedAt.isAfter(now.plus(MAX_CLOCK_SKEW))
+                        } == true
                     },
                 ))
             }
@@ -72,5 +77,6 @@ class KakaoIdTokenVerifier(private val properties: AuthProperties) {
 
     companion object {
         const val PROVIDER = "KAKAO"
+        private val MAX_CLOCK_SKEW: Duration = Duration.ofSeconds(60)
     }
 }
