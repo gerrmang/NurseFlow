@@ -150,11 +150,13 @@ class StaffService(
         val nurse = requireStaff(wardId, nurseId)
         val start = nurse.careerStartedOn ?: throw BusinessException(ErrorCode.PROFILE_NOT_SUBMITTED)
         val rank = nurse.rank ?: throw BusinessException(ErrorCode.PROFILE_NOT_SUBMITTED)
+        val context = context(wardId)
         if (nurse.status() != ProfileStatus.CONFIRMED) {
+            validate(ProfileInput(YearMonth.parse(start), rank), context)
             repo.confirmProfile(nurseId, start, rank, actor, Instant.now())
             audit.record(wardId, actor, "PROFILE_CONFIRMED", nurseId.toString())
         }
-        return requireStaff(wardId, nurseId).toResult(context(wardId))
+        return requireStaff(wardId, nurseId).toResult(context)
     }
 
     /** Admin correction: the admin's own values are confirmed immediately. */

@@ -793,6 +793,12 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/ApiProblem'
+        '400':
+          description: INVALID_CAREER_START 또는 RANK_NOT_IN_POLICY (현재 병동 정책 기준으로 확인 불가)
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ApiProblem'
         '409':
           description: PROFILE_NOT_SUBMITTED
           content:
