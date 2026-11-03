@@ -27,6 +27,16 @@ Tests use an in-process fake OIDC provider (`src/test/kotlin/com/nurseflow/suppo
 
 A `WARD_ADMIN` issues invitations with `POST /api/v1/wards/{wardId}/invitations {role, nurseId?, expiresInHours}` (1–168 h, default 72). The response contains the 43-character token **once**; only its SHA-256 hash is stored. `GET` lists invitations with status (`PENDING`/`REDEEMED`/`REVOKED`/`EXPIRED`) and no tokens, and `DELETE .../{invitationId}` revokes an unused invitation. Set `NURSEFLOW_INVITE_LINK_BASE` (for example `https://<web-host>/invite`) to also receive `inviteUrl`, with the token in the URL fragment. `WARD_ADMIN` invitations cannot link a nurse record because administrators are excluded from rostering. Creation and revocation are written to `audit_events`.
 
+The invitee signs in with Kakao, opens the link, and calls `POST /api/v1/invitations/preview {token}` to see the ward and role, then `POST /api/v1/invitations/redeem {token}`. Redemption consumes the invitation, creates the ward membership and, for `WARD_MEMBER`, links the invited nurse record (or creates one with the user's display name) in one transaction. The role always comes from the invitation; extra fields such as `role` are rejected. A user who already belongs to the ward gets `409 ALREADY_WARD_MEMBER` and the invitation stays usable. Role changes for existing members are not implemented yet.
+
+WARD_ADMIN invitation redemption returns 409 `ADMIN_NURSE_RECORD_CONFLICT` if the user has an active nurse record in that ward. This keeps managers out of the roster population without silently deactivating existing schedule data.
+
+| Role | Access |
+| --- | --- |
+| Signed in, no membership | `/me`, `/wards` (empty), invitation preview/redeem. Every ward endpoint returns `404 WARD_NOT_FOUND`. |
+| `WARD_MEMBER` | Published ward calendar and own published calendar. Drafts, absences, generation, confirmation and invitations return `403 WARD_ADMIN_REQUIRED`. |
+| `WARD_ADMIN` | Everything above plus drafts, absences, assignments, generation, confirmation and invitations. Not part of the rostered nurse pool. |
+
 The service cannot serve scheduling requests until `nurses` and `shift_types` have been provisioned in the local H2 database. Provisioning endpoints and production database migration are separate work.
 
 `ward_memberships.subject` and `nurses.subject` hold the NurseFlow `userId` (the access token `sub`). Administrators need a `WARD_ADMIN` membership. The whole ward calendar also requires `can_view_ward_calendar=TRUE`. The personal calendar resolves its nurse ID from the authenticated subject and never accepts a nurse ID in the request.
