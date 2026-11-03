@@ -4,6 +4,14 @@ CREATE TABLE IF NOT EXISTS wards (
     time_zone VARCHAR(100) NOT NULL
 );
 
+-- A single locked row makes demo bootstrap a one-time operation across app instances.
+CREATE TABLE IF NOT EXISTS bootstrap_state (
+    state_id INT PRIMARY KEY CHECK (state_id = 1),
+    consumed BOOLEAN NOT NULL DEFAULT FALSE
+);
+INSERT INTO bootstrap_state(state_id, consumed)
+SELECT 1, FALSE WHERE NOT EXISTS (SELECT 1 FROM bootstrap_state WHERE state_id = 1);
+
 CREATE TABLE IF NOT EXISTS ward_memberships (
     ward_id UUID NOT NULL REFERENCES wards(ward_id),
     subject VARCHAR(255) NOT NULL,
@@ -93,3 +101,37 @@ CREATE TABLE IF NOT EXISTS generation_jobs (
     finished_at VARCHAR(40)
 );
 CREATE INDEX IF NOT EXISTS ix_generation_jobs_roster ON generation_jobs(roster_id, status);
+
+-- ── Identity: Kakao OIDC users and NurseFlow sessions ──
+CREATE TABLE IF NOT EXISTS users (
+    user_id UUID PRIMARY KEY,
+    provider VARCHAR(20) NOT NULL CHECK (provider IN ('KAKAO')),
+    provider_subject VARCHAR(255) NOT NULL,
+    display_name VARCHAR(100) NOT NULL,
+    created_at VARCHAR(40) NOT NULL,
+    last_login_at VARCHAR(40) NOT NULL,
+    UNIQUE (provider, provider_subject)
+);
+
+CREATE TABLE IF NOT EXISTS auth_refresh_tokens (
+    token_id UUID PRIMARY KEY,
+    family_id UUID NOT NULL,
+    user_id UUID NOT NULL REFERENCES users(user_id),
+    token_hash VARCHAR(64) NOT NULL UNIQUE,
+    created_at VARCHAR(40) NOT NULL,
+    expires_at VARCHAR(40) NOT NULL,
+    replaced_at VARCHAR(40),
+    revoked_at VARCHAR(40)
+);
+CREATE INDEX IF NOT EXISTS ix_auth_refresh_tokens_family ON auth_refresh_tokens(family_id);
+
+-- ── Audit trail for ward access changes (no tokens, leave reasons or health data) ──
+CREATE TABLE IF NOT EXISTS audit_events (
+    event_id UUID PRIMARY KEY,
+    ward_id UUID REFERENCES wards(ward_id),
+    actor VARCHAR(255) NOT NULL,
+    action VARCHAR(60) NOT NULL,
+    target_id VARCHAR(255),
+    created_at VARCHAR(40) NOT NULL
+);
+CREATE INDEX IF NOT EXISTS ix_audit_events_ward ON audit_events(ward_id, created_at);

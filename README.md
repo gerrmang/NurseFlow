@@ -10,13 +10,13 @@
 | [`docs/`](docs/) | MVP scope, API draft, project and review plans | Any editor |
 | `web/` | Responsive web client | Planned; not created yet |
 
-The Android and web clients share one backend API. The Android prototype currently uses fictional in-process data; its edits are not yet saved to the server. The API requires OIDC configuration and provisioned ward data before end-to-end use. See [MVP scope](docs/mvp-scope.md), [monthly scheduling rules and two-person plan](docs/monthly-roster-rules-and-two-person-plan.md), and [Claude development handoff](docs/claude-next-stage.md).
+The Android and web clients share one backend API. The Android prototype currently uses fictional in-process data; its edits are not yet saved to the server. The API requires a session secret, Kakao app keys and provisioned ward data before end-to-end use. See [MVP scope](docs/mvp-scope.md), [monthly scheduling rules and two-person plan](docs/monthly-roster-rules-and-two-person-plan.md), and [Claude development handoff](docs/claude-next-stage.md).
 
 Choose the branch that contains the work you need when cloning. New feature work starts from the latest reviewed `dev`; the `main` branch is updated through a release PR. See [Git policy](docs/runbooks/git-flow.md) and [Claude next stage](docs/claude-next-stage.md).
 
 ## Local development
 
-1. Open `backend/` in IntelliJ IDEA with JDK 21. Run `./gradlew test` in that directory. Configure `NURSEFLOW_OIDC_ISSUER_URI` and `NURSEFLOW_OIDC_AUDIENCE` before starting `bootRun`.
+1. Open `backend/` in IntelliJ IDEA with JDK 21. Run `./gradlew test` in that directory. Configure `NURSEFLOW_SESSION_SECRET` and `NURSEFLOW_KAKAO_AUDIENCES` (see [backend README](backend/README.md)) before starting `bootRun`.
 2. Open `android/` separately in Android Studio with Android SDK 35. Sync Gradle and run the `app` configuration on an emulator. See [Android prototype notes](android/README.md).
 3. When API integration is added, the emulator reaches a backend running on the development computer through `10.0.2.2:8080`; physical devices use the computer's reachable network address. Keep local HTTP restricted to debug builds and use HTTPS for deployed environments.
 

@@ -1,50 +1,24 @@
 package com.nurseflow.roster.api
 
-import com.nurseflow.support.HttpTestClient
-import com.nurseflow.support.SubjectJwtDecoderConfig
+import com.nurseflow.support.ApiTestBase
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
-import org.springframework.beans.factory.annotation.Autowired
-import org.springframework.boot.test.context.SpringBootTest
-import org.springframework.boot.test.web.server.LocalServerPort
-import org.springframework.context.annotation.Import
-import org.springframework.jdbc.core.JdbcTemplate
-import tools.jackson.databind.json.JsonMapper
 import java.util.UUID
 
-@SpringBootTest(
-    webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
-    properties = [
-        "spring.datasource.url=jdbc:h2:mem:request_validation;DB_CLOSE_DELAY=-1",
-        "spring.security.oauth2.resourceserver.jwt.issuer-uri=https://issuer.example.invalid",
-        "spring.security.oauth2.resourceserver.jwt.audiences=nurseflow-api",
-    ],
-)
-@Import(SubjectJwtDecoderConfig::class)
-class RosterRequestValidationHttpTest @Autowired constructor(
-    private val jdbc: JdbcTemplate,
-    private val mapper: JsonMapper,
-    @LocalServerPort private val port: Int,
-) {
-    private val admin = "sub.validation-admin"
-    private lateinit var http: HttpTestClient
+class RosterRequestValidationHttpTest : ApiTestBase() {
+    private lateinit var admin: String
     private lateinit var wardId: UUID
 
     @BeforeEach
     fun setup() {
-        http = HttpTestClient(port, mapper)
-        listOf("mutation_replays", "generation_jobs", "approved_absences", "roster_slots", "rosters",
-            "shift_types", "nurses", "ward_memberships", "wards").forEach { jdbc.update("DELETE FROM $it") }
-        wardId = UUID.randomUUID()
-        jdbc.update("INSERT INTO wards(ward_id,name,time_zone) VALUES(?,?,?)", wardId, "검증 병동", "Asia/Seoul")
-        jdbc.update("INSERT INTO ward_memberships(ward_id,subject,role,can_view_ward_calendar) VALUES(?,?,'WARD_ADMIN',TRUE)",
-            wardId, "validation-admin")
+        val (adminId, token) = userToken("검증 관리자")
+        admin = token
+        wardId = insertWard("검증 병동")
+        grant(wardId, adminId, "WARD_ADMIN")
     }
-
-    private fun idem() = mapOf("Idempotency-Key" to UUID.randomUUID().toString())
 
     private fun createRoster(): Pair<String, String> {
         val created = http.post("/api/v1/wards/$wardId/rosters", mapOf("month" to "2026-12"), admin, idem())
