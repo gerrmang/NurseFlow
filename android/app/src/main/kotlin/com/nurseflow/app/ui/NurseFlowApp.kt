@@ -14,7 +14,6 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -208,6 +207,33 @@ fun NurseFlowApp() {
 }
 
 @Composable
+private fun Label(text: String, size: Int = 14, color: Color = C.text, bold: Boolean = false, modifier: Modifier = Modifier) {
+    Text(text, modifier = modifier, color = color, fontSize = size.sp, fontWeight = if (bold) FontWeight.Bold else FontWeight.Normal, lineHeight = (size * 1.45f).sp)
+}
+
+@Composable
+private fun Asset(id: Int, size: Int, description: String? = null) {
+    Image(painterResource(id), contentDescription = description, modifier = Modifier.size(size.dp))
+}
+
+@Composable
+private fun AppButton(text: String, onClick: () -> Unit, modifier: Modifier = Modifier, outlined: Boolean = false, enabled: Boolean = true) {
+    if (outlined) {
+        OutlinedButton(onClick, modifier.height(48.dp), enabled = enabled,
+            shape = RoundedCornerShape(12.dp), border = BorderStroke(1.dp, C.borderStrong),
+            colors = ButtonDefaults.outlinedButtonColors(contentColor = C.brandDeep)) {
+            Label(text, 15, C.brandDeep, true)
+        }
+    } else {
+        Button(onClick, modifier.height(48.dp), enabled = enabled,
+            shape = RoundedCornerShape(12.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = C.brand, disabledContainerColor = C.subtle)) {
+            Label(text, 15, if (enabled) Color.White else C.muted, true)
+        }
+    }
+}
+
+@Composable
 private fun ShiftChip(code: String, size: Int = 22, modifier: Modifier = Modifier) {
     val bg = when (code) { "D" -> C.dayBg; "E" -> C.eveningBg; "N" -> C.nightBg; "O" -> C.offBg; "휴", "AM", "PM" -> C.leaveBg; else -> C.surface }
     val fg = when (code) { "D" -> C.dayFg; "E" -> C.eveningFg; "N" -> C.nightFg; "O" -> C.offFg; "휴", "AM", "PM" -> C.leaveFg; else -> C.muted }
@@ -226,6 +252,11 @@ private fun StatusBanner(message: String, published: Boolean = false, modifier: 
         Spacer(Modifier.width(8.dp))
         Label(message, 13, if (published) C.brandDeep else C.warning)
     }
+}
+
+@Composable
+private fun CardBox(modifier: Modifier = Modifier, content: @Composable () -> Unit) {
+    Column(modifier.background(C.surface, RoundedCornerShape(16.dp)).padding(16.dp)) { content() }
 }
 
 @Composable
@@ -559,8 +590,7 @@ private fun AbsencesScreen(roster: DemoRoster, onBack: () -> Unit) {
     var selectedType by rememberSaveable { mutableStateOf("휴가") }
     var dateText by rememberSaveable { mutableStateOf("2026-11-12") }
     var feedback by rememberSaveable { mutableStateOf("") }
-    // MainActivity가 adjustResize를 쓰므로 키보드가 날짜 입력을 가리지 않도록 화면을 키보드 위로 줄인다.
-    Column(Modifier.fillMaxSize().imePadding()) {
+    Column(Modifier.fillMaxSize()) {
         Header("휴가 · 반차", "7병동 · 2026년 11월", onBack)
         LazyColumn(Modifier.weight(1f).padding(horizontal = 16.dp)) {
             item { Label("승인된 일정만 등록합니다", 13, C.secondary, modifier = Modifier.padding(vertical = 12.dp)) }
