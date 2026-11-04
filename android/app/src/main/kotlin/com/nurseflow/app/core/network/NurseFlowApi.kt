@@ -24,9 +24,6 @@ interface NurseFlowApi {
     @GET("api/v1/me")
     suspend fun me(): CurrentUserDto
 
-    @POST("api/v1/wards")
-    suspend fun createWard(@Body body: CreateWardBody): MembershipDto
-
     @POST("api/v1/invitations/preview")
     suspend fun previewInvitation(@Body body: InvitationTokenBody): InvitationPreviewDto
 

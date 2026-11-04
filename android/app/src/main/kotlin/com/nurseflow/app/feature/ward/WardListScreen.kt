@@ -24,7 +24,6 @@ import com.nurseflow.app.core.ui.NfCard
 import com.nurseflow.app.core.ui.NfError
 import com.nurseflow.app.core.ui.NfLoading
 import com.nurseflow.app.core.ui.NfOutlinedButton
-import com.nurseflow.app.core.ui.NfPrimaryButton
 import com.nurseflow.app.core.ui.NfScreen
 import com.nurseflow.app.core.ui.NfText
 import com.nurseflow.app.core.ui.NfTextLink
@@ -41,7 +40,6 @@ fun WardListScreen(
     onInvites: (MembershipDto) -> Unit,
     onMyProfile: (MembershipDto) -> Unit,
     onEnterInvite: () -> Unit,
-    onCreateWard: () -> Unit,
     onLogout: () -> Unit,
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -56,7 +54,6 @@ fun WardListScreen(
             TextButton({ menu = true }) { NfText("메뉴", 14, C.secondary, true) }
             DropdownMenu(menu, onDismissRequest = { menu = false }) {
                 DropdownMenuItem(text = { NfText("초대 코드 입력", 15) }, onClick = { menu = false; onEnterInvite() })
-                DropdownMenuItem(text = { NfText("새 병동 만들기", 15) }, onClick = { menu = false; onCreateWard() })
                 DropdownMenuItem(text = { NfText("새로고침", 15) }, onClick = { menu = false; viewModel.reload() })
                 DropdownMenuItem(text = { NfText("로그아웃", 15, C.danger) }, onClick = { menu = false; onLogout() })
             }
@@ -71,7 +68,7 @@ fun WardListScreen(
             is WardsUiState.Loaded -> {
                 val wards = current.user.memberships
                 if (wards.isEmpty()) {
-                    NoWardState(onCreateWard, onEnterInvite)
+                    NoWardState(onEnterInvite)
                 } else {
                     NfText("내 병동 ${wards.size}", 13, C.secondary, true)
                     wards.forEach { ward -> WardCard(ward, onOpenWard, onInvites, onMyProfile) }
@@ -104,18 +101,11 @@ private fun WardCard(
     }
 }
 
-/** First run: choose between starting a ward as its administrator or joining with an invitation. */
+/** A signed-in user joins a ward through an invitation. */
 @Composable
-private fun NoWardState(onCreateWard: () -> Unit, onEnterInvite: () -> Unit) {
+private fun NoWardState(onEnterInvite: () -> Unit) {
     NfText("어떻게 시작할까요?", 18, C.text, true)
-    NfText("로그인만으로는 병동 근무표를 볼 수 없어요. 병동을 만들거나 초대를 받아 가입해 주세요.", 14, C.secondary)
-    NfCard(onClick = onCreateWard) {
-        NfText("병동 관리자예요", 16, C.text, true)
-        Spacer(Modifier.height(4.dp))
-        NfText("병동을 만들고 간호사를 초대해 근무표를 관리해요.", 14, C.secondary)
-        Spacer(Modifier.height(12.dp))
-        NfPrimaryButton("병동 만들기", onCreateWard)
-    }
+    NfText("로그인만으로는 병동 근무표를 볼 수 없어요. 관리자에게 초대를 받아 가입해 주세요.", 14, C.secondary)
     NfCard(onClick = onEnterInvite) {
         NfText("초대를 받았어요", 16, C.text, true)
         Spacer(Modifier.height(4.dp))

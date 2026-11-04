@@ -32,8 +32,6 @@ import com.nurseflow.app.feature.invite.JoinWardScreen
 import com.nurseflow.app.feature.invite.JoinWardViewModel
 import com.nurseflow.app.feature.profile.MyProfileScreen
 import com.nurseflow.app.feature.profile.MyProfileViewModel
-import com.nurseflow.app.feature.ward.CreateWardScreen
-import com.nurseflow.app.feature.ward.CreateWardViewModel
 import com.nurseflow.app.feature.ward.WardListScreen
 import com.nurseflow.app.feature.ward.WardsViewModel
 import kotlinx.coroutines.launch
@@ -66,7 +64,6 @@ fun NurseFlowRoot(container: AppContainer) {
 private object Routes {
     const val WARDS = "wards"
     const val JOIN = "join"
-    const val CREATE_WARD = "create-ward"
     const val INVITES = "invites"
     const val PROFILE = "profile"
     const val ROSTER = "roster"
@@ -102,7 +99,6 @@ private fun SignedInNavigation(container: AppContainer, userId: String) {
                 onInvites = { select(it); nav.navigate(Routes.INVITES) },
                 onMyProfile = { select(it); nav.navigate(Routes.PROFILE) },
                 onEnterInvite = { nav.navigate(Routes.JOIN) },
-                onCreateWard = { nav.navigate(Routes.CREATE_WARD) },
                 onLogout = {
                     container.kakaoLogin.logout()
                     scope.launch { container.session.logout() }
@@ -121,21 +117,6 @@ private fun SignedInNavigation(container: AppContainer, userId: String) {
                     wardsVm.reload()
                     // Back from the ward list must not re-open the consumed invitation.
                     nav.navigate(Routes.WARDS) { popUpTo(nav.graph.id) { inclusive = true } }
-                },
-            )
-        }
-        composable(Routes.CREATE_WARD) {
-            val vm: CreateWardViewModel = viewModel(factory = viewModelFactory {
-                initializer { CreateWardViewModel(container.wards) }
-            })
-            CreateWardScreen(
-                viewModel = vm,
-                onBack = { nav.popBackStack() },
-                onCreated = { ward ->
-                    // Admin flow continues straight to inviting nurses; Back returns to the ward list.
-                    wardsVm.reload()
-                    select(ward)
-                    nav.navigate(Routes.INVITES) { popUpTo(Routes.WARDS) }
                 },
             )
         }

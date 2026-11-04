@@ -27,6 +27,7 @@ enum class ErrorCode(val status: HttpStatus, val safeMessage: String) {
     INVALID_MONTH(HttpStatus.BAD_REQUEST, "월은 YYYY-MM 형식이어야 합니다."),
     INVALID_REFRESH_TOKEN(HttpStatus.UNAUTHORIZED, "로그인이 만료되었습니다. 다시 로그인해 주세요."),
     INVALID_REQUEST(HttpStatus.BAD_REQUEST, "요청 형식 또는 필드 값이 올바르지 않습니다."),
+    METHOD_NOT_ALLOWED(HttpStatus.METHOD_NOT_ALLOWED, "허용되지 않은 요청 방법입니다."),
     INVALID_REQUIREMENTS(HttpStatus.BAD_REQUEST, "인력 수요 항목이 허용 범위를 벗어났습니다."),
     INVALID_SHIFT_INTERVAL(HttpStatus.UNPROCESSABLE_CONTENT, "근무 종료 시각은 시작 시각보다 뒤여야 합니다."),
     INVALID_TIME_LIMIT(HttpStatus.BAD_REQUEST, "자동배치 제한 시간은 1~600초여야 합니다."),

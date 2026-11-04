@@ -35,18 +35,6 @@ class WardJdbcRepository(private val jdbc: JdbcTemplate) {
         jdbc.query("SELECT ward_id FROM wards WHERE ward_id=? FOR UPDATE", { rs, _ -> rs.getString(1) }, wardId)
             .isNotEmpty()
 
-    fun insertWard(wardId: UUID, name: String, timeZone: String) {
-        jdbc.update("INSERT INTO wards(ward_id,name,time_zone) VALUES(?,?,?)", wardId, name, timeZone)
-    }
-
-    /** Admin's own career start and rank (admins have no nurse record). */
-    fun setMembershipProfile(wardId: UUID, subject: String, role: String, careerStartedOn: String, rank: String) {
-        jdbc.update(
-            "UPDATE ward_memberships SET career_started_on=?, rank_name=? WHERE ward_id=? AND subject=? AND role=?",
-            careerStartedOn, rank, wardId, subject, role,
-        )
-    }
-
     fun insertMembership(wardId: UUID, subject: String, role: String, canViewWardCalendar: Boolean) {
         jdbc.update(
             "INSERT INTO ward_memberships(ward_id,subject,role,can_view_ward_calendar) VALUES(?,?,?,?)",

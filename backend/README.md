@@ -19,7 +19,7 @@ Java 21 is required. Set these environment variables in the run configuration (n
 3. Every other API call uses `Authorization: Bearer <NurseFlow access token>`. Kakao tokens are not accepted as API tokens.
 4. `POST /api/v1/auth/session/refresh` keeps the user signed in by rotating the refresh token; reuse of a rotated token revokes the whole session. `POST /api/v1/auth/logout` revokes it (idempotent). Only SHA-256 hashes of refresh tokens are stored.
 5. `GET /api/v1/me` and `GET /api/v1/wards` return the user and server-side ward memberships. Signing in alone grants no ward access.
-6. `POST /api/v1/wards {name, careerStartedOn, rank}` lets any signed-in user create a ward and become its `WARD_ADMIN`; the admin's own career start and rank are stored on the membership (admins are not rostered nurse records). Existing wards are joined only by invitation.
+6. This branch does not expose ward creation to a signed-in user. Ward membership is granted through an invitation. The hospital-admin-only ward creation flow is maintained on the latest `dev` branch.
 
 Tests use an in-process fake OIDC provider (`src/test/kotlin/com/nurseflow/support/FakeOidcProvider.kt`) instead of Kakao. Real Kakao end-to-end login has not been verified until the Kakao Developers app, keys and redirect URIs are registered.
 

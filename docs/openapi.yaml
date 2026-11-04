@@ -7,7 +7,7 @@ info:
     확정된 결정: 간호사는 병동 전체 공개표 또는 본인 공개표 조회, 미충원 표 공개 허용,
     관리자 확정 전 draft는 비공개, 관리자 confirm 성공 시 해당 revision을 활성 달력에 공개 적용.
     시연 MVP는 Kakao 로그인 후 관리자 초대 수락으로 병동 소속을 얻고 H2를 사용한다.
-    Kakao 세션(/auth/*), 병동 생성(POST /wards, 생성자가 관리자), 초대 발급·철회·수락은 구현된 계약이다.
+    Kakao 세션(/auth/*)과 초대 발급·철회·수락은 구현된 계약이다. 병동 생성은 이 작업 브랜치에서 제공하지 않는다.
     클라이언트는 Kakao SDK/웹 로그인으로 받은 ID 토큰을 /auth/kakao/session에 보내고,
     이후 모든 요청에는 NurseFlow가 발급한 access token을 사용한다. Kakao 토큰은 API bearer로 받지 않는다.
     병동 내 팀별 편성 및 관리자 확인을 거친 근무연차·직급의 1~5 경력 단계 구성 목표도
@@ -159,36 +159,6 @@ paths:
                       $ref: '#/components/schemas/WardMembership'
         '401':
           $ref: '#/components/responses/Unauthorized'
-    post:
-      tags: [Wards]
-      operationId: createWard
-      summary: 병동 생성 (호출자가 첫 WARD_ADMIN)
-      description: |
-        로그인한 사용자는 누구나 병동을 만들 수 있고 만든 사람이 관리자가 된다. 다른 병동 권한은 생기지 않으며,
-        기존 병동 가입은 초대로만 한다. 관리자 본인의 입사 년월·직급을 함께 받아 병동 소속 기록에 저장한다
-        (관리자는 근무 편성 대상 간호사가 아니므로 간호사 기록을 만들지 않는다).
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/CreateWardRequest'
-      responses:
-        '201':
-          description: 생성된 병동 소속
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/WardMembership'
-        '400':
-          description: INVALID_REQUEST(fieldErrors), INVALID_TIME_ZONE, INVALID_CAREER_START 또는 RANK_NOT_IN_POLICY
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ApiProblem'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-
   /wards/{wardId}/invitations:
     parameters:
       - $ref: '#/components/parameters/WardId'
@@ -1795,25 +1765,6 @@ components:
               type: string
             newUser:
               type: boolean
-    CreateWardRequest:
-      type: object
-      additionalProperties: false
-      required: [name, careerStartedOn, rank]
-      properties:
-        name:
-          type: string
-          maxLength: 100
-        timeZone:
-          type: string
-          default: Asia/Seoul
-        careerStartedOn:
-          type: string
-          pattern: '^\\d{4}-(0[1-9]|1[0-2])$'
-          description: 관리자 본인 입사 년월
-        rank:
-          type: string
-          maxLength: 30
-          description: 새 병동 기본 직급 목록(팀장·과장·신규) 중 하나
     CurrentUser:
       type: object
       required: [userId, displayName, memberships]

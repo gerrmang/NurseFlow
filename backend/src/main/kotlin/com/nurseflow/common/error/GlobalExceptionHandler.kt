@@ -6,6 +6,7 @@ import org.springframework.http.converter.HttpMessageNotReadableException
 import org.springframework.validation.FieldError
 import org.springframework.web.bind.MethodArgumentNotValidException
 import org.springframework.web.bind.MissingRequestHeaderException
+import org.springframework.web.HttpRequestMethodNotSupportedException
 import org.springframework.web.bind.annotation.ExceptionHandler
 import org.springframework.web.bind.annotation.RestControllerAdvice
 import org.springframework.web.method.annotation.HandlerMethodValidationException
@@ -13,6 +14,9 @@ import org.springframework.web.method.annotation.MethodArgumentTypeMismatchExcep
 
 @RestControllerAdvice
 class GlobalExceptionHandler {
+    @ExceptionHandler(HttpRequestMethodNotSupportedException::class)
+    fun methodNotAllowed(): ResponseEntity<ApiProblem> = problem(ErrorCode.METHOD_NOT_ALLOWED)
+
     @ExceptionHandler(BusinessException::class)
     fun handle(ex: BusinessException): ResponseEntity<ApiProblem> = problem(
         ex.errorCode,
