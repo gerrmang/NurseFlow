@@ -48,13 +48,6 @@ WARD_ADMIN invitation redemption returns 409 `ADMIN_NURSE_RECORD_CONFLICT` if th
 The service cannot serve scheduling requests until `shift_types` has been provisioned in the local H2 database. Provisioning endpoints and production database migration are separate work.
 
 `ward_memberships.subject` and `nurses.subject` hold the NurseFlow `userId` (the access token `sub`). Administrators need a `WARD_ADMIN` membership. The whole ward calendar also requires `can_view_ward_calendar=TRUE`. The personal calendar resolves its nurse ID from the authenticated subject and never accepts a nurse ID in the request.
-### Hospital bootstrap and ward creation
-
-A hospital and its first `HOSPITAL_ADMIN` are registered only by the server operator. Set `nurseflow.bootstrap.hospital.name`, `nurseflow.bootstrap.hospital.admin-subject` (the NurseFlow user's `sub`), and optionally `nurseflow.bootstrap.hospital.time-zone` (default `Asia/Seoul`). For example, use `NURSEFLOW_BOOTSTRAP_HOSPITAL_NAME` and `NURSEFLOW_BOOTSTRAP_HOSPITAL_ADMIN_SUBJECT`, then start the server. Re-running with the same values changes nothing. The server refuses to add a different admin to an existing hospital. There is no HTTP endpoint for this step. The hospital admin can then call `POST /api/v1/hospitals/{hospitalId}/wards` with an `Idempotency-Key`. That call creates the ward and the caller's `WARD_ADMIN` membership in one transaction. A ward-admin role never grants hospital permissions. `GET /api/v1/wards` returns only the caller's own ward memberships, and this is what ward members use to pick a ward. See [the design notes](../docs/hospital-ward-team-foundation.md).
-
-On startup, `schema.sql` upgrades an existing `nurseflow.mv.db` in place. It adds `wards.hospital_id`, `created_at`, and `created_by` with `ALTER TABLE ... IF NOT EXISTS`. Existing wards keep `hospital_id = NULL` and their roster behaviour is unchanged.
-
-The hospital bootstrap is configuration-only; ward creation is restricted to `HOSPITAL_ADMIN` and does not grant hospital-level access to a ward administrator.
 
 The API stores approved absence category and time range only. It does not store leave reasons or clinical details. Published calendar responses omit absence records and use `Cache-Control: private, no-store`.
 
@@ -69,7 +62,7 @@ The API stores approved absence category and time range only. It does not store 
 7. `POST /api/v1/rosters/{rosterId}/confirm` revalidates the draft and atomically switches the active published calendar. An unfilled roster requires an exact `acknowledgeUnfilledCount`.
 8. Published ward and personal calendars read only the active published roster. A new draft stays private until confirmed.
 
-Writes require the current strong `If-Match` ETag. Mutations that require `Idempotency-Key` retain their original response in H2, so a retry with the same key and payload returns the prior result. The generator is a heuristic and does not claim optimality. Membership role changes, shift-type configuration APIs, production database migrations, the Android roster workflow, web API integration, and full contract coverage remain to be built; see the [MVP scope](../docs/mvp-scope.md).
+Writes require the current strong `If-Match` ETag. Mutations that require `Idempotency-Key` retain their original response in H2, so a retry with the same key and payload returns the prior result. The generator is a heuristic and does not claim optimality. Membership role changes, shift-type configuration APIs, Android/web API integration, production database migrations, and full contract coverage remain to be built; see the [MVP scope](../docs/mvp-scope.md).
 
 ## Build
 
