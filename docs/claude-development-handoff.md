@@ -1,5 +1,7 @@
 # Claude Code 인계: NurseFlow 시연 MVP
 
+> **2026-11-04:** 아래 초기 프롬프트는 과거 시작점의 기록이다. 새 구현 작업은 [breakdown 전 제품 결정](pre-breakdown-scope-2026-11-04.md)과 최신 `origin/dev`를 먼저 확인한 뒤 새 기능 범위를 정한다. 이전 `feat/roster-rule-validator`를 개발 시작 브랜치로 사용하지 않는다.
+
 이 문서는 초기 체크포인트 인계 기록이다. 기반 기능 PR을 `dev`와 `main`에 병합한 뒤의 새 작업은 [다음 개발 단계](claude-next-stage.md)를 따른다.
 
 ## 시작 전 확인

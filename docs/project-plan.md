@@ -1,13 +1,13 @@
 # Project Plan: 간호사 근무표 앱
 
-초기 시연 범위: [MVP 결정](mvp-scope.md) · [월간 편성 규칙·2인 분담](monthly-roster-rules-and-two-person-plan.md) · 요구사항: [PRD](requirements.md) · 테스트: [Test Spec](test-plan.md) · 인터뷰 원본: [요구사항 명세](requirements-interview.md)
+초기 시연 범위: [MVP 결정](mvp-scope.md) · [breakdown 전 제품 결정](pre-breakdown-scope-2026-11-04.md) · [월간 편성 규칙·2인 분담](monthly-roster-rules-and-two-person-plan.md) · 요구사항: [PRD](requirements.md) · 테스트: [Test Spec](test-plan.md)
 
 ## RALPLAN-DR
 ### 원칙
 1. Hard rule은 모든 경로에서 강제한다.
 2. 부족 인원은 미충원으로 드러내며 규칙 위반으로 메우지 않는다.
 3. 자동 배치는 초안까지만, 관리자가 확인 후 확정하면 활성 달력에 공개 적용한다.
-4. 최소 정보·최소 권한, 병원/병동 경계는 서버에서 집행한다.
+4. 최소 정보·최소 권한, 병동 ID·소속 경계는 서버에서 집행한다.
 5. 시간 효율은 안전/검토 품질과 함께 측정한다.
 
 ### 결정 동인
@@ -23,12 +23,12 @@
 
 ## 단계 및 출구 기준
 ### P0 — 초기 시연 MVP 범위와 가상 정책 확정
-플랫폼(Android/Compose + 반응형 웹), 공통 서버(Spring Boot), 시연 DB(H2), Kakao 로그인 후 관리자 초대, 관리자 입력 확정 불가 일정, 관리자만 확정·공개하는 경계는 [MVP 결정](mvp-scope.md)에서 확정했다.
-가상 병동의 팀·간호사·자격 구성, Day/Evening/Night별 팀·날짜 수요, 관리자가 허용하는 팀 간 지원근무의 범위·철회, 병동 관리자가 설정할 근무연차·직급의 1~5 경력 단계 기준과 프로필 확인 흐름, 병원별 근무 시각·휴게·특수 코드·환산시간·반차, 휴일 달력·월 목표시간, 일반/Night 전담·SOF·연속 Night·교대 휴식·주간 시간 상한·희망 오프/주말 목표·선임 최소 인원, 단계 구성·균등 배분 산식, 초대 링크 만료·철회와 첫 관리자 초기화, Android App Links/웹 링크 및 Kakao Redirect URI를 API 계약과 fixture로 구체화한다. 관리자 입력 항목은 [정책 설정 명세](hospital-roster-policy-settings.md)에 정의하며, 미확정 법령·기관별 정책에는 임의 기본값을 두지 않는다. 실제 병원 호스팅·운영 DB·보존정책·오프라인 지원은 초기 시연 범위 밖으로 둔다.
+플랫폼(Android/Compose + 반응형 웹), 공통 서버(Spring Boot), 시연 DB(H2), Kakao 로그인 후 최초 관리자의 병원·병동 지정과 간호사 초대 가입, 관리자 입력 확정 불가 일정, 관리자만 확정·공개하는 경계는 [MVP 결정](mvp-scope.md)에서 확정했다.
+가상 병동의 팀·간호사·자격 구성, Day/Evening/Night별 팀·날짜 수요, 관리자가 허용하는 팀 간 지원근무의 범위·철회, 간호사의 입사 연월 입력과 병동 관리자의 1~5 편성 단계·팀 내 순서·선임 자격 조정, 병동별 근무 시각·휴게·특수 코드·환산시간·반차, 휴일 달력·월 목표시간, 일반/Night 전담·SOF·연속 Night·교대 휴식·주간 시간 상한·미확정/확정 희망 오프·주말 목표·각 팀·근무의 선임 최소 1명, 단계 구성·균등 배분 산식, 24시간 초대·철회와 최초 관리자의 병동 생성, Android App Links/웹 링크 및 Kakao Redirect URI를 API 계약과 가상 사례로 구체화한다. 관리자 입력 항목은 [정책 설정 명세](hospital-roster-policy-settings.md)에 정의하며, 미확정 법령·기관별 정책에는 임의 기본값을 두지 않는다. 실제 병원 호스팅·운영 DB·보존정책·오프라인 지원은 초기 시연 범위 밖으로 둔다.
 **Exit:** 두 클라이언트에 공통인 역할표·초대 흐름·가상 정책표·OpenAPI 계약·완전 충원/미충원 fixture와 시연 인수 기준이 문서화된다.
 
 ### P1 — 도메인·권한·규칙 검증기
-Kakao OIDC 로그인·초대 수락, 사용자/병동 membership·간호사 연결·역할 변경, 병동 내 팀·관리자 허용형 팀 간 지원근무·근무연차·직급·관리자 확인 상태·단계 변환 정책, 초대 수락 직원 모수·일반/Night 전담 근무 형태, 직원·자격·근무유형·팀별 수요 슬롯·확정 부재·희망 오프·병원별 시간/휴식/월 목표 정책 revision·monthly roster revision 모델과 서버 validator를 만든다.
+Kakao OIDC 로그인·최초 관리자의 새 병동 생성·24시간 초대 수락, 사용자/병동 membership·간호사 연결·역할 변경, 병동 내 팀·관리자 허용형 팀 간 지원근무·입사 연월 원본·관리자 확인/편성 단계 조정·선임 자격 정책, 초대 수락 직원 모수·일반/Night 전담 근무 형태, 직원·자격·근무유형·팀별 수요 슬롯·확정 부재·희망 오프 제출/확정/반려·병동별 시간/휴식/월 목표 정책 revision·monthly roster revision 모델과 서버 validator를 만든다.
 **Exit:** 초대 만료·재사용·권한 상승 차단과 unit/property/integration 월 경계 fixture가 통과한다. 모든 write path가 공통 validator와 병동 권한 검사를 사용한다.
 
 ### P2 — 관리자 수동 편성
@@ -36,7 +36,7 @@ Android와 웹의 월간 달력, 인력/수요 입력, 사전 취합된 불가 i
 **Exit:** 두 클라이언트가 같은 API/revision을 사용하고 UI/API 우회 모두 hard rule을 차단한다. 미공개 초안/부재정보는 관리자에게만 보인다.
 
 ### P3 — 자동 배치 초안
-초기 결정적 휴리스틱, 승인 부재·Night 다음날 Day·팀 간 허용·선임 최소 인원·연속근무 상한과 개인별 월 목표시간을 반영한 hard rule·충원 우선, 희망 오프·팀별 경력 구성·개인 간 fairness 목표, 시간 부족·경력 구성 미달·미충원을 분리한 진단, timeout/cancel/status, 생성 입력·policy·engine revision. 생성형 모델의 토큰 사용 없이 독립 validator를 통과한 결과만 초안에 반영한다.
+초기 결정적 휴리스틱, 승인 부재·확정 희망 오프·Night/Evening 다음날 Day·팀 간 허용·각 팀의 각 D/E/N 선임 최소 1명·연속근무 상한과 개인별 월 목표시간을 반영한 hard rule·충원 우선, 미확정 희망 오프·팀별 경력 구성·개인 간 fairness 목표, 시간 부족·경력 구성 미달·미충원을 분리한 진단, timeout/cancel/status, 생성 입력·policy·engine revision. 생성형 모델의 토큰 사용 없이 독립 validator를 통과한 결과만 초안에 반영한다.
 **Exit:** 대표 fixtures에서 결과 독립 검증 통과, violation=0, timeout/shortage/infeasible 상태 분리, stale 결과 안전 폐기.
 
 ### P4 — 관리자 검토·확정·공개와 간호사 조회
