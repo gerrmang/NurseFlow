@@ -8,7 +8,7 @@ info:
     관리자 확정 전 draft는 비공개, 관리자 confirm 성공 시 해당 revision을 활성 달력에 공개 적용.
     현재 구현은 Kakao 세션(/auth/*), 운영자 코드가 설정된 시연용 1회 첫 병동 생성(POST /wards),
     초대 발급·철회·수락과 팀·경력 프로필 API를 제공한다. 신규 제품 결정은
-    docs/pre-breakdown-scope-2026-11-04.md를 따른다. 최초 관리자의 병원명·병동명 자기 공간 생성,
+    docs/pre-breakdown-scope-2026-11-04.md를 따른다. 최초 관리자의 실제 병원 검색·선택과 병동명 자기 공간 생성,
     24시간 고정 초대, 간호사 입사 연월 단독 입력, 관리자 확정 희망 오프는 아직 이 API 계약/구현에 반영되지 않았다.
     클라이언트는 Kakao SDK/웹 로그인으로 받은 ID 토큰을 /auth/kakao/session에 보내고,
     이후 모든 요청에는 NurseFlow가 발급한 access token을 사용한다. Kakao 토큰은 API bearer로 받지 않는다.
