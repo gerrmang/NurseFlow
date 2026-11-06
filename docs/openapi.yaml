@@ -207,7 +207,7 @@ paths:
       operationId: createInvitation
       summary: 관리자 초대 링크 발급
       description: |
-        만료(1~168시간, 기본 72)·1회용 초대를 만든다. token은 이 응답에서 한 번만 보여 주며
+        정확히 24시간 만료되는 1회용 초대를 만든다. token은 이 응답에서 한 번만 보여 주며
         서버에는 SHA-256 해시만 저장한다. inviteUrl은 서버에 링크 기본 주소가 설정된 경우에만 오며
         token은 URL fragment(#token=)에 붙는다. WARD_ADMIN 초대에는 nurseId를 넣을 수 없다.
       requestBody:
@@ -301,6 +301,44 @@ paths:
                 $ref: '#/components/schemas/ApiProblem'
         '409':
           description: INVITATION_ALREADY_REDEEMED
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ApiProblem'
+
+  /wards/{wardId}/invitations/{invitationId}/reissue:
+    parameters:
+      - $ref: '#/components/parameters/WardId'
+      - name: invitationId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    post:
+      tags: [Invitations]
+      operationId: reissueInvitation
+      summary: 같은 역할·대상으로 초대 링크 재발급
+      description: 이전 미사용 링크를 자동 철회하고 정확히 24시간 유효한 새 링크를 발급한다. 철회되었거나 이미 사용된 초대는 재발급할 수 없다.
+      responses:
+        '201':
+          description: 새 링크 (Cache-Control no-store)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreatedInvitation'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          description: WARD_NOT_FOUND 또는 INVITATION_NOT_FOUND
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ApiProblem'
+        '409':
+          description: INVITATION_ALREADY_REDEEMED, INVITATION_REVOKED 또는 NURSE_ALREADY_LINKED
           content:
             application/problem+json:
               schema:
@@ -838,13 +876,13 @@ paths:
     put:
       tags: [Staff]
       operationId: submitMyProfile
-      summary: 본인 입사 년월·직급 입력/수정 (관리자 재확인 전까지 점수 제외)
+      summary: 본인 입사 년월 입력/수정 (관리자 재확인 전까지 점수 제외)
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/CareerProfileInput'
+              $ref: '#/components/schemas/CareerStartInput'
       responses:
         '200':
           description: 갱신됨
@@ -1666,7 +1704,7 @@ components:
       type: object
       additionalProperties: false
       required: [token]
-      description: WARD_MEMBER는 가입하면서 입사 년월·직급을 함께 낼 수 있다(둘 다 또는 둘 다 생략). WARD_ADMIN이면 무시한다.
+      description: WARD_MEMBER는 가입하면서 입사 년월(YYYY-MM)을 선택적으로 제출할 수 있다. 제출값은 관리자 확인 전까지 편성 점수에 쓰이지 않는다. WARD_ADMIN이면 무시한다.
       properties:
         token:
           type: string
@@ -1674,9 +1712,6 @@ components:
         careerStartedOn:
           type: string
           pattern: '^\d{4}-(0[1-9]|1[0-2])$'
-        rank:
-          type: string
-          maxLength: 30
     InvitationPreview:
       type: object
       required: [wardId, wardName, role, expiresAt, linksExistingNurse]
@@ -1706,11 +1741,6 @@ components:
           type: string
           format: uuid
           description: WARD_MEMBER가 이어받을 기존 가상 간호사 기록(선택). 없으면 수락 시 새 기록을 만든다.
-        expiresInHours:
-          type: integer
-          minimum: 1
-          maximum: 168
-          default: 72
     Invitation:
       type: object
       required: [invitationId, wardId, role, status, createdAt, expiresAt]
@@ -1985,6 +2015,15 @@ components:
           type: string
           maxLength: 30
           description: 병동 직급 목록 중 하나
+    CareerStartInput:
+      type: object
+      additionalProperties: false
+      required: [careerStartedOn]
+      properties:
+        careerStartedOn:
+          type: string
+          pattern: '^\d{4}-(0[1-9]|1[0-2])$'
+          description: 입사 년월(YYYY-MM). 미래 불가.
     CareerProfile:
       type: object
       required: [status]
