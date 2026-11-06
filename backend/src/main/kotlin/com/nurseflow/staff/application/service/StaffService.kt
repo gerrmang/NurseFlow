@@ -24,8 +24,8 @@ import java.time.ZoneId
 import java.util.UUID
 
 /**
- * Teams, the ward career policy and nurse career profiles. A nurse submits a career start
- * month and rank; only values an admin has confirmed feed the career stage used for scoring.
+ * Teams, the ward career policy and nurse career profiles. Nurses submit their career start
+ * month; only values an admin has confirmed feed the career stage used for scoring.
  */
 @Service
 class StaffService(
@@ -149,11 +149,10 @@ class StaffService(
         wards.requireAdmin(wardId, actor)
         val nurse = requireStaff(wardId, nurseId)
         val start = nurse.careerStartedOn ?: throw BusinessException(ErrorCode.PROFILE_NOT_SUBMITTED)
-        val rank = nurse.rank ?: throw BusinessException(ErrorCode.PROFILE_NOT_SUBMITTED)
         val context = context(wardId)
         if (nurse.status() != ProfileStatus.CONFIRMED) {
-            validate(ProfileInput(YearMonth.parse(start), rank), context)
-            repo.confirmProfile(nurseId, start, rank, actor, Instant.now())
+            validateCareerStart(YearMonth.parse(start), context)
+            repo.confirmCareerStart(nurseId, start, actor, Instant.now())
             audit.record(wardId, actor, "PROFILE_CONFIRMED", nurseId.toString())
         }
         return requireStaff(wardId, nurseId).toResult(context)
@@ -181,23 +180,24 @@ class StaffService(
     }
 
     @Transactional
-    fun submitMyProfile(wardId: UUID, input: ProfileInput, actor: String): StaffResult {
+    fun submitMyProfile(wardId: UUID, careerStartedOn: YearMonth, actor: String): StaffResult {
         wards.requireMember(wardId, actor)
         val nurse = repo.findStaffBySubject(wardId, actor) ?: throw BusinessException(ErrorCode.NURSE_IDENTITY_REQUIRED)
-        submit(nurse, input)
+        submitCareerStart(nurse, careerStartedOn)
         return requireStaff(wardId, nurse.id).toResult(context(wardId))
     }
 
     /** Used by invitation redemption inside its transaction, after the nurse link exists. */
-    fun submitForLinkedNurse(wardId: UUID, subject: String, input: ProfileInput) {
+    fun submitForLinkedNurse(wardId: UUID, subject: String, careerStartedOn: YearMonth) {
         val nurse = repo.findStaffBySubject(wardId, subject) ?: throw BusinessException(ErrorCode.NURSE_IDENTITY_REQUIRED)
-        submit(nurse, input)
+        submitCareerStart(nurse, careerStartedOn)
     }
 
-    private fun submit(nurse: DbStaff, input: ProfileInput) {
-        validate(input, context(nurse.wardId))
-        val unchanged = nurse.careerStartedOn == input.careerStartedOn.toString() && nurse.rank == input.rank
-        if (!unchanged) repo.submitProfile(nurse.id, input.careerStartedOn.toString(), input.rank, Instant.now())
+    private fun submitCareerStart(nurse: DbStaff, careerStartedOn: YearMonth) {
+        validateCareerStart(careerStartedOn, context(nurse.wardId))
+        if (nurse.careerStartedOn != careerStartedOn.toString()) {
+            repo.submitCareerStart(nurse.id, careerStartedOn.toString(), Instant.now())
+        }
     }
 
     // ── Helpers ──
@@ -220,10 +220,14 @@ class StaffService(
     }
 
     private fun validate(input: ProfileInput, context: Context) {
-        if (input.careerStartedOn.isAfter(context.today) || input.careerStartedOn.year < 1950) {
+        validateCareerStart(input.careerStartedOn, context)
+        if (input.rank !in context.policy.ranks) throw BusinessException(ErrorCode.RANK_NOT_IN_POLICY)
+    }
+
+    private fun validateCareerStart(careerStartedOn: YearMonth, context: Context) {
+        if (careerStartedOn.isAfter(context.today) || careerStartedOn.year < 1950) {
             throw BusinessException(ErrorCode.INVALID_CAREER_START)
         }
-        if (input.rank !in context.policy.ranks) throw BusinessException(ErrorCode.RANK_NOT_IN_POLICY)
     }
 
     private fun requireStaff(wardId: UUID, nurseId: UUID): DbStaff =
@@ -234,7 +238,7 @@ class StaffService(
     }
 
     private fun DbStaff.status(): ProfileStatus = when {
-        careerStartedOn == null || rank == null -> ProfileStatus.MISSING
+        careerStartedOn == null -> ProfileStatus.MISSING
         confirmedAt != null && confirmedCareerStartedOn == careerStartedOn && confirmedRank == rank -> ProfileStatus.CONFIRMED
         else -> ProfileStatus.PENDING
     }

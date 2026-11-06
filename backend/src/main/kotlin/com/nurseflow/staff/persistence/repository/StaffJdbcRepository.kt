@@ -102,11 +102,21 @@ class StaffJdbcRepository(private val jdbc: JdbcTemplate, private val mapper: Js
         jdbc.update("UPDATE nurses SET team_id=? WHERE nurse_id=?", teamId, nurseId)
     }
 
-    /** Nurse input: replaces the submitted values and leaves the confirmed copy untouched. */
-    fun submitProfile(nurseId: UUID, careerStartedOn: String, rank: String, now: Instant) {
+    /** Nurse input updates only their career start; rank is administrator-managed. */
+    fun submitCareerStart(nurseId: UUID, careerStartedOn: String, now: Instant) {
         jdbc.update(
-            "UPDATE nurses SET career_started_on=?, rank_name=?, profile_submitted_at=? WHERE nurse_id=?",
-            careerStartedOn, rank, now.toString(), nurseId,
+            "UPDATE nurses SET career_started_on=?, profile_submitted_at=? WHERE nurse_id=?",
+            careerStartedOn, now.toString(), nurseId,
+        )
+    }
+
+    /** Confirms the submitted career start while preserving any existing administrator-set rank. */
+    fun confirmCareerStart(nurseId: UUID, careerStartedOn: String, actor: String, now: Instant) {
+        jdbc.update(
+            """UPDATE nurses SET profile_submitted_at=COALESCE(profile_submitted_at, ?),
+                   confirmed_career_started_on=?, confirmed_rank_name=rank_name, profile_confirmed_at=?, profile_confirmed_by=?
+               WHERE nurse_id=?""",
+            now.toString(), careerStartedOn, now.toString(), actor, nurseId,
         )
     }
 

@@ -2,6 +2,7 @@ package com.nurseflow.staff.api.controller
 
 import com.nurseflow.common.security.CurrentSubject
 import com.nurseflow.staff.api.dto.request.CareerProfileRequest
+import com.nurseflow.staff.api.dto.request.CareerStartRequest
 import com.nurseflow.staff.api.dto.request.StaffRequest
 import com.nurseflow.staff.api.dto.request.TeamAssignmentRequest
 import com.nurseflow.staff.api.dto.response.StaffMemberResponse
@@ -85,7 +86,7 @@ class StaffController(private val staff: StaffService) {
     @PutMapping("/my-profile")
     fun submitMyProfile(
         @PathVariable wardId: UUID,
-        @Valid @RequestBody request: CareerProfileRequest,
+        @Valid @RequestBody request: CareerStartRequest,
         @CurrentSubject subject: String,
-    ): StaffMemberResponse = staff.submitMyProfile(wardId, request.toInput(), subject).toResponse()
+    ): StaffMemberResponse = staff.submitMyProfile(wardId, request.toCareerStart(), subject).toResponse()
 }

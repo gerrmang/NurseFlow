@@ -35,6 +35,12 @@ data class CareerProfileRequest(
     val rank: String,
 )
 
+/** Nurse-submitted career start month; rank remains an administrator-managed value. */
+data class CareerStartRequest(
+    @field:Pattern(regexp = YEAR_MONTH_PATTERN)
+    val careerStartedOn: String,
+)
+
 data class StaffRequest(
     @field:NotBlank @field:Size(max = 100)
     val displayName: String,

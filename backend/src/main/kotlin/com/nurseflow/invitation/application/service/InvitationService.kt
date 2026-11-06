@@ -17,6 +17,7 @@ import com.nurseflow.ward.application.service.WardService
 import com.nurseflow.ward.persistence.repository.WardJdbcRepository
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
+import java.time.Duration
 import java.time.Instant
 import java.util.UUID
 
@@ -40,13 +41,47 @@ class InvitationService(
         val now = Instant.now()
         command.nurseId?.let { requireInvitableNurse(wardId, it, now) }
 
+        return issue(wardId, command.role, command.nurseId, actor, now, "INVITATION_CREATED")
+    }
+
+    /** Reissues an invitation with the same role and nurse target, revoking its old unused link. */
+    @Transactional
+    fun reissue(wardId: UUID, invitationId: UUID, actor: String): IssuedInvitation {
+        wards.requireAdmin(wardId, actor)
+        val previous = repo.lockInWard(wardId, invitationId)
+            ?: throw BusinessException(ErrorCode.INVITATION_NOT_FOUND)
+        if (!wardRepo.lockWard(wardId)) throw BusinessException(ErrorCode.WARD_NOT_FOUND)
+        val now = Instant.now()
+        when (previous.statusAt(now)) {
+            InvitationStatus.REDEEMED -> throw BusinessException(ErrorCode.INVITATION_ALREADY_REDEEMED)
+            InvitationStatus.PENDING -> {
+                repo.revoke(previous.id, now)
+                audit.record(wardId, actor, "INVITATION_REVOKED", previous.id.toString())
+            }
+            InvitationStatus.REVOKED -> throw BusinessException(ErrorCode.INVITATION_REVOKED)
+            InvitationStatus.EXPIRED -> Unit
+        }
+        previous.nurseId?.let { requireInvitableNurse(wardId, it, now) }
+        audit.record(wardId, actor, "INVITATION_REISSUED", previous.id.toString())
+        return issue(wardId, WardRole.valueOf(previous.role), previous.nurseId, actor, now, "INVITATION_CREATED")
+    }
+
+    private fun issue(
+        wardId: UUID,
+        role: WardRole,
+        nurseId: UUID?,
+        actor: String,
+        now: Instant,
+        auditAction: String,
+    ): IssuedInvitation {
+
         val token = OpaqueToken.generate()
         val id = UUID.randomUUID()
-        val expiresAt = now.plus(command.validFor)
-        repo.insert(id, wardId, command.role.name, command.nurseId, OpaqueToken.sha256Hex(token), actor, now, expiresAt)
-        audit.record(wardId, actor, "INVITATION_CREATED", id.toString())
+        val expiresAt = now.plus(Duration.ofHours(24))
+        repo.insert(id, wardId, role.name, nurseId, OpaqueToken.sha256Hex(token), actor, now, expiresAt)
+        audit.record(wardId, actor, auditAction, id.toString())
         val result = InvitationResult(
-            id, wardId, command.role, command.nurseId, InvitationStatus.PENDING, now, expiresAt, null, null,
+            id, wardId, role, nurseId, InvitationStatus.PENDING, now, expiresAt, null, null,
         )
         return IssuedInvitation(result, token, inviteUrl(token))
     }
