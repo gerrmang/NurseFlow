@@ -176,3 +176,13 @@
 
 - 문제 발생 시 이번 복원 재시도 수명 보완 커밋을 되돌린 앱을 배포합니다. DB 복구는 필요하지 않습니다.
 - 앱 프로세스 종료는 실행 중인 요청도 종료합니다. 다음 프로세스는 기존 최초 세션 복원 경로를 따릅니다. 화면 회전 시 진행 중인 요청을 재전송하지 않습니다.
+
+## PR P4 Android JVM 검사 CI 연결 (2026-11-07)
+
+- 변경 목적·관련 이슈: 별도 이슈 없음. Verify의 Android 단계가 APK만 빌드하여 JVM 회귀 검사를 놓치는 리뷰를 보완했습니다.
+- `.github/workflows/verify.yml`의 Android 명령을 `./gradlew :app:testDebugUnitTest :app:assembleDebug --no-daemon`으로 변경했습니다. 기존 `dev`·`main` 대상 PR과 해당 브랜치 push에서 테스트 컴파일·실행 실패가 Android 작업 실패로 이어집니다. 작업 이름 `Android debug build`는 유지하고 단계 이름을 `Test and build Android app`으로 명확히 했습니다.
+- 검증: `android/`에서 `./gradlew.bat :app:cleanTestDebugUnitTest :app:testDebugUnitTest :app:assembleDebug --no-daemon` 통과(`BUILD SUCCESSFUL`, 14초). 이전 실행 결과를 지운 뒤 JVM **26개를 다시 실행하여 실패/오류/건너뜀 0**을 확인했습니다. `git diff --check` 통과.
+- 미실행: GitHub의 변경 후 Verify 실행, 기기 계측 테스트, 백엔드·Lint 재검사. 이번 변경은 기존 JVM 테스트와 빌드를 CI에 연결하는 범위입니다. 기기 테스트는 이 명령에 포함되지 않습니다. 브랜치 보호·필수 검사 설정은 확인하지 않았습니다.
+- API·DB·환경변수·의존성 변경 없음. 앱 동작과 서버 근무 규칙·권한 검증은 변경하지 않았습니다. 비공개 정보나 사용자 DB 파일은 수정·추가하지 않았습니다.
+- 배포 영향: 앱·서버 재배포나 데이터 이전은 필요하지 않습니다. PR CI에 JVM 검사 시간이 추가됩니다.
+- 되돌리기: 이번 워크플로 변경 커밋을 되돌립니다. 남은 확인은 GitHub에서 새 명령이 실행된 결과이며, 로컬 검증을 원격 CI 통과로 표현하지 않습니다.
