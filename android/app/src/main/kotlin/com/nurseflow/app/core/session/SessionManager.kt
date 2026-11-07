@@ -12,6 +12,7 @@ import kotlinx.coroutines.sync.withLock
 sealed interface SessionState {
     data object Restoring : SessionState
     data object SignedOut : SessionState
+    data object LogoutFailed : SessionState
     data class RestoreFailed(val message: String) : SessionState
     data class SignedIn(val userId: String, val displayName: String, val generation: Long) : SessionState
 }
@@ -28,7 +29,14 @@ class SessionManager(private val authApi: AuthApi, private val store: TokenStore
         private set
 
     suspend fun restore() {
-        val started = mutex.withLock { revision }
+        val started = mutex.withLock {
+            // Never reuse credentials whose deletion failed in this process.
+            if (mutableState.value == SessionState.LogoutFailed) {
+                signOutLocked()
+                return
+            }
+            revision
+        }
         requests.withLock {
             try {
                 val refresh = mutex.withLock {
@@ -88,7 +96,10 @@ class SessionManager(private val authApi: AuthApi, private val store: TokenStore
 
     suspend fun logout() {
         val refresh = mutex.withLock {
-            try { store.read() } finally { signOutLocked() }
+            try { store.read() }
+            catch (e: CancellationException) { throw e }
+            catch (_: Exception) { null } // Unreadable credentials cannot be sent for revocation.
+            finally { signOutLocked() }
         }
         if (refresh != null) {
             try { apiCall { authApi.logout(RefreshTokenBody(refresh)) } }
@@ -111,6 +122,8 @@ class SessionManager(private val authApi: AuthApi, private val store: TokenStore
         revision++
         accessToken = null
         mutableState.value = SessionState.SignedOut
-        store.clear()
+        try { store.clear() }
+        catch (e: CancellationException) { throw e }
+        catch (_: Exception) { mutableState.value = SessionState.LogoutFailed }
     }
 }

@@ -16,6 +16,7 @@ class SessionManagerTest {
         var refreshCalls = 0
         var failure: Exception? = null
         var logoutFailure = false
+        var lastLogout: String? = null
         var loginGate: CompletableDeferred<Unit>? = null
         var refreshGate: CompletableDeferred<Unit>? = null
         var logoutGate: CompletableDeferred<Unit>? = null
@@ -36,9 +37,130 @@ class SessionManagerTest {
             return session("rotated")
         }
         override suspend fun logout(body: RefreshTokenBody) {
+            lastLogout = body.refreshToken
             logoutStarted.complete(Unit)
             logoutGate?.await()
             if (logoutFailure) throw ApiException(0, "NETWORK", "offline")
+        }
+    }
+
+    private class FailingTokenStore : TokenStore {
+        var token: String? = null
+        var readFailure: Exception? = null
+        var clearFailure: Exception? = null
+        var reads = 0
+        var clears = 0
+        override suspend fun read(): String? {
+            reads++
+            readFailure?.let { throw it }
+            return token
+        }
+        override suspend fun write(refreshToken: String) { token = refreshToken }
+        override suspend fun clear() {
+            clears++
+            clearFailure?.let { throw it }
+            token = null
+        }
+    }
+
+    @Test fun logoutStillClearsCredentialsWhenReadFails() = runBlocking {
+        val api = FakeAuth()
+        val store = FailingTokenStore()
+        val manager = SessionManager(api, store)
+        manager.loginWithKakao("fake-id", "fake-nonce")
+        store.readFailure = java.io.IOException("fake storage read failure")
+        manager.logout()
+        assertEquals(SessionState.SignedOut, manager.state.value)
+        assertNull(manager.accessToken)
+        assertNull(store.token)
+        assertEquals(1, store.clears)
+        assertNull(api.lastLogout)
+    }
+
+    @Test fun restoreReadFailureCanBeDismissedByLogout() = runBlocking {
+        val store = FailingTokenStore().apply {
+            token = "fake-refresh-saved"
+            readFailure = IllegalStateException("fake storage read failure")
+        }
+        val manager = SessionManager(FakeAuth(), store)
+        manager.restore()
+        assertTrue(manager.state.value is SessionState.RestoreFailed)
+        manager.logout()
+        assertEquals(SessionState.SignedOut, manager.state.value)
+        assertNull(manager.accessToken)
+        assertNull(store.token)
+        store.readFailure = null
+        manager.loginWithKakao("fake-id", "fake-nonce")
+        assertTrue(manager.state.value is SessionState.SignedIn)
+    }
+
+    @Test fun clearFailureOffersRetryAndStillAttemptsServerRevocation() = runBlocking {
+        val api = FakeAuth()
+        val store = FailingTokenStore()
+        val manager = SessionManager(api, store)
+        manager.loginWithKakao("fake-id", "fake-nonce")
+        val previousAccess = manager.accessToken
+        store.clearFailure = java.io.IOException("fake storage clear failure")
+        manager.logout()
+        assertEquals(SessionState.LogoutFailed, manager.state.value)
+        assertNull(manager.accessToken)
+        assertEquals("fake-refresh-initial", store.token)
+        assertEquals(store.token, api.lastLogout)
+        assertNull(manager.refreshAfterUnauthorized(previousAccess))
+        assertEquals(0, api.refreshCalls)
+        val reads = store.reads
+        manager.restore()
+        assertEquals(SessionState.LogoutFailed, manager.state.value)
+        assertEquals(reads, store.reads)
+        assertEquals(0, api.refreshCalls)
+        store.clearFailure = null
+        manager.logout()
+        assertEquals(SessionState.SignedOut, manager.state.value)
+        assertNull(store.token)
+    }
+
+    @Test fun combinedStorageFailuresAfterRestoreFailureDoNotEscapeLogout() = runBlocking {
+        val store = FailingTokenStore().apply {
+            token = "fake-refresh-saved"
+            readFailure = java.io.IOException("fake storage read failure")
+            clearFailure = IllegalStateException("fake storage clear failure")
+        }
+        val manager = SessionManager(FakeAuth(), store)
+        manager.restore()
+        assertTrue(manager.state.value is SessionState.RestoreFailed)
+        manager.logout()
+        assertEquals(SessionState.LogoutFailed, manager.state.value)
+        assertNull(manager.accessToken)
+        assertEquals(1, store.clears)
+        store.clearFailure = null
+        manager.logout()
+        assertEquals(SessionState.SignedOut, manager.state.value)
+        assertNull(store.token)
+    }
+
+    @Test fun rejectedRefreshWithClearFailureDoesNotEscapeToCaller() = runBlocking {
+        val api = FakeAuth().apply { failure = ApiException(401, "EXPIRED", "expired") }
+        val store = FailingTokenStore()
+        val manager = SessionManager(api, store)
+        manager.loginWithKakao("fake-id", "fake-nonce")
+        store.clearFailure = java.io.IOException("fake storage clear failure")
+        assertNull(manager.refreshAfterUnauthorized(manager.accessToken))
+        assertEquals(SessionState.LogoutFailed, manager.state.value)
+        assertNull(manager.accessToken)
+    }
+
+    @Test fun logoutReadCancellationStillClearsButIsNotSwallowed() = runBlocking {
+        val store = FailingTokenStore()
+        val manager = SessionManager(FakeAuth(), store)
+        manager.loginWithKakao("fake-id", "fake-nonce")
+        store.readFailure = CancellationException("fake cancellation")
+        try {
+            manager.logout()
+            fail("Cancellation must propagate")
+        } catch (_: CancellationException) {
+            assertEquals(SessionState.SignedOut, manager.state.value)
+            assertNull(manager.accessToken)
+            assertNull(store.token)
         }
     }
 

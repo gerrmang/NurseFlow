@@ -36,6 +36,10 @@ fun NurseFlowRoot(container: AppContainer) {
                     when (val current = session) {
                         SessionState.Restoring -> CircularProgressIndicator()
                         SessionState.SignedOut -> LoginScreen(viewModel { LoginViewModel(container.session, container.kakao) })
+                        SessionState.LogoutFailed -> Column(Modifier.padding(24.dp)) {
+                            Text("저장된 로그인 정보를 지우지 못했어요. 로그아웃을 다시 시도해 주세요.")
+                            Button(onClick = container::logout) { Text("로그아웃 재시도") }
+                        }
                         is SessionState.RestoreFailed -> Column(Modifier.padding(24.dp)) {
                             Text(current.message)
                             Button(onClick = { scope.launch { container.session.restore() } }) { Text("세션 복원 재시도") }
