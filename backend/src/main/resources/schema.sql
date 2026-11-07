@@ -174,6 +174,7 @@ CREATE TABLE IF NOT EXISTS ward_career_policies (
 
 -- Submitted values come from the nurse; confirmed_* are the admin-checked copy used for scoring.
 ALTER TABLE nurses ADD COLUMN IF NOT EXISTS team_id UUID REFERENCES ward_teams(team_id);
+ALTER TABLE nurses ADD COLUMN IF NOT EXISTS hospital_joined_on VARCHAR(7);
 ALTER TABLE nurses ADD COLUMN IF NOT EXISTS career_started_on VARCHAR(7);
 ALTER TABLE nurses ADD COLUMN IF NOT EXISTS rank_name VARCHAR(30);
 ALTER TABLE nurses ADD COLUMN IF NOT EXISTS profile_submitted_at VARCHAR(40);

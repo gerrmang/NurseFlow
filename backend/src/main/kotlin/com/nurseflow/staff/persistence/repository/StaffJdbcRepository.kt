@@ -102,11 +102,21 @@ class StaffJdbcRepository(private val jdbc: JdbcTemplate, private val mapper: Js
         jdbc.update("UPDATE nurses SET team_id=? WHERE nurse_id=?", teamId, nurseId)
     }
 
-    /** Nurse input: replaces the submitted values and leaves the confirmed copy untouched. */
-    fun submitProfile(nurseId: UUID, careerStartedOn: String, rank: String, now: Instant) {
+    /** Nurse input records the hospital joining month without changing admin-managed career history. */
+    fun submitHospitalJoinMonth(nurseId: UUID, hospitalJoinedOn: String) {
         jdbc.update(
-            "UPDATE nurses SET career_started_on=?, rank_name=?, profile_submitted_at=? WHERE nurse_id=?",
-            careerStartedOn, rank, now.toString(), nurseId,
+            "UPDATE nurses SET hospital_joined_on=? WHERE nurse_id=?",
+            hospitalJoinedOn, nurseId,
+        )
+    }
+
+    /** Confirms the submitted career start while preserving any existing administrator-set rank. */
+    fun confirmCareerStart(nurseId: UUID, careerStartedOn: String, actor: String, now: Instant) {
+        jdbc.update(
+            """UPDATE nurses SET profile_submitted_at=COALESCE(profile_submitted_at, ?),
+                   confirmed_career_started_on=?, confirmed_rank_name=rank_name, profile_confirmed_at=?, profile_confirmed_by=?
+               WHERE nurse_id=?""",
+            now.toString(), careerStartedOn, now.toString(), actor, nurseId,
         )
     }
 
@@ -138,6 +148,7 @@ class StaffJdbcRepository(private val jdbc: JdbcTemplate, private val mapper: Js
         qualifications = mapper.readValue(rs.getString("qualifications"), strings),
         active = rs.getBoolean("active"),
         teamId = rs.getObject("team_id", UUID::class.java),
+        hospitalJoinedOn = rs.getString("hospital_joined_on"),
         careerStartedOn = rs.getString("career_started_on"),
         rank = rs.getString("rank_name"),
         submittedAt = rs.getString("profile_submitted_at")?.let(Instant::parse),

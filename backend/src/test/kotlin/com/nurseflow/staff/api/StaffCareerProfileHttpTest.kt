@@ -6,6 +6,7 @@ import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import tools.jackson.databind.JsonNode
+import java.time.Instant
 import java.time.YearMonth
 import java.time.ZoneId
 import java.util.UUID
@@ -31,14 +32,13 @@ class StaffCareerProfileHttpTest : ApiTestBase() {
         return created.json!!.get("teamId").asString()
     }
 
-    /** A nurse who joined through an invitation, optionally submitting a profile while joining. */
-    private fun joinedNurse(name: String, start: YearMonth? = null, rank: String? = null): Pair<UUID, String> {
+    /** A nurse who joined through an invitation, optionally submitting the hospital joining month. */
+    private fun joinedNurse(name: String, hospitalJoinedOn: YearMonth = YearMonth.of(2020, 3)): Pair<UUID, String> {
         val (userId, token) = userToken(name)
         val invite = http.post("${base()}/invitations", mapOf("role" to "WARD_MEMBER"), admin).json!!.get("token").asString()
         val body = buildMap {
             put("token", invite)
-            start?.let { put("careerStartedOn", it.toString()) }
-            rank?.let { put("rank", it) }
+            put("hospitalJoinedOn", hospitalJoinedOn.toString())
         }
         val joined = http.post("/api/v1/invitations/redeem", body, token)
         assertEquals(201, joined.status, joined.body)
@@ -98,61 +98,103 @@ class StaffCareerProfileHttpTest : ApiTestBase() {
     }
 
     @Test
-    fun `profile submitted at join waits for confirmation before scoring`() {
-        val (userId, nurse) = joinedNurse("가상 간호사", today.minusMonths(40), "과장")
+    fun `hospital joining month stays separate from actual career start`() {
+        val hospitalJoinedOn = today.minusMonths(2)
+        val actualCareerStart = today.minusMonths(40)
+        val (userId, nurse) = joinedNurse("가상 간호사", hospitalJoinedOn)
         val nurseId = nurseIdOf(userId)
 
-        val pending = http.get("${base()}/my-profile", nurse).json!!.get("profile")
-        assertEquals("PENDING", pending.get("status").asString())
-        assertEquals(3, pending.get("submittedStage").asInt())
-        assertTrue(pending.get("scoringStage").isNull)
+        val joined = http.get("${base()}/my-profile", nurse).json!!.get("profile")
+        assertEquals(hospitalJoinedOn.toString(), joined.get("hospitalJoinedOn").asString())
+        assertTrue(joined.get("careerStartedOn").isNull)
+        assertEquals("MISSING", joined.get("status").asString())
 
-        val confirmed = http.post("${base()}/staff/$nurseId/profile/confirm", null, admin)
-        assertEquals(200, confirmed.status, confirmed.body)
-        assertEquals("CONFIRMED", confirmed.json!!.get("profile").get("status").asString())
-        assertEquals(3, confirmed.json!!.get("profile").get("scoringStage").asInt())
+        val actualCareer = http.put("${base()}/staff/$nurseId/profile", mapOf(
+            "careerStartedOn" to actualCareerStart.toString(), "rank" to "과장",
+        ), admin).json!!.get("profile")
+        assertEquals("CONFIRMED", actualCareer.get("status").asString())
+        assertEquals(actualCareerStart.toString(), actualCareer.get("careerStartedOn").asString())
+        assertEquals(hospitalJoinedOn.toString(), actualCareer.get("hospitalJoinedOn").asString())
+        assertEquals(3, actualCareer.get("scoringStage").asInt())
 
-        // A later edit is excluded from scoring until re-confirmed.
-        val edited = http.put("${base()}/my-profile", mapOf("careerStartedOn" to today.minusMonths(130).toString(), "rank" to "팀장"), nurse)
-        assertEquals("PENDING", edited.json!!.get("profile").get("status").asString())
-        assertEquals(5, edited.json!!.get("profile").get("submittedStage").asInt())
-        assertTrue(edited.json!!.get("profile").get("scoringStage").isNull)
-        assertEquals(today.minusMonths(40).toString(), edited.json!!.get("profile").get("confirmedCareerStartedOn").asString())
-
-        val reconfirmed = http.post("${base()}/staff/$nurseId/profile/confirm", null, admin).json!!.get("profile")
-        assertEquals(5, reconfirmed.get("scoringStage").asInt())
-        assertEquals(2, jdbc.queryForObject("SELECT COUNT(*) FROM audit_events WHERE action='PROFILE_CONFIRMED' AND target_id=?",
-            Int::class.java, nurseId))
+        val correctedHospitalMonth = today.minusMonths(1)
+        val updated = http.put("${base()}/my-profile", mapOf("hospitalJoinedOn" to correctedHospitalMonth.toString()), nurse)
+            .json!!.get("profile")
+        assertEquals(correctedHospitalMonth.toString(), updated.get("hospitalJoinedOn").asString())
+        assertEquals(actualCareerStart.toString(), updated.get("careerStartedOn").asString())
+        assertEquals("CONFIRMED", updated.get("status").asString())
+        assertEquals(3, updated.get("scoringStage").asInt())
     }
 
     @Test
     fun `profile input is validated against the ward policy`() {
-        val (_, nurse) = joinedNurse("가상 간호사")
+        val (userId, nurse) = joinedNurse("가상 간호사")
+        val nurseId = nurseIdOf(userId)
 
         assertEquals("NURSE_IDENTITY_REQUIRED", http.get("${base()}/my-profile", admin).code)
-        assertEquals("RANK_NOT_IN_POLICY",
-            http.put("${base()}/my-profile", mapOf("careerStartedOn" to "2020-03", "rank" to "원장"), nurse).code)
-        assertEquals("INVALID_CAREER_START",
-            http.put("${base()}/my-profile", mapOf("careerStartedOn" to today.plusMonths(1).toString(), "rank" to "신규"), nurse).code)
+        val rankByNurse = http.put("${base()}/my-profile", mapOf("hospitalJoinedOn" to "2020-03", "rank" to "원장"), nurse)
+        assertEquals(400, rankByNurse.status)
+        assertEquals(listOf("rank"), rankByNurse.fieldNames)
+        assertEquals("RANK_NOT_IN_POLICY", http.put("${base()}/staff/$nurseId/profile",
+            mapOf("careerStartedOn" to "2020-03", "rank" to "원장"), admin).code)
+        assertEquals("INVALID_CAREER_START", http.put("${base()}/staff/$nurseId/profile",
+            mapOf("careerStartedOn" to today.plusMonths(1).toString(), "rank" to "신규"), admin).code)
         assertEquals(listOf("careerStartedOn"),
-            http.put("${base()}/my-profile", mapOf("careerStartedOn" to "2020-13", "rank" to "신규"), nurse).fieldNames)
+            http.put("${base()}/staff/$nurseId/profile", mapOf("careerStartedOn" to "2020-13", "rank" to "신규"), admin).fieldNames)
+        assertEquals("INVALID_HOSPITAL_JOIN_MONTH", http.put(
+            "${base()}/my-profile", mapOf("hospitalJoinedOn" to today.plusMonths(1).toString()), nurse,
+        ).code)
+        assertEquals(listOf("hospitalJoinedOn"), http.put(
+            "${base()}/my-profile", mapOf("hospitalJoinedOn" to "2020-13"), nurse,
+        ).fieldNames)
         assertEquals("MISSING", http.get("${base()}/my-profile", nurse).json!!.get("profile").get("status").asString())
-        assertEquals("PROFILE_NOT_SUBMITTED",
-            http.post("${base()}/staff/${http.get("${base()}/my-profile", nurse).json!!.get("nurseId").asString()}/profile/confirm", null, admin).code)
+        assertEquals("PROFILE_NOT_SUBMITTED", http.post("${base()}/staff/$nurseId/profile/confirm", null, admin).code)
     }
 
     @Test
-    fun `join with half a profile is rejected and nothing is created`() {
-        val (_, token) = userToken("가상 간호사")
+    fun `confirmation rejects a submitted rank removed from the current ward policy`() {
+        val (userId, _) = joinedNurse("가상 간호사")
+        val nurseId = nurseIdOf(userId)
+        jdbc.update("UPDATE nurses SET career_started_on=?, rank_name=?, profile_submitted_at=? WHERE nurse_id=?",
+            "2020-03", "과장", Instant.now().toString(), UUID.fromString(nurseId))
+        assertEquals(200, http.put("${base()}/career-policy", mapOf(
+            "stageThresholdMonths" to listOf(12, 36, 72, 120), "ranks" to listOf("신규"),
+        ), admin).status)
+
+        assertEquals("RANK_NOT_IN_POLICY", http.post("${base()}/staff/$nurseId/profile/confirm", null, admin).code)
+        assertEquals(null, jdbc.queryForObject(
+            "SELECT confirmed_rank_name FROM nurses WHERE nurse_id=?", String::class.java, UUID.fromString(nurseId),
+        ))
+    }
+
+    @Test
+    fun `join records hospital month without setting actual career`() {
+        val (userId, token) = userToken("가상 간호사")
         val invite = http.post("${base()}/invitations", mapOf("role" to "WARD_MEMBER"), admin).json!!.get("token").asString()
 
-        val half = http.post("/api/v1/invitations/redeem", mapOf("token" to invite, "careerStartedOn" to "2020-03"), token)
-        val badRank = http.post("/api/v1/invitations/redeem", mapOf("token" to invite, "careerStartedOn" to "2020-03", "rank" to "원장"), token)
-
-        assertEquals(400, half.status)
-        assertEquals("RANK_NOT_IN_POLICY", badRank.code)
+        val oldProfile = http.post("/api/v1/invitations/redeem",
+            mapOf("token" to invite, "hospitalJoinedOn" to "2020-03", "rank" to "원장"), token)
+        assertEquals(listOf("rank"), oldProfile.fieldNames)
+        val oldField = http.post("/api/v1/invitations/redeem",
+            mapOf("token" to invite, "careerStartedOn" to "2020-03"), token)
+        assertEquals(listOf("careerStartedOn"), oldField.fieldNames)
         assertEquals(0, jdbc.queryForObject("SELECT COUNT(*) FROM nurses", Int::class.java))
-        assertEquals(201, http.post("/api/v1/invitations/redeem", mapOf("token" to invite), token).status)
+
+        val joined = http.post("/api/v1/invitations/redeem", mapOf("token" to invite, "hospitalJoinedOn" to "2020-03"), token)
+
+        assertEquals(201, joined.status, joined.body)
+        val profile = http.get("${base()}/my-profile", token).json!!.get("profile")
+        assertEquals("2020-03", profile.get("hospitalJoinedOn").asString())
+        assertTrue(profile.get("careerStartedOn").isNull)
+        assertTrue(profile.get("rank").isNull)
+        assertEquals("MISSING", profile.get("status").asString())
+
+        val actual = http.put("${base()}/staff/${nurseIdOf(userId)}/profile", mapOf(
+            "careerStartedOn" to "2015-05", "rank" to "과장",
+        ), admin).json!!.get("profile")
+        assertEquals("2015-05", actual.get("careerStartedOn").asString())
+        assertEquals("2020-03", actual.get("hospitalJoinedOn").asString())
+        assertEquals("CONFIRMED", actual.get("status").asString())
     }
 
     @Test
@@ -164,15 +206,17 @@ class StaffCareerProfileHttpTest : ApiTestBase() {
             Triple("B-중간", b, 40L), Triple("B-고참", b, 100L), Triple("무소속", null, 200L),
         )
         people.forEach { (name, teamId, months) ->
-            val (userId, _) = joinedNurse(name, today.minusMonths(months), "신규")
+            val (userId, _) = joinedNurse(name, today.minusMonths(months))
             val nurseId = nurseIdOf(userId)
             teamId?.let { http.put("${base()}/staff/$nurseId/team", mapOf("teamId" to it), admin) }
-            if (name != "A-중간") http.post("${base()}/staff/$nurseId/profile/confirm", null, admin)
+            http.put("${base()}/staff/$nurseId/profile", mapOf(
+                "careerStartedOn" to today.minusMonths(months).toString(), "rank" to "신규",
+            ), admin)
         }
 
         val all = staffList()
         assertEquals(listOf("A-고참", "A-중간", "A-신규", "B-고참", "B-중간", "무소속"), all.map { it.get("displayName").asString() })
-        assertEquals(listOf(5, null, 1, 4, 3, 5), all.map { it.get("profile").get("scoringStage").let { s -> if (s.isNull) null else s.asInt() } })
+        assertEquals(listOf(5, 3, 1, 4, 3, 5), all.map { it.get("profile").get("scoringStage").asInt() })
         assertEquals(listOf("B-고참", "B-중간"), staffList("?teamId=$b").map { it.get("displayName").asString() })
     }
 

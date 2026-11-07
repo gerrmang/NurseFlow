@@ -3,6 +3,7 @@ package com.nurseflow.staff.api.controller
 import com.nurseflow.common.error.BusinessException
 import com.nurseflow.common.error.ErrorCode
 import com.nurseflow.staff.api.dto.request.CareerProfileRequest
+import com.nurseflow.staff.api.dto.request.HospitalJoinMonthRequest
 import com.nurseflow.staff.api.dto.request.StaffRequest
 import com.nurseflow.staff.api.dto.response.CareerPolicyResponse
 import com.nurseflow.staff.api.dto.response.CareerProfileResponse
@@ -24,7 +25,7 @@ internal fun StaffResult.toResponse() = StaffMemberResponse(
     nurseId, displayName, qualifications, active, linkedAccount, team?.toResponse(),
     with(profile) {
         CareerProfileResponse(
-            status.name, careerStartedOn?.toString(), rank, submittedAt,
+            status.name, hospitalJoinedOn?.toString(), careerStartedOn?.toString(), rank, submittedAt,
             confirmedCareerStartedOn?.toString(), confirmedRank, confirmedAt,
             experienceMonths, submittedStage, scoringStage,
         )
@@ -39,5 +40,11 @@ internal fun CareerProfileRequest.toInput() = ProfileInput(
     },
     rank.trim(),
 )
+
+internal fun HospitalJoinMonthRequest.toHospitalJoinMonth() = try {
+    YearMonth.parse(hospitalJoinedOn)
+} catch (_: DateTimeParseException) {
+    throw BusinessException(ErrorCode.INVALID_HOSPITAL_JOIN_MONTH)
+}
 
 internal fun StaffRequest.toCommand() = StaffInputCommand(displayName, qualifications, active, teamId)

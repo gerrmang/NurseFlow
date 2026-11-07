@@ -41,8 +41,9 @@ WARD_ADMIN invitation redemption returns 409 `ADMIN_NURSE_RECORD_CONFLICT` if th
 
 - Teams: `GET/POST /api/v1/wards/{wardId}/teams`, `PUT/DELETE .../teams/{teamId}`. Members read; admins change. A team with active nurses cannot be deleted.
 - Career policy: `GET/PUT /api/v1/wards/{wardId}/career-policy`. `stageThresholdMonths` are the lower bounds of stages 2–5 in months; the default `[12, 36, 72, 120]` gives <1y = 1, 1–3y = 2, 3–6y = 3, 6–10y = 4, 10y+ = 5. `ranks` default to 팀장·과장·신규 and are names only (they do not change the stage yet). Changes apply immediately.
-- A nurse submits the career start month (`YYYY-MM`) and rank with `PUT /api/v1/wards/{wardId}/my-profile`, or while joining via `POST /api/v1/invitations/redeem {token, careerStartedOn, rank}`.
-- Admins confirm with `POST .../staff/{nurseId}/profile/confirm` or set values directly with `PUT .../staff/{nurseId}/profile`. `scoringStage` is present only while the profile is `CONFIRMED`; an edit returns it to `PENDING` and excludes it from scoring until re-confirmed.
+- A `WARD_MEMBER` must provide the month they joined the hospital with `POST /api/v1/invitations/redeem {token, hospitalJoinedOn}`. `PUT /api/v1/wards/{wardId}/my-profile {hospitalJoinedOn}` updates only that date.
+- Admins set the actual career start month and rank with `PUT .../staff/{nurseId}/profile`. These values are stored separately from the hospital joining month; `scoringStage` uses the admin-confirmed career profile.
+- The current staff list sorts by confirmed career start month. Admin drag-and-drop ordering within a team is not implemented yet. When added, that saved order will determine relative seniority even when it differs from hospital joining dates.
 - `GET /api/v1/wards/{wardId}/staff` (admin) lists nurses by team order, then most experienced first, then name. `POST`/`PUT .../staff` create fictional nurse records and change name, qualifications or `active`; `PUT .../staff/{nurseId}/team` assigns a team. Nurses cannot change their own team.
 
 The service cannot serve scheduling requests until `shift_types` has been provisioned in the local H2 database. Provisioning endpoints and production database migration are separate work.

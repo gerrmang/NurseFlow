@@ -2,11 +2,10 @@ package com.nurseflow.invitation.application.model
 
 import com.nurseflow.invitation.domain.InvitationStatus
 import com.nurseflow.ward.application.model.WardRole
-import java.time.Duration
 import java.time.Instant
 import java.util.UUID
 
-data class CreateInvitationCommand(val role: WardRole, val nurseId: UUID?, val validFor: Duration)
+data class CreateInvitationCommand(val role: WardRole, val nurseId: UUID?)
 
 data class InvitationResult(
     val invitationId: UUID,

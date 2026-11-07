@@ -5,7 +5,6 @@ import com.nurseflow.invitation.api.dto.request.InvitationTokenRequest
 import com.nurseflow.invitation.api.dto.request.RedeemInvitationRequest
 import com.nurseflow.invitation.api.dto.response.InvitationPreviewResponse
 import com.nurseflow.invitation.application.service.InvitationRedemptionService
-import com.nurseflow.staff.application.model.ProfileInput
 import com.nurseflow.ward.api.controller.toResponse
 import com.nurseflow.ward.api.dto.response.WardMembershipResponse
 import jakarta.validation.Valid
@@ -37,11 +36,9 @@ class InvitationRedemptionController(private val redemption: InvitationRedemptio
         @Valid @RequestBody request: RedeemInvitationRequest,
         @CurrentSubject subject: String,
     ): ResponseEntity<WardMembershipResponse> {
-        val profile = request.careerStartedOn?.let { start ->
-            ProfileInput(YearMonth.parse(start), request.rank!!.trim())
-        }
+        val hospitalJoinedOn = request.hospitalJoinedOn?.let(YearMonth::parse)
         return ResponseEntity.status(HttpStatus.CREATED)
             .header("Cache-Control", "private, no-store")
-            .body(redemption.redeem(request.token, subject, profile).toResponse())
+            .body(redemption.redeem(request.token, subject, hospitalJoinedOn).toResponse())
     }
 }

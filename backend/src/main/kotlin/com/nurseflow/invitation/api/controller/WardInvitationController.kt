@@ -19,7 +19,6 @@ import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RestController
-import java.time.Duration
 import java.util.UUID
 
 @RestController
@@ -33,7 +32,7 @@ class WardInvitationController(private val invitations: InvitationService) {
     ): ResponseEntity<CreatedInvitationResponse> {
         val issued = invitations.create(
             wardId,
-            CreateInvitationCommand(WardRole.valueOf(request.role), request.nurseId, Duration.ofHours(request.expiresInHours.toLong())),
+            CreateInvitationCommand(WardRole.valueOf(request.role), request.nurseId),
             subject,
         )
         return ResponseEntity.status(HttpStatus.CREATED).header("Cache-Control", "no-store")
@@ -44,6 +43,17 @@ class WardInvitationController(private val invitations: InvitationService) {
     fun list(@PathVariable wardId: UUID, @CurrentSubject subject: String): ResponseEntity<InvitationItems> =
         ResponseEntity.ok().header("Cache-Control", "private, no-store")
             .body(InvitationItems(invitations.list(wardId, subject).map { it.toResponse() }))
+
+    @PostMapping("/{invitationId}/reissue")
+    fun reissue(
+        @PathVariable wardId: UUID,
+        @PathVariable invitationId: UUID,
+        @CurrentSubject subject: String,
+    ): ResponseEntity<CreatedInvitationResponse> {
+        val issued = invitations.reissue(wardId, invitationId, subject)
+        return ResponseEntity.status(HttpStatus.CREATED).header("Cache-Control", "no-store")
+            .body(CreatedInvitationResponse(issued.invitation.toResponse(), issued.token, issued.inviteUrl))
+    }
 
     @DeleteMapping("/{invitationId}")
     fun revoke(

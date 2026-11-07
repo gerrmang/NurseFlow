@@ -9,7 +9,6 @@ import com.nurseflow.invitation.domain.InvitationStatus
 import com.nurseflow.invitation.domain.statusAt
 import com.nurseflow.invitation.persistence.entity.DbInvitation
 import com.nurseflow.invitation.persistence.repository.InvitationJdbcRepository
-import com.nurseflow.staff.application.model.ProfileInput
 import com.nurseflow.staff.application.service.StaffService
 import com.nurseflow.ward.application.model.WardMembershipResult
 import com.nurseflow.ward.application.model.WardRole
@@ -17,6 +16,7 @@ import com.nurseflow.ward.persistence.repository.WardJdbcRepository
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.time.Instant
+import java.time.YearMonth
 import java.util.UUID
 
 /**
@@ -48,7 +48,7 @@ class InvitationRedemptionService(
      * in one transaction. Any failure rolls everything back and leaves the invitation usable.
      */
     @Transactional
-    fun redeem(token: String, subject: String, profile: ProfileInput? = null): WardMembershipResult {
+    fun redeem(token: String, subject: String, hospitalJoinedOn: YearMonth? = null): WardMembershipResult {
         val invitation = repo.lockByTokenHash(OpaqueToken.sha256Hex(token))
             ?: throw BusinessException(ErrorCode.INVITATION_NOT_FOUND)
         if (!wardRepo.lockWard(invitation.wardId)) throw BusinessException(ErrorCode.INVITATION_NOT_FOUND)
@@ -66,9 +66,10 @@ class InvitationRedemptionService(
             throw BusinessException(ErrorCode.ADMIN_NURSE_RECORD_CONFLICT)
         }
         if (role == WardRole.WARD_MEMBER) {
-            // Link or create the nurse record before submitting the optional profile in this transaction.
+            val joinedOn = hospitalJoinedOn ?: throw BusinessException(ErrorCode.HOSPITAL_JOIN_MONTH_REQUIRED)
+            // Link or create the nurse record and save the hospital joining month in this transaction.
             linkNurse(invitation, subject)
-            profile?.let { staff.submitForLinkedNurse(invitation.wardId, subject, it) }
+            staff.submitForLinkedNurse(invitation.wardId, subject, joinedOn)
         }
         wardRepo.insertMembership(invitation.wardId, subject, role.name, canViewWardCalendar = true)
         if (!repo.markRedeemed(invitation.id, subject, now)) {
