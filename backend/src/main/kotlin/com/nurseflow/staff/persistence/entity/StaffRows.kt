@@ -13,6 +13,7 @@ data class DbStaff(
     val qualifications: List<String>,
     val active: Boolean,
     val teamId: UUID?,
+    val hospitalJoinedOn: String?,
     val careerStartedOn: String?,
     val rank: String?,
     val submittedAt: Instant?,

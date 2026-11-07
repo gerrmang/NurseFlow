@@ -36,9 +36,9 @@ class InvitationRedemptionController(private val redemption: InvitationRedemptio
         @Valid @RequestBody request: RedeemInvitationRequest,
         @CurrentSubject subject: String,
     ): ResponseEntity<WardMembershipResponse> {
-        val careerStartedOn = request.careerStartedOn?.let(YearMonth::parse)
+        val hospitalJoinedOn = request.hospitalJoinedOn?.let(YearMonth::parse)
         return ResponseEntity.status(HttpStatus.CREATED)
             .header("Cache-Control", "private, no-store")
-            .body(redemption.redeem(request.token, subject, careerStartedOn).toResponse())
+            .body(redemption.redeem(request.token, subject, hospitalJoinedOn).toResponse())
     }
 }

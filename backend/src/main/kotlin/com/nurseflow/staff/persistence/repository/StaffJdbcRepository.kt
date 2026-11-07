@@ -102,11 +102,11 @@ class StaffJdbcRepository(private val jdbc: JdbcTemplate, private val mapper: Js
         jdbc.update("UPDATE nurses SET team_id=? WHERE nurse_id=?", teamId, nurseId)
     }
 
-    /** Nurse input updates only their career start; rank is administrator-managed. */
-    fun submitCareerStart(nurseId: UUID, careerStartedOn: String, now: Instant) {
+    /** Nurse input records the hospital joining month without changing admin-managed career history. */
+    fun submitHospitalJoinMonth(nurseId: UUID, hospitalJoinedOn: String) {
         jdbc.update(
-            "UPDATE nurses SET career_started_on=?, profile_submitted_at=? WHERE nurse_id=?",
-            careerStartedOn, now.toString(), nurseId,
+            "UPDATE nurses SET hospital_joined_on=? WHERE nurse_id=?",
+            hospitalJoinedOn, nurseId,
         )
     }
 
@@ -148,6 +148,7 @@ class StaffJdbcRepository(private val jdbc: JdbcTemplate, private val mapper: Js
         qualifications = mapper.readValue(rs.getString("qualifications"), strings),
         active = rs.getBoolean("active"),
         teamId = rs.getObject("team_id", UUID::class.java),
+        hospitalJoinedOn = rs.getString("hospital_joined_on"),
         careerStartedOn = rs.getString("career_started_on"),
         rank = rs.getString("rank_name"),
         submittedAt = rs.getString("profile_submitted_at")?.let(Instant::parse),

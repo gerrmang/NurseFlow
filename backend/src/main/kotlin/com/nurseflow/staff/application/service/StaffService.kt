@@ -181,23 +181,23 @@ class StaffService(
     }
 
     @Transactional
-    fun submitMyProfile(wardId: UUID, careerStartedOn: YearMonth, actor: String): StaffResult {
+    fun submitMyProfile(wardId: UUID, hospitalJoinedOn: YearMonth, actor: String): StaffResult {
         wards.requireMember(wardId, actor)
         val nurse = repo.findStaffBySubject(wardId, actor) ?: throw BusinessException(ErrorCode.NURSE_IDENTITY_REQUIRED)
-        submitCareerStart(nurse, careerStartedOn)
+        submitHospitalJoinMonth(nurse, hospitalJoinedOn)
         return requireStaff(wardId, nurse.id).toResult(context(wardId))
     }
 
     /** Used by invitation redemption inside its transaction, after the nurse link exists. */
-    fun submitForLinkedNurse(wardId: UUID, subject: String, careerStartedOn: YearMonth) {
+    fun submitForLinkedNurse(wardId: UUID, subject: String, hospitalJoinedOn: YearMonth) {
         val nurse = repo.findStaffBySubject(wardId, subject) ?: throw BusinessException(ErrorCode.NURSE_IDENTITY_REQUIRED)
-        submitCareerStart(nurse, careerStartedOn)
+        submitHospitalJoinMonth(nurse, hospitalJoinedOn)
     }
 
-    private fun submitCareerStart(nurse: DbStaff, careerStartedOn: YearMonth) {
-        validateCareerStart(careerStartedOn, context(nurse.wardId))
-        if (nurse.careerStartedOn != careerStartedOn.toString()) {
-            repo.submitCareerStart(nurse.id, careerStartedOn.toString(), Instant.now())
+    private fun submitHospitalJoinMonth(nurse: DbStaff, hospitalJoinedOn: YearMonth) {
+        validateHospitalJoinMonth(hospitalJoinedOn, context(nurse.wardId))
+        if (nurse.hospitalJoinedOn != hospitalJoinedOn.toString()) {
+            repo.submitHospitalJoinMonth(nurse.id, hospitalJoinedOn.toString())
         }
     }
 
@@ -235,6 +235,12 @@ class StaffService(
         }
     }
 
+    private fun validateHospitalJoinMonth(hospitalJoinedOn: YearMonth, context: Context) {
+        if (hospitalJoinedOn.isAfter(context.today) || hospitalJoinedOn.year < 1950) {
+            throw BusinessException(ErrorCode.INVALID_HOSPITAL_JOIN_MONTH)
+        }
+    }
+
     private fun requireStaff(wardId: UUID, nurseId: UUID): DbStaff =
         repo.findStaff(wardId, nurseId) ?: throw BusinessException(ErrorCode.NURSE_NOT_FOUND)
 
@@ -263,6 +269,7 @@ class StaffService(
             team = team?.toResult(),
             profile = CareerProfileResult(
                 status = status(),
+                hospitalJoinedOn = hospitalJoinedOn?.let(YearMonth::parse),
                 careerStartedOn = submittedStart,
                 rank = rank,
                 submittedAt = submittedAt,

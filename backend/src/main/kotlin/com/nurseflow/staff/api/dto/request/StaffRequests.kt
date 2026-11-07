@@ -35,10 +35,10 @@ data class CareerProfileRequest(
     val rank: String,
 )
 
-/** Nurse-submitted career start month; rank remains an administrator-managed value. */
-data class CareerStartRequest(
+/** Nurse-submitted month they joined this hospital; career history is administrator-managed. */
+data class HospitalJoinMonthRequest(
     @field:Pattern(regexp = YEAR_MONTH_PATTERN)
-    val careerStartedOn: String,
+    val hospitalJoinedOn: String,
 )
 
 data class StaffRequest(

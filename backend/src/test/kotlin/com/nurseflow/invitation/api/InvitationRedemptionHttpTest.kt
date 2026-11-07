@@ -39,7 +39,9 @@ class InvitationRedemptionHttpTest : ApiTestBase() {
         return UUID.fromString(session.get("user").get("userId").asString()) to session.get("accessToken").asString()
     }
 
-    private fun redeem(token: String, user: String) = http.post("/api/v1/invitations/redeem", mapOf("token" to token), user)
+    private fun redeem(token: String, user: String) = http.post(
+        "/api/v1/invitations/redeem", mapOf("token" to token, "hospitalJoinedOn" to "2020-03"), user,
+    )
 
     private fun invitationStatus(): List<String> =
         http.get("/api/v1/wards/$wardId/invitations", admin).json!!.get("items").values().map { it.get("status").asString() }
@@ -80,6 +82,24 @@ class InvitationRedemptionHttpTest : ApiTestBase() {
     }
 
     @Test
+    fun `member must provide hospital joining month but admin does not`() {
+        val memberInvite = issue("WARD_MEMBER")
+        val (_, nurse) = kakaoLogin("가상 간호사")
+        val missingMonth = http.post("/api/v1/invitations/redeem", mapOf("token" to memberInvite), nurse)
+
+        assertEquals(400, missingMonth.status)
+        assertEquals("HOSPITAL_JOIN_MONTH_REQUIRED", missingMonth.code)
+        assertEquals(listOf("PENDING"), invitationStatus())
+        assertEquals(0, jdbc.queryForObject("SELECT COUNT(*) FROM ward_memberships WHERE subject IS NOT NULL AND role='WARD_MEMBER'", Int::class.java))
+        assertEquals(0, jdbc.queryForObject("SELECT COUNT(*) FROM nurses WHERE ward_id=?", Int::class.java, wardId))
+        assertEquals(201, redeem(memberInvite, nurse).status)
+
+        val adminInvite = issue("WARD_ADMIN")
+        val (_, secondAdmin) = kakaoLogin("가상 부관리자")
+        assertEquals(201, http.post("/api/v1/invitations/redeem", mapOf("token" to adminInvite), secondAdmin).status)
+    }
+
+    @Test
     fun `member invitation can take over an existing fictional nurse record`() {
         val nurseId = insertNurse(wardId, "가상 간호사 C")
         val token = issue("WARD_MEMBER", nurseId)
@@ -99,7 +119,7 @@ class InvitationRedemptionHttpTest : ApiTestBase() {
         val token = issue("WARD_ADMIN")
         val (_, second) = kakaoLogin("가상 부관리자")
 
-        assertEquals(201, redeem(token, second).status)
+        assertEquals(201, http.post("/api/v1/invitations/redeem", mapOf("token" to token), second).status)
 
         assertEquals(0, jdbc.queryForObject("SELECT COUNT(*) FROM nurses WHERE ward_id=?", Int::class.java, wardId))
         assertEquals(200, http.get("/api/v1/wards/$wardId/rosters?month=2026-12", second).status)
@@ -112,7 +132,7 @@ class InvitationRedemptionHttpTest : ApiTestBase() {
         insertNurse(wardId, "가상 간호사", subject = userId.toString())
         val token = issue("WARD_ADMIN")
 
-        val response = redeem(token, nurse)
+        val response = http.post("/api/v1/invitations/redeem", mapOf("token" to token), nurse)
 
         assertEquals(409, response.status)
         assertEquals("ADMIN_NURSE_RECORD_CONFLICT", response.code)
@@ -129,7 +149,7 @@ class InvitationRedemptionHttpTest : ApiTestBase() {
         insertNurse(wardId, "비활성 간호사", subject = userId.toString(), active = false)
         val token = issue("WARD_ADMIN")
 
-        assertEquals(201, redeem(token, adminInvitee).status)
+        assertEquals(201, http.post("/api/v1/invitations/redeem", mapOf("token" to token), adminInvitee).status)
         assertEquals(1, jdbc.queryForObject(
             "SELECT COUNT(*) FROM ward_memberships WHERE subject=? AND role='WARD_ADMIN'",
             Int::class.java, userId.toString()))
@@ -190,7 +210,7 @@ class InvitationRedemptionHttpTest : ApiTestBase() {
     fun `existing members cannot redeem again and the invitation stays usable`() {
         val token = issue("WARD_ADMIN")
 
-        val again = redeem(token, admin)
+        val again = http.post("/api/v1/invitations/redeem", mapOf("token" to token), admin)
 
         assertEquals(409, again.status)
         assertEquals("ALREADY_WARD_MEMBER", again.code)

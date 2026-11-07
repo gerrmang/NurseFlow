@@ -11,6 +11,7 @@ data class CareerPolicyResponse(val stageThresholdMonths: List<Int>, val ranks: 
 
 data class CareerProfileResponse(
     val status: String,
+    val hospitalJoinedOn: String?,
     val careerStartedOn: String?,
     val rank: String?,
     val submittedAt: Instant?,

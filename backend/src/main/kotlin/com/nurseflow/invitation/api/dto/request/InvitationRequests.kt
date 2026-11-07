@@ -21,12 +21,11 @@ data class InvitationTokenRequest(
 )
 
 /**
- * Joining a ward. WARD_MEMBER invitees may submit their career start (YYYY-MM).
- * Submitted values still need admin confirmation. Ignored for WARD_ADMIN.
+ * WARD_MEMBER invitees must submit the month they joined this hospital. Ignored for WARD_ADMIN.
  */
 data class RedeemInvitationRequest(
     @field:Pattern(regexp = OpaqueToken.PATTERN)
     val token: String,
     @field:Pattern(regexp = "^\\d{4}-(0[1-9]|1[0-2])$")
-    val careerStartedOn: String? = null,
+    val hospitalJoinedOn: String? = null,
 )

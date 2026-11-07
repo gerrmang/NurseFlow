@@ -159,7 +159,7 @@ class WardInvitationHttpTest : ApiTestBase() {
         assertEquals("INVITATION_REVOKED", http.post("/api/v1/invitations/redeem",
             mapOf("token" to original.get("token").asString()), newUser).code)
         assertEquals(201, http.post("/api/v1/invitations/redeem",
-            mapOf("token" to replacementBody.get("token").asString()), newUser).status)
+            mapOf("token" to replacementBody.get("token").asString(), "hospitalJoinedOn" to "2020-03"), newUser).status)
         assertEquals(1, jdbc.queryForObject(
             "SELECT COUNT(*) FROM audit_events WHERE action='INVITATION_REISSUED' AND target_id=?",
             Int::class.java, originalInvitationId))

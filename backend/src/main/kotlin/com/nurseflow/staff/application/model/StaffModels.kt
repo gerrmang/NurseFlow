@@ -13,6 +13,7 @@ data class ProfileInput(val careerStartedOn: YearMonth, val rank: String)
 
 data class CareerProfileResult(
     val status: ProfileStatus,
+    val hospitalJoinedOn: YearMonth?,
     val careerStartedOn: YearMonth?,
     val rank: String?,
     val submittedAt: Instant?,
