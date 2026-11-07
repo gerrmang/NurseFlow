@@ -6,8 +6,6 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.ViewModelStore
-import androidx.lifecycle.ViewModelStoreOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.LocalViewModelStoreOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -22,6 +20,8 @@ import kotlinx.coroutines.launch
 @Composable
 fun NurseFlowRoot(container: AppContainer) {
     val session by container.session.state.collectAsStateWithLifecycle()
+    val sessionModels: SessionViewModelStore = viewModel()
+    val owner = sessionModels.ownerFor(session)
     val scope = rememberCoroutineScope()
     var demo by remember { mutableStateOf(false) }
     Column(Modifier.fillMaxSize().safeDrawingPadding()) {
@@ -31,10 +31,6 @@ fun NurseFlowRoot(container: AppContainer) {
             TextButton(onClick = { demo = false }) { Text("시연 나가기") }
             Box(Modifier.weight(1f)) { NurseFlowApp() }
         } else {
-            val owner = remember(session) {
-                object : ViewModelStoreOwner { override val viewModelStore = ViewModelStore() }
-            }
-            DisposableEffect(owner) { onDispose { owner.viewModelStore.clear() } }
             CompositionLocalProvider(LocalViewModelStoreOwner provides owner) {
                 Box(Modifier.weight(1f)) {
                     when (val current = session) {

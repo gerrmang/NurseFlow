@@ -16,57 +16,80 @@ sealed interface SessionState {
     data class SignedIn(val userId: String, val displayName: String, val generation: Long) : SessionState
 }
 
-/** All token rotation and local storage changes share one lock. Tokens never enter UI state. */
+/** Network operations are serialized separately from local credentials. Tokens never enter UI state. */
 class SessionManager(private val authApi: AuthApi, private val store: TokenStore) {
     private val mutex = Mutex()
+    private val requests = Mutex()
     private val mutableState = MutableStateFlow<SessionState>(SessionState.Restoring)
     val state = mutableState.asStateFlow()
     private var generation = 0L
+    private var revision = 0L
     @Volatile var accessToken: String? = null
         private set
 
-    suspend fun restore() = mutex.withLock {
-        mutableState.value = SessionState.Restoring
-        try {
-            val refresh = store.read()
-            if (refresh == null) signOutLocked()
-            else apply(apiCall { authApi.refresh(RefreshTokenBody(refresh)) })
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            accessToken = null
-            if (e is ApiException && e.status == 401) signOutLocked()
-            else mutableState.value = SessionState.RestoreFailed(e.userMessage())
-        }
-    }
-
-    suspend fun loginWithKakao(idToken: String, nonce: String) = mutex.withLock {
-        apply(apiCall { authApi.kakaoLogin(KakaoLoginBody(idToken, nonce)) })
-    }
-
-    suspend fun refreshAfterUnauthorized(usedToken: String?): String? = mutex.withLock {
-        // A response from a logged-out session may not restore credentials.
-        if (mutableState.value !is SessionState.SignedIn || usedToken == null) return@withLock null
-        val current = accessToken
-        if (current != null && current != usedToken) return@withLock current
-        try {
-            val refresh = store.read()
-            if (refresh == null) {
-                signOutLocked()
-                return@withLock null
+    suspend fun restore() {
+        val started = mutex.withLock { revision }
+        requests.withLock {
+            try {
+                val refresh = mutex.withLock {
+                    if (started != revision) return
+                    mutableState.value = SessionState.Restoring
+                    store.read().also { if (it == null) signOutLocked() }
+                } ?: return
+                val result = apiCall { authApi.refresh(RefreshTokenBody(refresh)) }
+                mutex.withLock { if (started == revision) apply(result) }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                mutex.withLock {
+                    if (started != revision) return
+                    accessToken = null
+                    if (e is ApiException && e.status == 401) signOutLocked()
+                    else mutableState.value = SessionState.RestoreFailed(e.userMessage())
+                }
             }
-            apply(apiCall { authApi.refresh(RefreshTokenBody(refresh)) })
-            accessToken
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: ApiException) {
-            if (e.status == 401) signOutLocked()
-            null
         }
     }
 
-    suspend fun logout() = mutex.withLock {
-        val refresh = try { store.read() } finally { signOutLocked() }
+    suspend fun loginWithKakao(idToken: String, nonce: String) {
+        val started = mutex.withLock { revision }
+        requests.withLock {
+            mutex.withLock { if (started != revision) return }
+            val result = apiCall { authApi.kakaoLogin(KakaoLoginBody(idToken, nonce)) }
+            mutex.withLock { if (started == revision) apply(result) }
+        }
+    }
+
+    suspend fun refreshAfterUnauthorized(usedToken: String?): String? {
+        val started = mutex.withLock { revision }
+        return requests.withLock {
+            try {
+                val refresh = mutex.withLock {
+                    // Queued requests and late responses cannot restore a logged-out session.
+                    if (started != revision || mutableState.value !is SessionState.SignedIn || usedToken == null) return null
+                    val current = accessToken
+                    if (current != null && current != usedToken) return current
+                    store.read().also { if (it == null) signOutLocked() }
+                } ?: return null
+                val result = apiCall { authApi.refresh(RefreshTokenBody(refresh)) }
+                mutex.withLock {
+                    if (started != revision) return null
+                    apply(result)
+                    accessToken
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: ApiException) {
+                mutex.withLock { if (started == revision && e.status == 401) signOutLocked() }
+                null
+            }
+        }
+    }
+
+    suspend fun logout() {
+        val refresh = mutex.withLock {
+            try { store.read() } finally { signOutLocked() }
+        }
         if (refresh != null) {
             try { apiCall { authApi.logout(RefreshTokenBody(refresh)) } }
             catch (e: CancellationException) { throw e }
@@ -85,6 +108,7 @@ class SessionManager(private val authApi: AuthApi, private val store: TokenStore
     }
 
     private suspend fun signOutLocked() = withContext(NonCancellable) {
+        revision++
         accessToken = null
         mutableState.value = SessionState.SignedOut
         store.clear()
