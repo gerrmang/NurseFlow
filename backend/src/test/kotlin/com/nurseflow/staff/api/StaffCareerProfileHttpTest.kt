@@ -6,6 +6,7 @@ import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import tools.jackson.databind.JsonNode
+import java.time.Instant
 import java.time.YearMonth
 import java.time.ZoneId
 import java.util.UUID
@@ -141,6 +142,22 @@ class StaffCareerProfileHttpTest : ApiTestBase() {
             http.put("${base()}/my-profile", mapOf("careerStartedOn" to "2020-13"), nurse).fieldNames)
         assertEquals("MISSING", http.get("${base()}/my-profile", nurse).json!!.get("profile").get("status").asString())
         assertEquals("PROFILE_NOT_SUBMITTED", http.post("${base()}/staff/$nurseId/profile/confirm", null, admin).code)
+    }
+
+    @Test
+    fun `confirmation rejects a submitted rank removed from the current ward policy`() {
+        val (userId, _) = joinedNurse("가상 간호사")
+        val nurseId = nurseIdOf(userId)
+        jdbc.update("UPDATE nurses SET career_started_on=?, rank_name=?, profile_submitted_at=? WHERE nurse_id=?",
+            "2020-03", "과장", Instant.now().toString(), UUID.fromString(nurseId))
+        assertEquals(200, http.put("${base()}/career-policy", mapOf(
+            "stageThresholdMonths" to listOf(12, 36, 72, 120), "ranks" to listOf("신규"),
+        ), admin).status)
+
+        assertEquals("RANK_NOT_IN_POLICY", http.post("${base()}/staff/$nurseId/profile/confirm", null, admin).code)
+        assertEquals(null, jdbc.queryForObject(
+            "SELECT confirmed_rank_name FROM nurses WHERE nurse_id=?", String::class.java, UUID.fromString(nurseId),
+        ))
     }
 
     @Test

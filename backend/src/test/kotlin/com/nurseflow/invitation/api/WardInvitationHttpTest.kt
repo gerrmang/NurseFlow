@@ -140,9 +140,9 @@ class WardInvitationHttpTest : ApiTestBase() {
         )
 
         assertEquals(201, replacement.status, replacement.body)
-        assertEquals("INVITATION_REVOKED", http.post(
-            "/api/v1/wards/$wardId/invitations/$originalInvitationId/reissue", null, admin,
-        ).code)
+        val retry = http.post("/api/v1/wards/$wardId/invitations/$originalInvitationId/reissue", null, admin)
+        assertEquals(410, retry.status)
+        assertEquals("INVITATION_REVOKED", retry.code)
         val replacementBody = replacement.json!!
         val newInvitation = replacementBody.get("invitation")
         assertEquals("WARD_MEMBER", newInvitation.get("role").asString())
@@ -175,5 +175,26 @@ class WardInvitationHttpTest : ApiTestBase() {
         assertEquals("INVITATION_ALREADY_REDEEMED", http.post(
             "/api/v1/wards/$wardId/invitations/$inviteId/reissue", null, admin,
         ).code)
+    }
+
+    @Test
+    fun `reissuing an expired invitation revokes its source and prevents duplicate links`() {
+        val original = invite(mapOf("role" to "WARD_ADMIN")).json!!
+        val originalId = original.get("invitation").get("invitationId").asString()
+        jdbc.update("UPDATE ward_invitations SET expires_at=? WHERE invitation_id=?",
+            Instant.now().minusSeconds(1).toString(), UUID.fromString(originalId))
+
+        val replacement = http.post("/api/v1/wards/$wardId/invitations/$originalId/reissue", null, admin)
+        assertEquals(201, replacement.status, replacement.body)
+        assertEquals(2, jdbc.queryForObject("SELECT COUNT(*) FROM ward_invitations WHERE ward_id=?", Int::class.java, wardId))
+
+        val retry = http.post("/api/v1/wards/$wardId/invitations/$originalId/reissue", null, admin)
+        assertEquals(410, retry.status)
+        assertEquals("INVITATION_REVOKED", retry.code)
+        assertEquals(2, jdbc.queryForObject("SELECT COUNT(*) FROM ward_invitations WHERE ward_id=?", Int::class.java, wardId))
+
+        val (_, newUser) = userToken("재발급 사용자")
+        assertEquals(201, http.post("/api/v1/invitations/redeem",
+            mapOf("token" to replacement.json!!.get("token").asString()), newUser).status)
     }
 }

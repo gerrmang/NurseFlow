@@ -152,6 +152,7 @@ class StaffService(
         val context = context(wardId)
         if (nurse.status() != ProfileStatus.CONFIRMED) {
             validateCareerStart(YearMonth.parse(start), context)
+            nurse.rank?.let { validateRank(it, context) }
             repo.confirmCareerStart(nurseId, start, actor, Instant.now())
             audit.record(wardId, actor, "PROFILE_CONFIRMED", nurseId.toString())
         }
@@ -221,7 +222,11 @@ class StaffService(
 
     private fun validate(input: ProfileInput, context: Context) {
         validateCareerStart(input.careerStartedOn, context)
-        if (input.rank !in context.policy.ranks) throw BusinessException(ErrorCode.RANK_NOT_IN_POLICY)
+        validateRank(input.rank, context)
+    }
+
+    private fun validateRank(rank: String, context: Context) {
+        if (rank !in context.policy.ranks) throw BusinessException(ErrorCode.RANK_NOT_IN_POLICY)
     }
 
     private fun validateCareerStart(careerStartedOn: YearMonth, context: Context) {

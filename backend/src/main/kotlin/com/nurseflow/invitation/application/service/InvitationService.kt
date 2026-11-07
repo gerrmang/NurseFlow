@@ -59,7 +59,10 @@ class InvitationService(
                 audit.record(wardId, actor, "INVITATION_REVOKED", previous.id.toString())
             }
             InvitationStatus.REVOKED -> throw BusinessException(ErrorCode.INVITATION_REVOKED)
-            InvitationStatus.EXPIRED -> Unit
+            InvitationStatus.EXPIRED -> {
+                repo.revoke(previous.id, now)
+                audit.record(wardId, actor, "INVITATION_REVOKED", previous.id.toString())
+            }
         }
         previous.nurseId?.let { requireInvitableNurse(wardId, it, now) }
         audit.record(wardId, actor, "INVITATION_REISSUED", previous.id.toString())

@@ -332,13 +332,19 @@ paths:
         '403':
           $ref: '#/components/responses/Forbidden'
         '404':
-          description: WARD_NOT_FOUND 또는 INVITATION_NOT_FOUND
+          description: WARD_NOT_FOUND, INVITATION_NOT_FOUND 또는 NURSE_NOT_FOUND
           content:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/ApiProblem'
         '409':
-          description: INVITATION_ALREADY_REDEEMED, INVITATION_REVOKED, NURSE_ALREADY_LINKED 또는 INVITATION_ALREADY_PENDING
+          description: INVITATION_ALREADY_REDEEMED, NURSE_ALREADY_LINKED 또는 INVITATION_ALREADY_PENDING
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ApiProblem'
+        '410':
+          description: INVITATION_REVOKED
           content:
             application/problem+json:
               schema:
