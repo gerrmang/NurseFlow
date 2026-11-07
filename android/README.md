@@ -70,7 +70,9 @@ adb reverse --remove tcp:18082
 
 `ActivityRotationDeviceTest`는 실제 `MainActivity`·Compose 화면·ViewModel·HTTP 클라이언트를 사용합니다. 로그인 버튼을 누른 뒤 `ActivityScenario.recreate()`로 Activity 인스턴스를 교체하고, 이전 Activity가 파괴된 것도 확인합니다. 이후 Kakao SDK 형식의 성공·취소·오류 콜백을 전달해 로그인 완료 또는 재로그인을 검사합니다. 복원 재시도의 성공·실패도 실제 Activity 재생성 전후로 확인합니다.
 
-외부 SDK 호출만 `KakaoLoginSdk`의 가짜 구현으로 교체합니다. `KakaoLoginClient`의 콜백 변환·취소 처리, 로그인 ViewModel, nonce 생성, 세션 HTTP 요청은 실제 코드입니다. 가짜 HTTP 서버는 기기 loopback에만 열리고 가상 토큰·사용자만 사용합니다. 실제 KakaoTalk·브라우저 인증 화면과 OAuth 딥링크 복귀는 이 검사의 범위에 포함되지 않습니다.
+로그인 완료·취소·오류 검사에서는 외부 SDK 호출만 `KakaoLoginSdk`의 가짜 구현으로 교체합니다. `KakaoLoginClient`의 콜백 변환·취소 처리, 로그인 ViewModel, nonce 생성, 세션 HTTP 요청은 실제 코드입니다. 가짜 HTTP 서버는 기기 loopback에만 열리고 가상 토큰·사용자만 사용합니다.
+
+추가 전환 검사는 Activity 재생성 후 KakaoTalk 실패 콜백으로 계정 로그인을 유도합니다. 가짜 계정 콜백으로 nonce 유지와 로그인 완료를 검사하며, 별도 진단은 실제 Kakao SDK가 파괴된 Activity Context로도 `AuthCodeHandlerActivity`를 시작하고 `FLAG_ACTIVITY_NEW_TASK`를 사용하는지 확인합니다. 진단은 가짜 앱 키를 사용하고 외부 브라우저·선택기 Intent를 차단합니다. 실제 KakaoTalk·브라우저 인증 화면과 OAuth 딥링크 복귀는 검증 범위에 포함되지 않습니다.
 
 `IsolatedSessionTestRunner`는 테스트 Application을 사용해 시작 시 사용자 저장 세션을 읽거나 갱신하지 않습니다. 앱의 기본 실행은 기존 Application과 SDK 구현을 그대로 사용합니다. 다음 명령으로 실행합니다.
 

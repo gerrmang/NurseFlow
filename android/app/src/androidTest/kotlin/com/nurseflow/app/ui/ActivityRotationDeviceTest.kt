@@ -1,12 +1,18 @@
 package com.nurseflow.app.ui
 
+import android.app.Activity
+import android.app.Instrumentation
 import android.content.Context
+import android.content.ContextWrapper
+import android.content.Intent
 import android.os.SystemClock
 import android.view.accessibility.AccessibilityNodeInfo
 import androidx.test.core.app.ActivityScenario
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.kakao.sdk.auth.model.OAuthToken
+import com.kakao.sdk.auth.AuthCodeHandlerActivity
+import com.kakao.sdk.common.KakaoSdk
 import com.kakao.sdk.common.model.ClientError
 import com.kakao.sdk.common.model.ClientErrorCause
 import com.nurseflow.app.AppContainer
@@ -16,6 +22,7 @@ import com.nurseflow.app.core.session.SessionState
 import com.nurseflow.app.core.session.TokenStore
 import com.nurseflow.app.feature.auth.KakaoLoginClient
 import com.nurseflow.app.feature.auth.KakaoLoginSdk
+import com.nurseflow.app.feature.auth.AndroidKakaoLoginSdk
 import com.nurseflow.app.test.IsolatedSessionTestApplication
 import com.nurseflow.app.test.TestTokenStore
 import kotlinx.coroutines.CompletableDeferred
@@ -104,6 +111,62 @@ class ActivityRotationDeviceTest {
         assertNotEquals(pending.nonce, next.nonce)
         complete(next, token())
         assertLoginCompleted(next.nonce)
+    }
+
+    @Test fun kakaoTalkFailureAfterRecreationPreservesNonceAndCompletesFallback() {
+        launch(talkAvailable = true)
+        val talk = beginLogin()
+        val original = activity(talk.context)
+        recreateActivity()
+        assertTrue(original.isDestroyed)
+        complete(talk, error = IOException("fake KakaoTalk failure after recreation"))
+        await { sdk.accountCalls == 1 }
+        val account = requireNotNull(sdk.pending)
+        assertNotSame(talk, account)
+        assertEquals(talk.nonce, account.nonce)
+        assertEquals(1, sdk.talkCalls)
+        complete(account, token())
+        assertLoginCompleted(talk.nonce)
+    }
+
+    @Test fun kakaoTalkFailureAfterRecreationCanStartRealSdkAccountActivity() {
+        // Test the SDK's real launch path, but block external browser/chooser intents.
+        // No actual account, authorization request or token exchange is needed.
+        val externalBrowser = object : Instrumentation.ActivityMonitor() {
+            override fun onStartActivity(intent: Intent): Instrumentation.ActivityResult? =
+                if (intent.action == Intent.ACTION_VIEW || intent.action == Intent.ACTION_CHOOSER)
+                    Instrumentation.ActivityResult(Activity.RESULT_CANCELED, null)
+                else null
+        }
+        instrumentation.addMonitor(externalBrowser)
+        val accountMonitor = instrumentation.addMonitor(AuthCodeHandlerActivity::class.java.name, null, false)
+        var accountActivity: Activity? = null
+        try {
+            instrumentation.runOnMainSync {
+                KakaoSdk.init(instrumentation.targetContext.applicationContext, "00000000000000000000000000000001")
+            }
+            sdk.realAccountLogin = true
+            launch(talkAvailable = true)
+            val talk = beginLogin()
+            val original = activity(talk.context)
+            recreateActivity()
+            assertTrue(original.isDestroyed)
+            complete(talk, error = IOException("fake KakaoTalk failure after recreation"))
+            await { sdk.accountCalls == 1 }
+            val account = requireNotNull(sdk.pending)
+            assertEquals(talk.nonce, account.nonce)
+            // Diagnostic precondition: exercise the SDK with the destroyed context in question.
+            assertSame(original, activity(account.context))
+            accountActivity = instrumentation.waitForMonitorWithTimeout(accountMonitor, 10_000)
+            assertNotNull("The real SDK must start its account Activity from this context", accountActivity)
+            assertEquals(AuthCodeHandlerActivity::class.java, accountActivity!!.javaClass)
+            assertTrue(accountActivity!!.intent.flags and Intent.FLAG_ACTIVITY_NEW_TASK != 0)
+            assertEquals(0, loginCalls.get())
+        } finally {
+            accountActivity?.let { launched -> instrumentation.runOnMainSync { launched.finish() } }
+            instrumentation.removeMonitor(accountMonitor)
+            instrumentation.removeMonitor(externalBrowser)
+        }
     }
 
     @Test fun kakaoAccountErrorAfterRecreationShowsErrorAndAllowsAnotherLogin() {
@@ -242,24 +305,31 @@ class ActivityRotationDeviceTest {
     }
 
     private fun json(body: String) = MockResponse().setHeader("Content-Type", "application/json").setBody(body)
+    private fun activity(context: Context): Activity = when (context) {
+        is Activity -> context
+        is ContextWrapper -> activity(context.baseContext)
+        else -> error("Expected an Activity context")
+    }
     private fun token() = OAuthToken("fake-sdk-access", Date(Long.MAX_VALUE), "fake-sdk-refresh",
         Date(Long.MAX_VALUE), "fake-sdk-id", emptyList())
 
     private class CallbackSdk : KakaoLoginSdk {
-        data class Pending(val nonce: String, val callback: (OAuthToken?, Throwable?) -> Unit)
+        data class Pending(val context: Context, val nonce: String, val callback: (OAuthToken?, Throwable?) -> Unit)
         override val isConfigured = true
         var talkAvailable = false
+        var realAccountLogin = false
         @Volatile var talkCalls = 0
         @Volatile var accountCalls = 0
         @Volatile var pending: Pending? = null
         override fun isKakaoTalkLoginAvailable(context: Context) = talkAvailable
         override fun loginWithKakaoTalk(context: Context, nonce: String, callback: (OAuthToken?, Throwable?) -> Unit) {
             talkCalls++
-            pending = Pending(nonce, callback)
+            pending = Pending(context, nonce, callback)
         }
         override fun loginWithKakaoAccount(context: Context, nonce: String, callback: (OAuthToken?, Throwable?) -> Unit) {
             accountCalls++
-            pending = Pending(nonce, callback)
+            pending = Pending(context, nonce, callback)
+            if (realAccountLogin) AndroidKakaoLoginSdk().loginWithKakaoAccount(context, nonce, callback)
         }
         override fun logout() = Unit
     }
