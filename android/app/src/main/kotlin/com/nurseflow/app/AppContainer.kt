@@ -19,5 +19,12 @@ class AppContainer(
     init { restoreSession() }
     // Startup and UI retries share the application lifetime, including Activity recreation.
     fun restoreSession() = scope.launch { session.restore() }
-    fun logout() { scope.launch { try { session.logout() } finally { kakao.logout() } } }
+    fun logout() = scope.launch {
+        // SDK tokens belong to the session being ended. Never clear them after waiting for
+        // server revocation: another login may already have completed by then.
+        try { kakao.logout() }
+        catch (e: CancellationException) { throw e }
+        catch (_: Exception) { /* NurseFlow logout still runs if the SDK cache is unavailable. */ }
+        finally { session.logout() }
+    }
 }

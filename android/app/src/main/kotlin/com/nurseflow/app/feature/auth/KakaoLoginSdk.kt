@@ -2,6 +2,7 @@ package com.nurseflow.app.feature.auth
 
 import android.content.Context
 import com.kakao.sdk.auth.model.OAuthToken
+import com.kakao.sdk.auth.TokenManagerProvider
 import com.kakao.sdk.user.UserApiClient
 import com.nurseflow.app.BuildConfig
 
@@ -11,6 +12,7 @@ interface KakaoLoginSdk {
     fun isKakaoTalkLoginAvailable(context: Context): Boolean
     fun loginWithKakaoTalk(context: Context, nonce: String, callback: (OAuthToken?, Throwable?) -> Unit)
     fun loginWithKakaoAccount(context: Context, nonce: String, callback: (OAuthToken?, Throwable?) -> Unit)
+    /** Clear this device's SDK cache synchronously; do not schedule a remote logout. */
     fun logout()
 }
 
@@ -23,5 +25,7 @@ internal class AndroidKakaoLoginSdk : KakaoLoginSdk {
     override fun loginWithKakaoAccount(context: Context, nonce: String, callback: (OAuthToken?, Throwable?) -> Unit) {
         UserApiClient.instance.loginWithKakaoAccount(context, nonce = nonce, callback = callback)
     }
-    override fun logout() { if (isConfigured) UserApiClient.instance.logout { } }
+    override fun logout() {
+        if (isConfigured) TokenManagerProvider.instance.manager.clear()
+    }
 }

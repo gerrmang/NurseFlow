@@ -34,6 +34,7 @@ Kakao Developers에서 Android 패키지 `com.nurseflow.app`, 사용 중인 서�
 - 앱 시작 시 refresh token으로 복원합니다. 오프라인이면 저장된 토큰을 보존하고 재시도 화면을 제공합니다.
 - 인증 API와 일반 API의 HTTP 클라이언트를 분리합니다. 일반 GET 조회는 끊긴 유휴 연결을 복구하고, 401은 갱신 후 한 번만 재시도하며 동시 401은 mutex로 갱신을 공유합니다. 인증 API는 매번 새 연결을 사용하고 토큰 회전 요청의 전송 오류 자동 재시도는 끕니다.
 - refresh 거절은 로컬 세션을 폐기합니다. 로그아웃은 메모리 인증을 폐기하고 Keystore 암호화 키를 먼저 삭제한 뒤 저장된 암호문을 제거합니다. DataStore 삭제가 실패해도 키 폐기가 성공하면 재시작 후 잔존 암호문을 복호화할 수 없습니다. 읽기는 키를 새로 만들지 않으며, 새 로그인 저장만 키를 생성합니다. 암호문 삭제 오류는 로그아웃 재시도 화면으로 안내합니다. 오프라인에서는 서버 측 철회를 보장할 수 없습니다.
+- 앱 로그아웃은 Kakao SDK의 기기 토큰 캐시를 먼저 동기적으로 정리하고 NurseFlow 세션을 폐기·철회합니다. Kakao 서버에 SDK 로그아웃 요청을 보내지 않으므로 늦은 SDK 응답이 새 로그인 토큰을 지우지 않습니다. Kakao 계정·브라우저 SSO 세션 종료나 연결 해제는 수행하지 않으며, Kakao 서버의 SDK 토큰 철회와 NurseFlow 서버 세션 철회를 구분합니다. SDK 캐시 정리 오류가 나도 NurseFlow 로그아웃은 수행합니다.
 - `GET /api/v1/me`와 `GET /api/v1/wards`를 소비합니다. 역할은 서버 응답을 표시하며 근무표 유효성·권한 판단을 대신하지 않습니다.
 - 초대 토큰 입력·초대/프로필/병동 생성 API와 서버 근무표 조회는 B1 범위에 포함하지 않습니다.
 
@@ -106,3 +107,13 @@ adb shell am instrument -w -r -e oauthReturnProbe true -e class com.nurseflow.ap
 실제 MainActivity를 재생성하고 실제 SDK 인증 Activity를 시작합니다. 외부 브라우저 호출만 차단한 뒤 `access_denied` 딥링크를 Android가 manifest 설정으로 라우팅하도록 합니다. SDK가 전달한 오류 내용, 로그인 화면 복귀, 미인증 상태와 서버 로그인 요청 0회를 확인합니다. `INSTRUMENTATION_STATUS_CODE: 0`과 `OK (1 test)`가 성공 기준이며, 키 미설정 또는 단독 실행 조건 미충족으로 건너뛴 결과를 성공으로 보지 않습니다.
 
 이 검사는 실제 OS 라우팅과 SDK의 거절 응답 처리를 검증합니다. 실제 KakaoTalk·브라우저에서 계정 인증·동의에 성공하고 정상 OAuth code를 교환하는 경로는 별도 실계정 인수 검증 대상입니다.
+
+## 서버 로그아웃 지연과 재로그인 경합 검사
+
+`AppContainerLogoutDeviceTest`는 실제 AppContainer·Kakao 콜백 변환·HTTP 클라이언트와 기기 내 목업 서버를 사용합니다. 이전 세션의 서버 철회 응답을 멈춘 동안 SDK 기기 캐시와 NurseFlow 로컬 세션이 먼저 지워지는지 확인하고, 새 로그인 뒤 이전 철회의 성공·실패 응답을 풀어도 새 SDK 토큰·NurseFlow 토큰이 유지되는지 검사합니다. SDK 캐시 삭제 오류가 앱 로그아웃을 취소하지 않는 검사도 포함합니다. SDK 캐시는 가짜 구현이며 실제 계정의 Kakao 서버 로그아웃을 호출하지 않습니다.
+
+```powershell
+adb shell am instrument -w -e class com.nurseflow.app.core.session.AppContainerLogoutDeviceTest com.nurseflow.app.test/com.nurseflow.app.test.IsolatedSessionTestRunner
+```
+
+실제 외부 인증 성공·두 실제 계정 전환·기기 이전과 네트워크 차단을 포함한 전체 기기 E2E는 이 경합 검사로 대체하지 않습니다.
