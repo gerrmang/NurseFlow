@@ -16,6 +16,8 @@ class AppContainer(
     val api = ApiFactory.nurseFlowApi(apiBaseUrl, session)
     val kakao = KakaoLoginClient()
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
-    init { scope.launch { session.restore() } }
+    init { restoreSession() }
+    // Startup and UI retries share the application lifetime, including Activity recreation.
+    fun restoreSession() = scope.launch { session.restore() }
     fun logout() { scope.launch { try { session.logout() } finally { kakao.logout() } } }
 }

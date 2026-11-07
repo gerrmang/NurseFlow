@@ -149,3 +149,30 @@
 - 문제 발생 시 이번 저장소 오류 보완 커밋을 되돌린 앱을 배포합니다. DB 복구는 필요하지 않습니다.
 - 실제 디스크 삭제에 실패하면 저장된 토큰은 남을 수 있습니다. 이 프로세스에서는 메모리 인증과 복원을 차단하지만, 프로세스 재시작까지 이어지는 차단 표시는 추가하지 않았습니다. 서버 철회도 실패한 경우 재시작 후 복원을 막는 영속적 보장은 없으므로 삭제 재시도가 필요합니다.
 - 저장소 오류 처리와 재시도 UI를 추가했으며 독립 PR 승인·GitHub CI 통과를 확인했다는 의미는 아닙니다.
+
+## PR P2 복원 재시도 수명 보완 (2026-11-07)
+
+### 변경 목적과 내용
+
+- 관련 이슈: 별도 이슈 없음. 세션 복원 재시도 중 화면 회전 후 로딩 화면에 머무르는 P2 리뷰를 보완했습니다.
+- 재시도 버튼의 `rememberCoroutineScope`를 제거하고 `AppContainer.restoreSession()`을 호출합니다. 최초 복원과 재시도가 같은 Application 소유 범위에서 실행되어 Activity 재생성·composition 종료로 취소되지 않습니다. 완료 시 기존 세션 상태 스트림을 통해 새 화면이 성공·실패 결과를 받습니다.
+- 재시도 버튼은 작업을 시작하는 역할만 맡으며, 화면 생성 시 재요청을 자동 실행하지 않습니다. 로그아웃의 revision 기반 늦은 응답 차단은 유지됩니다.
+
+### 검증
+
+- `android/`에서 `./gradlew.bat :app:testDebugUnitTest :app:assembleDebug :app:assembleDebugAndroidTest :app:lintDebug`: `BUILD SUCCESSFUL`. JVM **26개 통과, 실패/오류/건너뜀 0**. Lint **오류 0, 경고 33개**.
+- 테스트 정리 코드의 실험 API 사용을 없앤 뒤 `:app:assembleDebugAndroidTest :app:lintDebug`를 다시 실행하여 통과했습니다.
+- `RestoreRetryDeviceTest` 2개를 추가했습니다. 실제 AppContainer 재시도 진입점을 UI 코루틴에서 호출하고 해당 UI 범위를 취소한 뒤에도 요청이 살아 있는지 확인합니다. 지연된 응답의 성공 시 로딩 종료, 실패 시 오류 표시 상태와 후속 재시도를 검증합니다. 별도 메모리 TokenStore를 사용하고 Kakao·HTTP 요청은 하지 않습니다.
+- 별도 임시 데이터 이미지를 쓰는 창 없는 `Pixel_10` 에뮬레이터에서 `adb -s emulator-5556 shell am instrument -w -e class com.nurseflow.app.core.session.RestoreRetryDeviceTest com.nurseflow.app.test/androidx.test.runner.AndroidJUnitRunner`: **`OK (2 tests)`**, 0.278초. 기존 AVD의 사용자 데이터 이미지는 사용하지 않았습니다. 첫 부팅 직후 실행은 테스트 결과 없이 `Process crashed`로 종료되었고, 같은 APK로 다시 실행하여 2개 모두 통과했습니다.
+- `git diff --check`: 통과.
+- 미실행: 실제 Kakao·서버 E2E와 Activity 회전 UI 조작. 수명 회귀 검사는 회전 때 사라지는 UI 코루틴 범위를 직접 취소하는 방식입니다. GitHub CI 상태는 조회하지 않았습니다.
+
+### API·데이터·설정 변경과 배포 영향
+
+- API 계약·DB·환경변수·저장 형식·의존성 변경 없음. 근무 규칙과 권한의 서버 검증 책임을 유지합니다. Android 앱 업데이트만 필요하며 서버 배포·데이터 이전은 없습니다.
+- 기존 사용자 DB 파일과 로컬 키 설정은 변경하지 않았습니다.
+
+### 되돌리기와 남은 위험
+
+- 문제 발생 시 이번 복원 재시도 수명 보완 커밋을 되돌린 앱을 배포합니다. DB 복구는 필요하지 않습니다.
+- 앱 프로세스 종료는 실행 중인 요청도 종료합니다. 다음 프로세스는 기존 최초 세션 복원 경로를 따릅니다. 화면 회전 시 진행 중인 요청을 재전송하지 않습니다.

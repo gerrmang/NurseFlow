@@ -15,14 +15,12 @@ import com.nurseflow.app.feature.auth.LoginScreen
 import com.nurseflow.app.feature.auth.LoginViewModel
 import com.nurseflow.app.feature.ward.WardListScreen
 import com.nurseflow.app.feature.ward.WardsViewModel
-import kotlinx.coroutines.launch
 
 @Composable
 fun NurseFlowRoot(container: AppContainer) {
     val session by container.session.state.collectAsStateWithLifecycle()
     val sessionModels: SessionViewModelStore = viewModel()
     val owner = sessionModels.ownerFor(session)
-    val scope = rememberCoroutineScope()
     var demo by remember { mutableStateOf(false) }
     Column(Modifier.fillMaxSize().safeDrawingPadding()) {
         if (demo) {
@@ -42,7 +40,7 @@ fun NurseFlowRoot(container: AppContainer) {
                         }
                         is SessionState.RestoreFailed -> Column(Modifier.padding(24.dp)) {
                             Text(current.message)
-                            Button(onClick = { scope.launch { container.session.restore() } }) { Text("세션 복원 재시도") }
+                            Button(onClick = { container.restoreSession() }) { Text("세션 복원 재시도") }
                             TextButton(onClick = container::logout) { Text("로그아웃하고 다시 로그인") }
                         }
                         is SessionState.SignedIn -> WardListScreen(viewModel { WardsViewModel(container.api) }, container::logout)
