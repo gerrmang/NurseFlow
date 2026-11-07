@@ -33,7 +33,7 @@ Kakao Developers에서 Android 패키지 `com.nurseflow.app`, 사용 중인 서�
 - NurseFlow access token은 메모리에만, refresh token은 Android Keystore의 AES-GCM으로 암호화해 DataStore에 저장합니다. 백업·기기 이전에서 앱 데이터를 제외합니다.
 - 앱 시작 시 refresh token으로 복원합니다. 오프라인이면 저장된 토큰을 보존하고 재시도 화면을 제공합니다.
 - 인증 API와 일반 API의 HTTP 클라이언트를 분리합니다. 일반 GET 조회는 끊긴 유휴 연결을 복구하고, 401은 갱신 후 한 번만 재시도하며 동시 401은 mutex로 갱신을 공유합니다. 인증 API는 매번 새 연결을 사용하고 토큰 회전 요청의 전송 오류 자동 재시도는 끕니다.
-- refresh 거절은 로컬 세션을 폐기합니다. 로그아웃 시 메모리·저장 토큰과 화면의 사용자/병동 상태를 제거합니다. 오프라인에서는 서버 측 철회를 보장할 수 없습니다.
+- refresh 거절은 로컬 세션을 폐기합니다. 로그아웃은 메모리 인증을 폐기하고 Keystore 암호화 키를 먼저 삭제한 뒤 저장된 암호문을 제거합니다. DataStore 삭제가 실패해도 키 폐기가 성공하면 재시작 후 잔존 암호문을 복호화할 수 없습니다. 읽기는 키를 새로 만들지 않으며, 새 로그인 저장만 키를 생성합니다. 암호문 삭제 오류는 로그아웃 재시도 화면으로 안내합니다. 오프라인에서는 서버 측 철회를 보장할 수 없습니다.
 - `GET /api/v1/me`와 `GET /api/v1/wards`를 소비합니다. 역할은 서버 응답을 표시하며 근무표 유효성·권한 판단을 대신하지 않습니다.
 - 초대 토큰 입력·초대/프로필/병동 생성 API와 서버 근무표 조회는 B1 범위에 포함하지 않습니다.
 
@@ -84,3 +84,25 @@ adb shell am instrument -w -e class com.nurseflow.app.ui.ActivityRotationDeviceT
 ```
 
 PR Verify는 JVM 테스트 실행과 앱·계측 테스트 APK 컴파일을 수행합니다. 기기 계측 테스트 실행은 연결된 테스트 기기에서 별도로 수행합니다.
+
+## 토큰 삭제 실패 후 프로세스 재시작 검사
+
+위 APK를 설치한 뒤 `android/`에서 다음 스크립트를 실행합니다. `adb`가 PATH에 없으면 `-Adb`에 SDK의 `platform-tools/adb.exe` 경로를 전달하세요.
+
+```powershell
+./scripts/verify-logout-restart.ps1 -Serial emulator-5556
+```
+
+첫 단계는 실제 Android Keystore·DataStore에 가상 세션을 저장하고 암호문 삭제와 서버 철회 실패를 주입합니다. 암호문이 남고 키는 폐기된 것을 확인한 뒤 스크립트가 `am force-stop`으로 앱을 종료합니다. 두 번째 단계는 이전과 다른 OS 프로세스임을 확인하고, 삭제가 계속 실패해도 refresh 요청 없이 복원이 차단되는지 검사합니다. 삭제 복구 뒤 로그아웃 완료도 확인합니다. 별도 테스트 파일과 `nurseflow_test_` 키 별칭만 사용합니다. 두 단계는 일반 기기 검사에서 건너뛰며, 스크립트는 실제 성공 status와 테스트 수를 검사합니다.
+
+## 실제 SDK와 OAuth 거절 딥링크 복귀 검사
+
+등록된 네이티브 앱 키로 빌드한 APK에서 다음 클래스를 **별도 계측 프로세스로 단독 실행**합니다. 앱 키 값이나 계정 정보는 명령에 넣지 않습니다.
+
+```powershell
+adb shell am instrument -w -r -e oauthReturnProbe true -e class com.nurseflow.app.ui.OAuthReturnDeviceTest com.nurseflow.app.test/com.nurseflow.app.test.IsolatedSessionTestRunner
+```
+
+실제 MainActivity를 재생성하고 실제 SDK 인증 Activity를 시작합니다. 외부 브라우저 호출만 차단한 뒤 `access_denied` 딥링크를 Android가 manifest 설정으로 라우팅하도록 합니다. SDK가 전달한 오류 내용, 로그인 화면 복귀, 미인증 상태와 서버 로그인 요청 0회를 확인합니다. `INSTRUMENTATION_STATUS_CODE: 0`과 `OK (1 test)`가 성공 기준이며, 키 미설정 또는 단독 실행 조건 미충족으로 건너뛴 결과를 성공으로 보지 않습니다.
+
+이 검사는 실제 OS 라우팅과 SDK의 거절 응답 처리를 검증합니다. 실제 KakaoTalk·브라우저에서 계정 인증·동의에 성공하고 정상 OAuth code를 교환하는 경로는 별도 실계정 인수 검증 대상입니다.

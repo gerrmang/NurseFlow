@@ -4,10 +4,15 @@ import android.content.Context
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import android.util.Base64
+import androidx.datastore.core.DataStore
+import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import java.security.KeyStore
 import javax.crypto.Cipher
 import javax.crypto.KeyGenerator
@@ -20,12 +25,20 @@ private val Context.sessionStore by preferencesDataStore(name = "session")
  * Persists only the refresh token, encrypted with AES-GCM under a non-exportable Android
  * Keystore key. The access token stays in memory. Backups are disabled in the manifest.
  */
-class SecureTokenStore(private val context: Context) : TokenStore {
+class SecureTokenStore(
+    context: Context,
+    private val preferences: DataStore<Preferences> = context.sessionStore,
+    private val keyAlias: String = ALIAS,
+) : TokenStore {
     private val key = stringPreferencesKey("refresh_token")
 
     override suspend fun read(): String? {
-        val stored = context.sessionStore.data.first()[key] ?: return null
-        return runCatching { decrypt(stored) }.getOrElse {
+        val stored = preferences.data.first()[key] ?: return null
+        // Reading must never recreate a key that logout revoked in an earlier process.
+        val secret = withContext(Dispatchers.IO) { existingSecretKey() } ?: return null
+        return try { decrypt(stored, secret) }
+        catch (e: CancellationException) { throw e }
+        catch (_: Exception) {
             // Key invalidated (e.g. device credentials reset): treat as signed out.
             clear()
             null
@@ -34,19 +47,34 @@ class SecureTokenStore(private val context: Context) : TokenStore {
 
     override suspend fun write(refreshToken: String) {
         val encrypted = encrypt(refreshToken)
-        context.sessionStore.edit { it[key] = encrypted }
+        preferences.edit { it[key] = encrypted }
     }
 
     override suspend fun clear() {
-        context.sessionStore.edit { it.remove(key) }
+        // Revoke decryption before touching the token file. A failed DataStore removal must
+        // leave only unreadable ciphertext, including after the app process has been killed.
+        val revocationFailure = try {
+            withContext(Dispatchers.IO) { keyStore().deleteEntry(keyAlias) }
+            null
+        } catch (e: CancellationException) { throw e }
+        catch (e: Exception) { e }
+        try { preferences.edit { it.remove(key) } }
+        catch (e: Exception) {
+            revocationFailure?.let(e::addSuppressed)
+            throw e
+        }
+        // Removing the ciphertext is sufficient if the Keystore itself was unavailable.
     }
 
+    private fun keyStore() = KeyStore.getInstance(ANDROID_KEYSTORE).apply { load(null) }
+
+    private fun existingSecretKey() = keyStore().getKey(keyAlias, null) as? SecretKey
+
     private fun secretKey(): SecretKey {
-        val keyStore = KeyStore.getInstance(ANDROID_KEYSTORE).apply { load(null) }
-        (keyStore.getKey(ALIAS, null) as? SecretKey)?.let { return it }
+        existingSecretKey()?.let { return it }
         val generator = KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, ANDROID_KEYSTORE)
         generator.init(
-            KeyGenParameterSpec.Builder(ALIAS, KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT)
+            KeyGenParameterSpec.Builder(keyAlias, KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT)
                 .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
                 .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
                 .setKeySize(256)
@@ -61,11 +89,11 @@ class SecureTokenStore(private val context: Context) : TokenStore {
         return Base64.encodeToString(sealed, Base64.NO_WRAP)
     }
 
-    private fun decrypt(stored: String): String {
+    private fun decrypt(stored: String, secret: SecretKey): String {
         val bytes = Base64.decode(stored, Base64.NO_WRAP)
         val iv = bytes.copyOfRange(0, IV_BYTES)
         val cipher = Cipher.getInstance(TRANSFORMATION).apply {
-            init(Cipher.DECRYPT_MODE, secretKey(), GCMParameterSpec(128, iv))
+            init(Cipher.DECRYPT_MODE, secret, GCMParameterSpec(128, iv))
         }
         return String(cipher.doFinal(bytes, IV_BYTES, bytes.size - IV_BYTES), Charsets.UTF_8)
     }
