@@ -1,7 +1,7 @@
 # NurseFlow 기능별 개발 breakdown (초안)
 
-상태: **2026-11-05 검토용 초안. 이 문서가 검토·합의되기 전에는 기능 구현을 시작하지 않는다.**
-기준 커밋: `origin/dev` `5ca51cc` (PR #26 병합 시점). 작업 시작 시 더 최신 `dev`가 있으면 표의 "현재 코드 근거"를 다시 확인한다.
+상태: **2026-11-07 실행 계획. breakdown은 PR #29로 병합됐고 A1은 PR #27에서 진행 중이다.**
+현재 구현 상태표 기준 커밋: `origin/dev` `5ca51cc` (PR #26 병합 시점). 새 기능을 시작할 때는 더 최신 `dev`의 코드 근거를 다시 확인한다.
 
 읽은 자료: `AGENTS.md`, `docs/runbooks/git-flow.md`, `docs/pre-breakdown-scope-2026-11-04.md`, `docs/mvp-scope.md`, `docs/requirements.md`, `docs/monthly-roster-rules-and-two-person-plan.md`, `docs/hospital-roster-policy-settings.md`, `docs/openapi.yaml`, `docs/test-plan.md`, `docs/ai-development-review-workflow.md`, 그리고 `backend/`·`android/`·`.github/` 코드.
 
@@ -110,7 +110,7 @@
 
 | 순서/PR 가칭 | 사용자에게 보이는 완료 결과 | 담당자 | 선행 PR | 변경 영역·파일 소유 | API·DTO·DB 변경 | 핵심 권한·근무 규칙 | 인수 테스트 | 병합 조건 |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| 1 · A1 `feat/invitation-24h-career-month` | 관리자가 만든 초대가 정확히 24시간 뒤 만료된다. 간호사는 가입할 때 입사 연월만 입력한다 | A | 없음 | `backend/invitation/**`, `backend/staff/**`(프로필 입력부), `openapi.yaml` | `CreateInvitationRequest.expiresInHours` 제거(24h 고정), 재발급 API, `RedeemInvitationRequest`·`my-profile` 요청에서 `rank` 제거 | 1회 사용, 만료·철회 거부, 역할은 초대에 저장된 값만, 관리자 초대 수락자는 간호사 기록 없음 | 만료 경계(23:59:59 성공 / 24:00:00 거부), 재발급 시 이전 링크 처리, `rank` 전송 시 400, 기존 HTTP 테스트 갱신 | CI 통과, Codex P1/P2 해결, B의 계약 검토 |
+| 1 · A1 `feat/invitation-24h-career-month` | 초대는 24시간 뒤 만료된다. 간호사는 가입 때 병원 입사 연월만 입력하고 실제 경력 정보는 관리자가 설정한다 | A | 없음 | `backend/invitation/**`, `backend/staff/**`(프로필 입력부), `openapi.yaml` | 초대 생성에서 `expiresInHours` 제거, 재발급 API 추가, 가입·본인 프로필에는 `hospitalJoinedOn`만 입력, `careerStartedOn`·직급은 관리자 경로로 분리 | WARD_MEMBER는 가입 시 병원 입사 연월 필수. 재발급하면 이전 미사용 링크를 철회한다. WARD_ADMIN은 간호사 기록을 만들지 않는다. | 24시간 만료 경계, 만료·철회·이미 사용된 초대의 재발급, 병원 입사 연월 누락·형식 검사, 실제 경력 정보 분리 저장 | CI 통과, Codex P1/P2 해결, B의 계약 검토 |
 | 1 · B1 `feat/android-kakao-session` | Android에서 Kakao로 로그인하고 내 병동 목록(역할 표시)을 본다. 소속이 없으면 "병동 만들기 / 초대 수락" 안내 | B | 없음 (서버 API는 이미 있음) | `android/**` | 소비: `/auth/kakao/session`, `/auth/session/refresh`, `/auth/logout`, `/me`, `GET /wards` | refresh token은 Keystore로 암호화해 저장, 401이면 한 번만 갱신, 로그아웃 시 캐시 폐기 | JVM 단위 테스트(세션 갱신·오류 매핑), 에뮬레이터 실로그인 시연 기록, `assembleDebug` | CI, 실서버 연동 확인(로컬 서버), 키·토큰이 로그·커밋에 없음 |
 | 2 · A2 `feat/auth-web-session` | 웹 로그인용 서버 경로가 생긴다 (화면은 B2) | A | 없음 | `backend/auth/**`, `openapi.yaml`, `application.yml` 설정 키 | `POST /auth/kakao/code`(코드 교환), refresh는 HttpOnly 쿠키, CSRF 대책 | Redirect URI 허용 목록, state·nonce 검증 | 가짜 OIDC 공급자로 성공·state 불일치·재사용 거부 | CI, B의 계약 검토. 기존 `feat/auth-web-session` 브랜치는 참고만 하고 최신 `dev`에서 다시 작성 |
 | 2 · B2 `feat/web-foundation-session` | 웹에서 Kakao 로그인 후 내 병동 목록을 본다 | B | A2(실연동), 웹 프레임워크 결정 | `web/**`(신규), `.github/workflows/verify.yml`(웹 작업 추가) | 소비: A2, `/me`, `/wards` | 쿠키 기반 refresh, 토큰을 localStorage에 두지 않음 | 웹 단위 테스트, 빌드, 로그인→목록 시연 | CI에 웹 작업 추가·통과 |
@@ -125,10 +125,10 @@
 
 | 순서/PR 가칭 | 사용자에게 보이는 완료 결과 | 담당자 | 선행 PR | 변경 영역·파일 소유 | API·DTO·DB 변경 | 핵심 권한·근무 규칙 | 인수 테스트 | 병합 조건 |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| 7 · A5 `feat/staff-admin-career-adjust` | 관리자가 간호사별 편성 단계·팀 내 순서·선임 자격을 지정하고, 원래 입사 연월과 변경 이력을 함께 본다 | A | A1 | `backend/staff/**`, `schema.sql`, `openapi.yaml` | `nurses`에 관리자 조정 컬럼(단계·팀 내 순서·선임 자격), 신규 `nurse_career_adjustments`(이력), 확인 API 정리, 직급 처리(결정 필요) | 관리자만 조정, 간호사는 입사 연월만 수정. 수정된 프로필은 재확인 전 점수 제외 | 원본 보존, 이력 순서, 권한(간호사 403·타 병동 404), 목록 정렬 | CI, 결정 사항 10~12 반영 |
+| 7 · A5 `feat/staff-admin-career-adjust` | 관리자가 실제 경력 정보와 직급을 확인하고, 각 팀 안에서 경력순을 직접 정한다 | A | A1 | `backend/staff/**`, `schema.sql`, `openapi.yaml` | 병원 입사 연월과 실제 경력 정보를 분리한다. 관리자가 편성 단계·선임 자격·팀 내 순서와 변경 이력을 설정한다. | 팀 안에서 위에 놓인 간호사가 더 선임이다. 병원 입사 연월이 늦더라도 수동 순서가 우선한다. | 실제 경력 프로필 검사, 드래그 순서 저장·재조회, 날짜순과 수동 순서가 다를 때 수동 순위 적용, 권한 검사 | CI, 결정 사항 10·11 적용 |
 | 8 · A6 `feat/membership-admin` | 관리자가 구성원 목록을 보고 추가 관리자 지정·해제·비활성화를 한다 | A | A4 | `backend/ward/**`(구성원 부분), `openapi.yaml` | `GET /wards/{id}/members`, `PATCH /wards/{id}/memberships/{userId}`, 감사 기록 | 자기 권한 승격 금지, **마지막 관리자 해제·비활성화 금지**, 비활성 구성원은 즉시 접근 불가 | 권한 조합 표 테스트, 마지막 관리자 보호, 동시 변경 | CI, 결정 사항 4 반영 |
 | 9 · A7 `feat/roster-eligibility` | 자동배치·충원 계산에 초대 수락한 활성 간호사만 들어가고 관리자는 빠진다. 관리자가 간호사별 포함/제외 이유를 본다 | A | A6 | `backend/roster/**`(대상 조회), `openapi.yaml` | 대상자 조회 API(포함/제외 사유), `activeNurses` 판정 변경 | 대상 = 초대 수락·활성·`WARD_MEMBER`·비관리자. 소속 해제·비활성 시 대상 제외 | 가상 기록·비활성·관리자·타 병동 각각 제외 사유 | CI, 결정 사항 9 반영 |
-| 10 · B5a `feat/android-staff-team` | Android 관리자: 팀 수·팀 이름 설정, 간호사 팀 배치, 팀별 경력순 목록, 입사 연월 확인·단계/순서/선임 조정, 구성원 관리 | B | A5, A6, B1 | `android/**` | 소비: 팀·staff·A5·A6 | 관리자 전용 화면, 간호사 화면에는 조정 정보 비노출 | 목록 정렬·권한 오류·동시 수정(409) 표시 | 실연동 확인 |
+| 10 · B5a `feat/android-staff-team` | Android 관리자: 팀 수·이름 설정, 간호사 배치, 팀 안의 경력순 드래그 정렬, 실제 경력 정보·선임 자격·구성원 관리 | B | A5, A6, B1 | `android/**` | 소비: 팀·staff·A5·A6 | 관리자만 정렬·수정 가능. 순서는 입사 연월과 달라도 그대로 적용 | 순서 변경·저장·재조회, 권한 오류, 동시 수정(409) | 실연동 확인 |
 | 10 · B5b `feat/web-staff-team` | 웹 같은 기능 | B | A5, A6, B2 | `web/**` | 같음 | 같음 | 같음 | 같음 |
 | 11 · B6 `chore/demo-seed-script` | 한 번의 명령으로 가상 병동(A/B팀, 경력 1~5단계 간호사, 근무 유형)을 API로 채운다 | B | A5, A7 (A8 이후 갱신) | `scripts/demo/**`(신규) | 공개 API만 사용, 서버 코드 변경 없음 | 실제 이름·실데이터 금지 | 스크립트 실행 후 조회 결과 확인 | 가상 데이터만 사용 |
 
@@ -163,7 +163,7 @@
 | 23 · A16 `feat/confirm-acknowledgements` | 확정할 때 미충원(일반·선임)과 개인별 목표시간 미달을 **각각** 대상·규모·사유와 함께 확인해야 공개되고, 확인 기록이 공개 revision에 남는다 | A | A9, A13 | `backend/roster/**`, `schema.sql`, `openapi.yaml` | `ConfirmRosterRequest` 확장(진단별 확인), 확인 기록 테이블 | 필수 규칙 위반은 확인해도 차단. 서버가 계산한 진단과 확인 내용이 다르면 거부 | 확인 누락·불일치·위반 차단, 멱등 재시도 | CI, 결정 사항 20 |
 | 24 · A17 `feat/revision-draft-compare` | 공개 후 수정 초안이 현재 공개 배치를 복사해 시작되고 영향 날짜·간호사가 표시된다. 공개 이력과 이전/현재 비교 API가 생긴다 | A | A16 | `backend/roster/**`, `openapi.yaml` | 공개본에서 초안 생성, 공개 이력 목록, 비교 응답(변경 날짜·근무만) | 비교는 공개본끼리만. 초안·부재 사유 비노출. 재확정 전 공개본 유지 | 비교 정확도, 권한, 동시 재확정 | CI, 결정 사항 17·18 |
 | 25 · A18 `feat/setup-readiness-precheck` | 관리자가 첫 초안 생성 전에 빠진 설정 목록을 보고, 팀·근무별 선임 수요 대비 가용 선임 부족을 미리 안내받는다. 필수 설정이 없으면 생성 거부 | A | A9, A13 | `backend/roster/**`, `openapi.yaml` | 준비 상태 API, 생성 전 점검 API | 규칙을 완화하지 않고 알림만 | 누락 항목별 응답, 선임 부족 사례 | CI |
-| 26 · A19 `feat/generation-engine-v2` | 자동배치가 팀·선임·근무 형태·연속근무·확정 희망 오프·팀 지원·목표시간을 지키고, 경력 구성·공정성·미확정 희망 오프를 목표로 개선하며 각 진단을 따로 보여준다 | A | A11, A12, A14, A15, A18 | `backend/roster/application/**`, `backend/roster/domain/**`, `openapi.yaml`(진단 응답) | 생성 작업 진단 확장, 입력·정책 revision 고정 | 필수 규칙 위반 0건. 시간 초과는 불가능 증명이 아님 | 고정 fixture 재현성, 완전 충원 사례·미충원 사례, 4경로 일치 | CI, 결정 사항 22. 필요하면 "필수 규칙 엔진"과 "소프트 목표 점수"로 두 PR 분리 |
+| 26 · A19 `feat/generation-engine-v2` | 자동배치가 필수 규칙을 지키고 팀별 경력 구성을 개선하며 진단을 따로 보여준다 | A | A11, A12, A14, A15, A18 | `backend/roster/application/**`, `backend/roster/domain/**`, `openapi.yaml`(진단 응답) | 생성 작업 진단 확장, 입력·정책 revision 고정 | 필수 규칙 위반 0건. 팀 안 수동 순서를 상대 경력순으로 사용하며 병원 입사 연월보다 우선 | 날짜순과 수동 순서가 다른 fixture, 완전 충원·미충원 사례, 4경로 결과 일치 | CI, 결정 사항 22. 필요하면 "필수 규칙 엔진"과 "소프트 목표 점수"로 두 PR 분리 |
 | 27 · B10a `feat/android-draft-review` | Android 관리자: 초안 달력 편집, 후보 가능/불가 사유, 자동배치 진행·취소, 미충원·선임·시간·경력 분포 진단, 진단별 확인 후 확정 | B | A16, A18, B7a | `android/**` | 소비: 기존 roster API, A16, A18 | 확정 버튼은 확인 항목 모두 체크해야 활성(서버가 최종 판정) | 409 revision 충돌, 확인 불일치 오류, 생성 취소 | 실연동 확인 |
 | 27 · B10b `feat/web-draft-review` | 웹 같은 기능 (관리자 편집 작업량이 커서 웹 화면 우선 검토 권장) | B | 같음, B7b | `web/**` | 같음 | 같음 | 같음 | 같음 |
 | 28 · B11 `feat/client-revision-compare` | Android·웹 간호사 화면에 변경 표시와 이전/현재 공개본 비교 | B | A17, B9a, B9b | `android/**`, `web/**` (작으면 한 PR, 크면 a/w 분리) | 소비: A17 | 공개본만 비교 | 비교 표시, 이력 없음 상태 | 실연동 확인 |
@@ -241,12 +241,12 @@
 - 완료 증명: 목업·실서버 시연.
 
 ### A5 `feat/staff-admin-career-adjust`
-- 포함: 관리자 조정 필드(편성 단계, 팀 내 순서, 선임 자격), 원본 입사 연월 보존, 조정 이력 저장·조회, `scoringStage` 계산 규칙 갱신, 목록 정렬에 팀 내 순서 반영.
+- 포함: 병원 입사 연월과 실제 경력 시작 연월·직급 분리, 관리자 편성 단계·선임 자격·팀 내 순서 저장, 조정 이력 조회. 팀 안에서 드래그한 순서가 상대 경력순의 기준이다.
 - 제외: 팀 수 일괄 설정(결정 사항 13), 근무 형태(A10).
 - 범위: 백엔드. 계약 합의: B (B5).
 - 충돌: `StaffService`, `StaffJdbcRepository`, `StaffResponses`, `CareerPolicy`, `schema.sql`, `StaffCareerProfileHttpTest`.
-- 예외: 조정 뒤 간호사가 입사 연월 수정(재확인 필요 표시), 비활성 간호사 조정, 동시 조정.
-- 완료 증명: HTTP 테스트, 이력 순서 검증.
+- 예외: 병원 입사 연월과 수동 경력순이 다른 경우, 비활성 간호사 조정, 동시 조정.
+- 완료 증명: HTTP 테스트, 드래그 순서 저장·재조회와 이력 순서 검증.
 
 ### A6 `feat/membership-admin`
 - 포함: 구성원 목록, 역할 변경(관리자 추가·해제), 비활성화, 감사 기록, 마지막 관리자 보호.
@@ -265,7 +265,7 @@
 - 완료 증명: 제외 사유별 테스트, 기존 roster 회귀 테스트.
 
 ### B5a / B5b 팀·간호사·구성원 관리 (Android / 웹)
-- 포함: 팀 수·이름 설정(기존 팀 API 사용), 간호사 팀 배치, 팀별 경력순 목록, 입사 연월 확인·조정·이력, 구성원 역할·비활성화.
+- 포함: 팀 수·이름 설정(기존 팀 API 사용), 간호사 팀 배치, 팀 안의 경력순 드래그 정렬, 병원 입사 연월·실제 경력 정보 조회, 구성원 역할·비활성화.
 - 제외: 근무 형태 입력(B7).
 - 범위: 각각. 계약 합의: A (A5·A6).
 - 예외: 소속 간호사가 있는 팀 삭제(409), 마지막 관리자 해제 거부 메시지.
@@ -368,7 +368,7 @@
 - 완료 증명: 누락 항목별 테스트.
 
 ### A19 `feat/generation-engine-v2`
-- 포함: 모든 필수 규칙을 쓰는 생성, 우선순위(필수 → 충원·선임 → 월 목표 → 선호·경력 분산·공정성), 진단 분리, 정책·입력 revision 고정, 결정적 결과.
+- 포함: 모든 필수 규칙을 쓰는 생성, 우선순위(필수 → 충원·선임 → 월 목표 → 선호·경력 분산·공정성), 진단 분리, 정책·입력 revision 고정, 결정적 결과. 경력 순위는 A5에서 저장한 팀 내 수동 순서를 사용한다.
 - 제외: "최적" 표시, 생성형 AI 판단.
 - 충돌: `RosterService.processGeneration` 대부분, `GenerationCoordinator`.
 - 완료 증명: 고정 fixture(완전 충원·미충원·경력 구성 미달), 성능 상한 측정.
@@ -416,7 +416,7 @@ A16 + A18 ──► B10a/b ──► B12
 
 ## 7. 구현 전에 결정해야 하는 사항
 
-아래 값은 이 문서에서 임의로 정하지 않았다. 표의 "막히는 PR"은 결정 전에 병합할 수 없다.
+아래 항목 중 미결정인 정책은 해당 기능 PR 전에 정한다. 12번은 사용자 결정으로 해결돼 후속 기능의 기준에 반영했다.
 
 | # | 결정할 내용 | 막히는 PR |
 | --- | --- | --- |
@@ -431,7 +431,7 @@ A16 + A18 ──► B10a/b ──► B12
 | 9 | Kakao 계정이 연결되지 않은 가상 간호사 기록을 시연·자동배치 대상에 넣을 수 있게 할지(예: 시연 모드, 관리자 포함 표시) | A7, B6 |
 | 10 | 경력 단계 기본 경계값(현재 코드 12/36/72/120개월)을 유지할지, 직급 필드를 관리자 전용으로 남길지 없앨지 | A5 |
 | 11 | 선임 자격 판정: 관리자 수동 지정만 / 단계 기준 자동 제안 후 관리자 확정 | A5, A9 |
-| 12 | 팀 내 순서의 의미: 화면 정렬만인지, 자동배치 우선순위에도 쓰는지 | A5, A19 |
+| 12 | **해결됨:** 관리자가 팀 안에서 정한 드래그 순서가 상대 경력순이다. 위에 놓인 간호사가 더 선임이며, 병원 입사 연월과 달라도 수동 순서가 자동배치의 경력 판단에 우선한다. | A5, A19, B5 |
 | 13 | 팀 수를 줄일 때 소속 간호사가 있는 팀 처리, 팀 수 일괄 설정 API 필요 여부 | A5, B5 |
 | 14 | 자정을 넘는 Night의 월 귀속, 공휴일 데이터 출처(수동 입력 / 외부 데이터), 기준 일 시간·목표시간의 시연 기본값 | A13 |
 | 15 | 희망 오프 월 한도·주말 목표·마감일 기본값, 마감 뒤 간호사가 앱에서 예외를 요청할 수 있는지 | A12 |
@@ -448,7 +448,7 @@ A16 + A18 ──► B10a/b ──► B12
 
 ## 8. 작업 순서와 검토 기준
 
-1. **breakdown 검토**: 이 문서를 `docs/feature-breakdown` 브랜치의 문서 PR로 올려 두 사람이 검토한다. §7 결정 중 첫 PR에 필요한 항목(8번)을 먼저 정한다. 병합 전에는 기능 구현을 시작하지 않는다.
+1. **breakdown 검토**: 이 문서는 PR #29로 `dev`에 병합됐다. A1 PR #27은 진행 중이며, 다음 서버 기능은 A1과 B1의 검토·병합 후 시작한다.
 2. **기능 브랜치**: 최신 `dev`에서 `feat/...`(또는 `fix/`, `chore/`, `test/`)를 만든다. 쌓인 브랜치는 만들지 않는다. 한 사람이 동시에 여는 기능 PR은 1개, 목업 PR을 포함해도 2개까지로 한다.
 3. **설계 기록**: 각 PR 시작 시 API·DB·권한·예외·인수 기준을 PR 설명 초안에 먼저 적는다(`ai-development-review-workflow.md`). 서버 PR은 OpenAPI 변경을 첫 커밋으로 올리고 B가 소비자 관점에서 검토한다.
 4. **구현·검증**: 백엔드 `./gradlew check`(CI는 현재 `test`), Android `./gradlew :app:assembleDebug`, 웹은 B2 이후 빌드·테스트. 실행하지 못한 검사는 PR에 적는다. 실제 Kakao·외부 API 연동 여부를 "목업/실연동"으로 구분해 적는다.
