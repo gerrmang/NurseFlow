@@ -186,3 +186,33 @@
 - API·DB·환경변수·의존성 변경 없음. 앱 동작과 서버 근무 규칙·권한 검증은 변경하지 않았습니다. 비공개 정보나 사용자 DB 파일은 수정·추가하지 않았습니다.
 - 배포 영향: 앱·서버 재배포나 데이터 이전은 필요하지 않습니다. PR CI에 JVM 검사 시간이 추가됩니다.
 - 되돌리기: 이번 워크플로 변경 커밋을 되돌립니다. 남은 확인은 GitHub에서 새 명령이 실행된 결과이며, 로컬 검증을 원격 CI 통과로 표현하지 않습니다.
+
+## PR P4 실제 Activity 재생성·인증 콜백 검증 보완 (2026-11-07)
+
+### 변경 목적과 내용
+
+- 관련 이슈: 별도 이슈 없음. 확정된 제품 결함 수정이 아니라, 실제 Activity 재생성과 인증 콜백을 연결하지 못했던 검증 공백을 보완했습니다.
+- `ActivityRotationDeviceTest` 6개는 실제 `MainActivity`를 띄우고 `ActivityScenario.recreate()`로 인스턴스 교체 및 이전 Activity 파괴를 확인합니다. KakaoTalk·계정 로그인의 대기 중 콜백을 재생성 후 전달해 로그인 완료·취소·오류·재로그인을 검사합니다. 복원 재시도의 성공·실패도 실제 재생성 전후로 확인합니다.
+- `KakaoLoginSdk`로 외부 SDK 호출 경계만 주입 가능하게 했습니다. 기본 구현은 동일한 `UserApiClient` API를 호출합니다. 테스트는 SDK의 `OAuthToken`·`ClientError` 형식 콜백을 가짜 구현에서 전달하고, 실제 `KakaoLoginClient`의 continuation·취소 처리, 로그인 ViewModel, nonce, 세션 HTTP 클라이언트와 화면을 사용합니다. 성공 시 원래 nonce와 ID 토큰이 정확히 한 번 서버에 전달되고 화면과 저장소가 갱신되는 것도 확인합니다.
+- `IsolatedSessionTestRunner`의 테스트 Application은 시작부터 메모리 저장소를 사용합니다. 계측 실행 자체가 개발자의 기존 NurseFlow 저장 세션을 읽거나 회전시키지 않습니다. 앱의 기본 Application·저장소·SDK 선택은 기존 동작을 유지합니다.
+- PR Verify에 `:app:assembleDebugAndroidTest`를 추가해 JVM 실행 외에 계측 코드 컴파일도 확인하도록 했습니다. 기기 테스트 실행은 CI에 추가하지 않았습니다. 재현 명령과 새 Runner는 `android/README.md`에 기록했습니다.
+
+### 검증
+
+- `android/`에서 `./gradlew.bat :app:testDebugUnitTest :app:assembleDebug :app:assembleDebugAndroidTest :app:lintDebug`: 통과. JVM **26개, 실패/오류/건너뜀 0**, 앱·테스트 APK 빌드 성공. 최종 테스트 수정 후 테스트 APK와 Lint를 다시 검증했습니다. Lint **오류 0, 기존 경고 33개**.
+- 별도 임시 데이터 이미지의 `Pixel_10`(Android 17)에서 `adb -s emulator-5556 shell am instrument -w -e class com.nurseflow.app.ui.ActivityRotationDeviceTest com.nurseflow.app.test/com.nurseflow.app.test.IsolatedSessionTestRunner`: **`OK (6 tests)`**, 12.208초.
+- 새 Runner로 기존 `RestoreRetryDeviceTest`·`SecureSessionDeviceTest` 실행: **`OK (5 tests)`**, 0.276초. 복원 작업 수명과 실제 Keystore/DataStore 저장·복원·폐기도 호환됩니다.
+- 하네스 초기 실행에서 구형 Espresso의 Android 17 입력 API 비호환과 테스트 서버 주소 확인의 UI 스레드 접근을 발견했습니다. Espresso 의존성을 제거하고 기존 접근성 기반 UI 검사로 통일했으며 주소 확인은 테스트 스레드로 옮겼습니다. 최종 하네스에서 6개 모두 통과했습니다.
+- `git diff --check`: 통과. 비밀값·실사용자 정보·실제 자격정보를 fixture나 로그에 추가하지 않았습니다.
+- 미실행: 외부 KakaoTalk·브라우저 인증 UI, OAuth 딥링크 복귀, 실제 계정·서버 E2E, 변경 후 GitHub CI 실행. 이번 검사는 SDK 외부 호출 경계에서 콜백을 전달하므로 실제 Kakao 서비스 인증을 재현했다고 표현하지 않습니다. 실제 기기 방향 센서 조작 대신 Activity 재생성을 직접 수행합니다.
+
+### API·데이터·설정 변경과 배포 영향
+
+- 서버 API·DB·환경변수·저장 형식 변경 없음. 서버 근무 규칙·권한 검증 책임을 유지합니다. 사용자 DB 파일과 로컬 키 설정은 변경하지 않았습니다.
+- Android의 SDK 호출 경계와 Application 컨테이너 생성에 테스트 주입 지점을 추가했습니다. 기본 생성은 기존 실제 SDK·저장소를 사용합니다. MockWebServer를 계측 테스트 의존성에도 추가했고 테스트 Runner를 변경했습니다. 테스트 구현·가상 서버는 앱 배포 코드에 포함되지 않습니다.
+- 서버 배포·데이터 이전은 필요하지 않습니다. PR CI의 계측 APK 컴파일 시간이 추가됩니다. Runner 클래스 변경으로 수동 `am instrument` 명령은 README의 새 컴포넌트 이름을 사용해야 합니다.
+
+### 되돌리기와 남은 위험
+
+- 이번 검증 보완 커밋을 되돌리면 SDK 직접 호출·기존 Runner·이전 CI 명령으로 돌아갑니다. DB 복구는 필요하지 않습니다.
+- 실제 Kakao 앱·브라우저와 운영 콜백 경로의 수동 인수 검증은 별도입니다. GitHub CI·브랜치 보호·독립 리뷰 상태는 확인하지 않았습니다.

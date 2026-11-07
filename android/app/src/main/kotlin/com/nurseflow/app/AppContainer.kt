@@ -11,10 +11,10 @@ class AppContainer(
     context: Context,
     apiBaseUrl: String = BuildConfig.API_BASE_URL,
     tokenStore: TokenStore = SecureTokenStore(context),
+    val kakao: KakaoLoginClient = KakaoLoginClient(),
 ) {
     val session = SessionManager(ApiFactory.authApi(apiBaseUrl), tokenStore)
     val api = ApiFactory.nurseFlowApi(apiBaseUrl, session)
-    val kakao = KakaoLoginClient()
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     init { restoreSession() }
     // Startup and UI retries share the application lifetime, including Activity recreation.

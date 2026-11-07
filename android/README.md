@@ -59,9 +59,26 @@ adb reverse tcp:18081 tcp:18081
 adb reverse tcp:18082 tcp:18082
 adb install -r app/build/outputs/apk/debug/app-debug.apk
 adb install -r app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk
-adb shell am instrument -w -e backendE2e true -e class com.nurseflow.app.core.session.RealBackendSessionDeviceTest com.nurseflow.app.test/androidx.test.runner.AndroidJUnitRunner
+adb shell am instrument -w -e backendE2e true -e class com.nurseflow.app.core.session.RealBackendSessionDeviceTest com.nurseflow.app.test/com.nurseflow.app.test.IsolatedSessionTestRunner
 adb reverse --remove tcp:18081
 adb reverse --remove tcp:18082
 ```
 
 이 검사는 2초 토큰 수명과 서버의 기본 시간 오차 허용을 실제로 기다리므로 1분 이상 걸립니다. 일반 기기 테스트에서는 명시적 `backendE2e=true`가 없으면 건너뜁니다. 두 실제 Kakao 계정의 인증 전환을 검증하는 검사는 아닙니다.
+
+## Activity 재생성과 인증 콜백 회귀 검사
+
+`ActivityRotationDeviceTest`는 실제 `MainActivity`·Compose 화면·ViewModel·HTTP 클라이언트를 사용합니다. 로그인 버튼을 누른 뒤 `ActivityScenario.recreate()`로 Activity 인스턴스를 교체하고, 이전 Activity가 파괴된 것도 확인합니다. 이후 Kakao SDK 형식의 성공·취소·오류 콜백을 전달해 로그인 완료 또는 재로그인을 검사합니다. 복원 재시도의 성공·실패도 실제 Activity 재생성 전후로 확인합니다.
+
+외부 SDK 호출만 `KakaoLoginSdk`의 가짜 구현으로 교체합니다. `KakaoLoginClient`의 콜백 변환·취소 처리, 로그인 ViewModel, nonce 생성, 세션 HTTP 요청은 실제 코드입니다. 가짜 HTTP 서버는 기기 loopback에만 열리고 가상 토큰·사용자만 사용합니다. 실제 KakaoTalk·브라우저 인증 화면과 OAuth 딥링크 복귀는 이 검사의 범위에 포함되지 않습니다.
+
+`IsolatedSessionTestRunner`는 테스트 Application을 사용해 시작 시 사용자 저장 세션을 읽거나 갱신하지 않습니다. 앱의 기본 실행은 기존 Application과 SDK 구현을 그대로 사용합니다. 다음 명령으로 실행합니다.
+
+```powershell
+./gradlew.bat :app:assembleDebug :app:assembleDebugAndroidTest
+adb install -r app/build/outputs/apk/debug/app-debug.apk
+adb install -r app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk
+adb shell am instrument -w -e class com.nurseflow.app.ui.ActivityRotationDeviceTest com.nurseflow.app.test/com.nurseflow.app.test.IsolatedSessionTestRunner
+```
+
+PR Verify는 JVM 테스트 실행과 앱·계측 테스트 APK 컴파일을 수행합니다. 기기 계측 테스트 실행은 연결된 테스트 기기에서 별도로 수행합니다.

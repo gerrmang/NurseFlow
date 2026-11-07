@@ -6,7 +6,6 @@ import com.kakao.sdk.common.model.ClientError
 import com.kakao.sdk.common.model.ClientErrorCause
 import com.kakao.sdk.common.model.AuthError
 import com.kakao.sdk.common.model.ApiError
-import com.kakao.sdk.user.UserApiClient
 import com.nurseflow.app.BuildConfig
 import com.kakao.sdk.common.util.Utility
 import kotlinx.coroutines.CancellationException
@@ -24,8 +23,8 @@ class KakaoLoginFailed(message: String) : Exception(message)
  * a browser tab. Requests an OpenID Connect ID token bound to a fresh nonce, which the server
  * verifies. Kakao access/refresh tokens are not sent to NurseFlow.
  */
-class KakaoLoginClient {
-    val isConfigured: Boolean get() = BuildConfig.KAKAO_NATIVE_APP_KEY.isNotBlank()
+class KakaoLoginClient(private val sdk: KakaoLoginSdk = AndroidKakaoLoginSdk()) {
+    val isConfigured: Boolean get() = sdk.isConfigured
 
     fun newNonce(): String {
         val bytes = ByteArray(24).also(SecureRandom()::nextBytes)
@@ -38,8 +37,7 @@ class KakaoLoginClient {
             if (BuildConfig.DEBUG) "카카오 앱 키가 설정되지 않았어요. local.properties의 kakao.nativeAppKey를 확인해 주세요."
             else "로그인 설정을 확인 중이에요. 관리자에게 문의해 주세요.",
         )
-        val client = UserApiClient.instance
-        val token = if (client.isKakaoTalkLoginAvailable(context)) {
+        val token = if (sdk.isKakaoTalkLoginAvailable(context)) {
             try {
                 talkLogin(context, nonce)
             } catch (e: KakaoLoginCancelled) {
@@ -59,15 +57,15 @@ class KakaoLoginClient {
 
     /** Clears the Kakao SDK token on this device. NurseFlow's own logout is separate. */
     fun logout() {
-        if (isConfigured) UserApiClient.instance.logout { }
+        sdk.logout()
     }
 
     private suspend fun talkLogin(context: Context, nonce: String): OAuthToken = suspendCancellableCoroutine { cont ->
-        UserApiClient.instance.loginWithKakaoTalk(context, nonce = nonce) { token, error -> cont.complete(token, error, context) }
+        sdk.loginWithKakaoTalk(context, nonce) { token, error -> cont.complete(token, error, context) }
     }
 
     private suspend fun accountLogin(context: Context, nonce: String): OAuthToken = suspendCancellableCoroutine { cont ->
-        UserApiClient.instance.loginWithKakaoAccount(context, nonce = nonce) { token, error -> cont.complete(token, error, context) }
+        sdk.loginWithKakaoAccount(context, nonce) { token, error -> cont.complete(token, error, context) }
     }
 
     private fun kotlinx.coroutines.CancellableContinuation<OAuthToken>.complete(token: OAuthToken?, error: Throwable?, context: Context) {
