@@ -160,7 +160,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiProblem'
         '403':
-          description: WEB_CLIENT_REQUIRED — 웹 헤더 누락 또는 허용되지 않은 Origin
+          description: WEB_CLIENT_REQUIRED — 웹 헤더 누락, 허용되지 않은 Origin 또는 교차 사이트 요청(Sec-Fetch-Site cross-site)
           content:
             application/problem+json:
               schema:
@@ -211,7 +211,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiProblem'
         '403':
-          description: WEB_CLIENT_REQUIRED
+          description: WEB_CLIENT_REQUIRED — 웹 헤더 누락, 허용되지 않은 Origin 또는 교차 사이트 요청(Sec-Fetch-Site cross-site)
           content:
             application/problem+json:
               schema:
@@ -248,7 +248,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiProblem'
         '403':
-          description: WEB_CLIENT_REQUIRED
+          description: WEB_CLIENT_REQUIRED — 웹 헤더 누락, 허용되지 않은 Origin 또는 교차 사이트 요청(Sec-Fetch-Site cross-site)
           content:
             application/problem+json:
               schema:
@@ -267,7 +267,7 @@ paths:
         '204':
           description: 로그아웃 완료 (Set-Cookie nf_refresh Max-Age=0)
         '403':
-          description: WEB_CLIENT_REQUIRED
+          description: WEB_CLIENT_REQUIRED — 웹 헤더 누락, 허용되지 않은 Origin 또는 교차 사이트 요청(Sec-Fetch-Site cross-site)
           content:
             application/problem+json:
               schema:
@@ -1710,6 +1710,10 @@ components:
       description: |
         웹 인증 경로의 CSRF 방어. 값은 `web`. 사용자 정의 헤더라 다른 사이트의 폼·단순 요청으로는 보낼 수 없다.
         Origin 헤더가 있으면 허용 출처(NURSEFLOW_WEB_ALLOWED_ORIGINS, 비우면 Redirect URI들의 출처)여야 한다.
+        출처는 브라우저처럼 기본 포트(https 443, http 80)를 생략해 비교한다.
+        허용 출처여도 `Sec-Fetch-Site: cross-site` 요청은 거부한다. 서버는 CORS를 열지 않으며 쿠키는 SameSite=Strict다.
+        따라서 웹은 API와 같은 사이트에서 호출해야 한다(같은 도메인, 개발 서버 프록시 또는 단일 리버스 프록시).
+        허용 출처 목록에 다른 사이트를 등록해도 교차 사이트 호출은 지원되지 않는다.
       schema:
         type: string
         enum: [web]
