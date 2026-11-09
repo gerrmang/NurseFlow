@@ -1,7 +1,7 @@
-# NurseFlow 기능별 개발 breakdown (초안)
+# NurseFlow 기능별 개발 breakdown
 
-상태: **2026-11-07 실행 계획. breakdown은 PR #29로 병합됐고 A1은 PR #27에서 진행 중이다.**
-현재 구현 상태표 기준 커밋: `origin/dev` `5ca51cc` (PR #26 병합 시점). 새 기능을 시작할 때는 더 최신 `dev`의 코드 근거를 다시 확인한다.
+상태: **2026-11-09 실행 기준. breakdown은 PR #29로, A1은 PR #27로, B1은 PR #30으로 `dev`에 병합됐다. 진행 중인 기능·PR은 [공유 작업 현황](work-status.md)을 확인한다. §7의 미결정 사항은 해당 기능의 선행 조건으로 남는다.**
+§1 구현 상태표는 `origin/dev` `5ca51cc` (PR #26 병합 시점)의 스냅샷이다. 현재 코드 상태를 나타내는 표가 아니므로 새 기능을 시작할 때는 최신 `dev`와 [기능별 검증 기록](../android/B1-verification.md)을 확인한다.
 
 읽은 자료: `AGENTS.md`, `docs/runbooks/git-flow.md`, `docs/pre-breakdown-scope-2026-11-04.md`, `docs/mvp-scope.md`, `docs/requirements.md`, `docs/monthly-roster-rules-and-two-person-plan.md`, `docs/hospital-roster-policy-settings.md`, `docs/openapi.yaml`, `docs/test-plan.md`, `docs/ai-development-review-workflow.md`, 그리고 `backend/`·`android/`·`.github/` 코드.
 
@@ -403,14 +403,14 @@ A16 + A18 ──► B10a/b ──► B12
 
 ---
 
-## 6. 첫 번째로 착수할 PR 2개
+## 6. 최초 착수 PR과 결과
 
 | PR | 담당 | 이유 |
 | --- | --- | --- |
-| **A1 `feat/invitation-24h-career-month`** | A | 열린 결정 사항이 없고(24시간 고정·입사 연월만은 확정), 범위가 작고, 초대 가입 화면(B3)의 계약을 먼저 고정한다. 병원 검색·병동 생성은 결정 사항 1~3과 외부 API 키가 필요해 그 사이 결정을 받는다 |
-| **B1 `feat/android-kakao-session`** | B | 필요한 서버 API가 이미 `dev`에 있고, 미병합 브랜치의 로그인 커밋이 최신 `dev`에 git 충돌 없이 적용됨을 확인했다(빌드는 PR에서 확인). A1과 파일이 전혀 겹치지 않는다 |
+| **A1 `feat/invitation-24h-career-month` · PR #27 병합 완료** | A | 초대 만료를 24시간으로 고정하고 가입 입력을 입사 연월만 받도록 해 초대 화면(B3)의 계약을 먼저 확정했다. 병원 검색·병동 생성은 후속 결정과 외부 API 키가 필요했다. |
+| **B1 `feat/android-kakao-session` · PR #30 병합 완료** | B | 서버 API를 소비해 Android Kakao 로그인·세션·병동 목록을 연결했다. 검증 결과와 미검증 범위는 [`B1 검증 기록`](../android/B1-verification.md)에 있다. |
 
-두 PR이 병합되면 A는 A3(병원 검색, 키 준비되면)·A2, B는 B9a(공개 근무표 조회)·B3a로 넘어간다.
+두 PR은 모두 `dev`에 병합됐다. 다음 기능은 §3의 선행 조건과 §7의 해당 결정 사항, 현재 [`공유 작업 현황`](work-status.md)을 확인해 선택한다. 이 절의 최초 착수 순서를 다음 작업 지시로 사용하지 않는다.
 
 ---
 

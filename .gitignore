@@ -1,5 +1,4 @@
 .omx/
-.codex/
 .gradle/
 **/build/
 .kotlin/
