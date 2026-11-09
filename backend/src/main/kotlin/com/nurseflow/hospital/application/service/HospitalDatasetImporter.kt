@@ -14,6 +14,7 @@ import java.nio.file.Files
 import java.nio.file.Path
 import java.security.MessageDigest
 import java.time.Instant
+import java.util.UUID
 import java.util.zip.ZipFile
 
 /** Outcome of one import. `imported` is false when the same file was already imported. */
@@ -30,6 +31,7 @@ class HospitalDatasetException(message: String) : RuntimeException(message)
 /**
  * Imports the `병원정보서비스` CSV of 「전국 병의원 및 약국 현황」 (CP949, one row per institution) in one
  * transaction: every row is upserted and reactivated, institutions missing from the file are deactivated.
+ * A truncated file, a CSV syntax error or an unusually large deactivation rolls the whole import back.
  * The pharmacy and detail CSVs in the same zip are ignored. Searches keep reading the previous list until commit.
  */
 @Service
@@ -65,21 +67,28 @@ class HospitalDatasetImporter(
         val column = REQUIRED_COLUMNS.associateWith { name ->
             header.indexOf(name).takeIf { it >= 0 } ?: throw HospitalDatasetException("missing column $name")
         }
+        val importId = UUID.randomUUID()
         return transactions.execute {
-            hospitals.deactivateAll(SOURCE)
+            val previouslyActive = hospitals.countActive(SOURCE)
             var imported = 0
             var skipped = 0
             rows(reader, column).chunked(BATCH).forEach { batch ->
                 val valid = batch.filterNotNull()
                 skipped += batch.size - valid.size
-                hospitals.upsert(SOURCE, version, valid)
+                hospitals.upsert(SOURCE, version, importId, valid)
                 imported += valid.size
             }
             if (imported < properties.dataset.minRows) {
                 throw HospitalDatasetException("only $imported rows; expected at least ${properties.dataset.minRows}")
             }
-            val deactivated = hospitals.countDeactivatedOutside(SOURCE, version)
-            hospitals.recordImport(SOURCE, version, sha256, imported, skipped, deactivated, Instant.now())
+            val deactivated = hospitals.deactivateUnseen(SOURCE, importId)
+            if (deactivated > previouslyActive * properties.dataset.maxDeactivationRatio) {
+                throw HospitalDatasetException(
+                    "would deactivate $deactivated of $previouslyActive institutions; " +
+                        "above ${properties.dataset.maxDeactivationRatio}",
+                )
+            }
+            hospitals.recordImport(importId, SOURCE, version, sha256, imported, skipped, deactivated, Instant.now())
             log.info("Hospital dataset {} imported: rows={} skipped={} deactivated={}", version, imported, skipped, deactivated)
             HospitalImportResult(true, version, imported, skipped, deactivated)
         }!!
@@ -138,31 +147,54 @@ class HospitalDatasetImporter(
     }
 }
 
-/** Minimal RFC 4180 reader: quoted fields may contain commas, doubled quotes and line breaks. */
+/**
+ * Minimal RFC 4180 reader: quoted fields may contain commas, doubled quotes and line breaks. An unterminated
+ * quote or an implausibly long field fails the whole import instead of silently merging rows.
+ */
 internal object HospitalCsv {
+    private const val MAX_FIELD = 2_000
+
     fun readRecord(reader: BufferedReader): List<String>? {
         val fields = mutableListOf<String>()
         val field = StringBuilder()
         var quoted = false
+        var closedQuote = false
         var sawAny = false
         while (true) {
             val c = reader.read()
             if (c < 0) {
+                // A missing closing quote would otherwise swallow every following row into one field.
+                if (quoted) throw HospitalDatasetException("unterminated quoted field")
                 if (!sawAny) return null
                 fields += field.toString()
                 return fields
             }
             sawAny = true
             val ch = c.toChar()
+            // After a closing quote only a delimiter may follow. Anything else means a quote went missing
+            // and the reader has been merging the following rows into this field.
+            if (closedQuote && ch != ',' && ch != '\n' && ch != '\r') {
+                throw HospitalDatasetException("unexpected character after a closing quote")
+            }
+            closedQuote = false
             when {
                 quoted && ch == '"' -> {
                     reader.mark(1)
-                    if (reader.read() == '"'.code) field.append('"') else { quoted = false; reader.reset() }
+                    if (reader.read() == '"'.code) {
+                        field.append('"')
+                    } else {
+                        quoted = false
+                        closedQuote = true
+                        reader.reset()
+                    }
                 }
-                quoted -> field.append(ch)
+                quoted -> field.append(ch).also {
+                    if (field.length > MAX_FIELD) throw HospitalDatasetException("quoted field longer than $MAX_FIELD")
+                }
                 ch == '"' && field.isEmpty() -> quoted = true
                 ch == ',' -> { fields += field.toString(); field.clear() }
-                ch == '\n' -> { fields += field.toString().removeSuffix("\r"); return fields }
+                ch == '\r' && !quoted -> Unit
+                ch == '\n' -> { fields += field.toString(); return fields }
                 else -> field.append(ch)
             }
         }

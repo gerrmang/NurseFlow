@@ -2,6 +2,8 @@ package com.nurseflow.hospital.api
 
 import com.nurseflow.hospital.application.service.HospitalDatasetException
 import com.nurseflow.hospital.application.service.HospitalDatasetImporter
+import com.nurseflow.hospital.config.HospitalProperties
+import com.nurseflow.hospital.persistence.repository.HospitalJdbcRepository
 import com.nurseflow.support.ApiTestBase
 import com.nurseflow.support.FakeHiraServer
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -11,6 +13,7 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 import org.junit.jupiter.api.io.TempDir
 import org.springframework.beans.factory.annotation.Autowired
+import org.springframework.transaction.support.TransactionTemplate
 import java.net.URLEncoder
 import java.nio.charset.Charset
 import java.nio.file.Files
@@ -21,6 +24,8 @@ import java.util.zip.ZipOutputStream
 /** Search over an imported copy of the official list. All institutions here are fictional. */
 class HospitalDatasetSearchHttpTest : ApiTestBase() {
     @Autowired lateinit var importer: HospitalDatasetImporter
+    @Autowired lateinit var hospitalRows: HospitalJdbcRepository
+    @Autowired lateinit var transactions: TransactionTemplate
     @TempDir lateinit var dir: Path
 
     private val header = "암호화요양기호,요양기관명,종별코드,종별코드명,시도코드,시도코드명,주소,전화번호"
@@ -139,6 +144,51 @@ class HospitalDatasetSearchHttpTest : ApiTestBase() {
         val item = search("가상큰병원").json!!.get("items")[0]
         assertEquals("가상 \"큰\" 병원", item.get("name").asString())
         assertEquals("서울특별시 가상구, 1층", item.get("address").asString())
+    }
+
+    @Test
+    fun `an unterminated quote fails the import instead of swallowing the following rows`() {
+        importer.importIfChanged(zip("data.zip", september))
+        val broken = september.take(2) + "FAKE-201,가상깨진병원,21,병원,110000,서울,\"닫히지 않은 주소,02-000-0000" + september.drop(2)
+
+        assertThrows<HospitalDatasetException> { importer.importIfChanged(csv("broken-quote.csv", broken)) }
+
+        assertEquals(4, search("가상병원").json!!.get("totalCount").asInt())
+        assertEquals(1, jdbc.queryForObject("SELECT COUNT(*) FROM hospital_dataset_imports", Int::class.java))
+    }
+
+    @Test
+    fun `a file that would deactivate too many institutions is rejected`() {
+        importer.importIfChanged(zip("data.zip", september))
+
+        // 5 active, only 2 left: 3 deactivations is above the 0.5 ratio in the test config.
+        assertThrows<HospitalDatasetException> { importer.importIfChanged(csv("shrunk.csv", september.take(2))) }
+
+        assertEquals(4, search("가상병원").json!!.get("totalCount").asInt())
+    }
+
+    @Test
+    fun `a file below the minimum row count rolls back without a history entry`() {
+        importer.importIfChanged(zip("data.zip", september))
+        val strict = HospitalDatasetImporter(
+            HospitalProperties(dataset = HospitalProperties.Dataset(minRows = 100)), hospitalRows, transactions,
+        )
+
+        assertThrows<HospitalDatasetException> { strict.importIfChanged(csv("small.csv", september)) }
+
+        assertEquals(4, search("가상병원").json!!.get("totalCount").asInt())
+        assertEquals(1, jdbc.queryForObject("SELECT COUNT(*) FROM hospital_dataset_imports", Int::class.java))
+    }
+
+    @Test
+    fun `line breaks inside a quoted address stay in one row`() {
+        importer.importIfChanged(csv("multiline.csv", listOf(
+            "FAKE-301,가상줄바꿈병원,21,병원,110000,서울,\"서울특별시 가상구\r\n가상로 1\",02-000-0000",
+            row("FAKE-302", "가상다음병원", "21", "병원", "서울특별시 가상구 2"),
+        )))
+
+        assertEquals("서울특별시 가상구\r\n가상로 1", search("가상줄바꿈병원").json!!.get("items")[0].get("address").asString())
+        assertEquals(1, search("가상다음병원").json!!.get("totalCount").asInt())
     }
 
     @Test

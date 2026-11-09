@@ -16,5 +16,6 @@ nurseflow:
       timeout: 500ms
     dataset:
       min-rows: 1
+      max-deactivation-ratio: 0.5
   invitation:
     link-base-url: https://nurseflow.test/invite

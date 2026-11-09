@@ -20,8 +20,7 @@ data class HospitalDatasetInfo(val version: String, val fileSha256: String)
 
 @Repository
 class HospitalJdbcRepository(private val jdbc: JdbcTemplate) {
-    fun hasActive(source: String): Boolean =
-        jdbc.queryForObject("SELECT COUNT(*) FROM hospitals WHERE source=? AND active=TRUE", Int::class.java, source)!! > 0
+    fun hasActive(source: String): Boolean = countActive(source) > 0
 
     /**
      * Contains-match on the normalized name. Order: exact name, then hospital-level institutions before clinics
@@ -56,40 +55,52 @@ class HospitalJdbcRepository(private val jdbc: JdbcTemplate) {
         source,
     ).firstOrNull()
 
-    fun deactivateAll(source: String) {
-        jdbc.update("UPDATE hospitals SET active=FALSE WHERE source=?", source)
-    }
-
-    /** Upserts and reactivates the rows under the new dataset version. */
-    fun upsert(source: String, version: String, rows: List<HospitalRow>) {
+    /** Upserts and reactivates the rows, marking them as seen by [importId]. */
+    fun upsert(source: String, version: String, importId: UUID, rows: List<HospitalRow>) {
         jdbc.batchUpdate(
             """MERGE INTO hospitals h
                USING (VALUES (CAST(? AS VARCHAR(255)), CAST(? AS VARCHAR(20)), CAST(? AS VARCHAR(200)),
                               CAST(? AS VARCHAR(200)), CAST(? AS INT), CAST(? AS VARCHAR(50)),
-                              CAST(? AS VARCHAR(500)), CAST(? AS VARCHAR(20))))
-                     AS v(external_id, source, name, search_name, search_rank, category_name, address, dataset_version)
+                              CAST(? AS VARCHAR(500)), CAST(? AS VARCHAR(20)), CAST(? AS UUID)))
+                     AS v(external_id, source, name, search_name, search_rank, category_name, address, dataset_version,
+                          last_import_id)
                ON h.external_id = v.external_id
                WHEN MATCHED THEN UPDATE SET source=v.source, name=v.name, search_name=v.search_name,
                     search_rank=v.search_rank, category_name=v.category_name, address=v.address,
-                    active=TRUE, dataset_version=v.dataset_version
+                    active=TRUE, dataset_version=v.dataset_version, last_import_id=v.last_import_id
                WHEN NOT MATCHED THEN INSERT (external_id, source, name, search_name, search_rank, category_name,
-                    address, active, dataset_version)
+                    address, active, dataset_version, last_import_id)
                     VALUES (v.external_id, v.source, v.name, v.search_name, v.search_rank, v.category_name,
-                    v.address, TRUE, v.dataset_version)""",
-            rows.map { arrayOf<Any?>(it.externalId, source, it.name, it.searchName, it.searchRank, it.categoryName, it.address, version) },
+                    v.address, TRUE, v.dataset_version, v.last_import_id)""",
+            rows.map {
+                arrayOf<Any?>(it.externalId, source, it.name, it.searchName, it.searchRank, it.categoryName, it.address, version, importId)
+            },
         )
     }
 
-    fun countDeactivatedOutside(source: String, version: String): Int = jdbc.queryForObject(
-        "SELECT COUNT(*) FROM hospitals WHERE source=? AND active=FALSE AND dataset_version<>?", Int::class.java, source, version,
-    )!!
+    fun countActive(source: String): Int =
+        jdbc.queryForObject("SELECT COUNT(*) FROM hospitals WHERE source=? AND active=TRUE", Int::class.java, source)!!
 
-    fun recordImport(source: String, version: String, sha256: String, imported: Int, skipped: Int, deactivated: Int, now: Instant) {
+    /** Deactivates active rows the import [importId] did not contain; returns how many. */
+    fun deactivateUnseen(source: String, importId: UUID): Int = jdbc.update(
+        "UPDATE hospitals SET active=FALSE WHERE source=? AND active=TRUE AND last_import_id<>?", source, importId,
+    )
+
+    fun recordImport(
+        importId: UUID,
+        source: String,
+        version: String,
+        sha256: String,
+        imported: Int,
+        skipped: Int,
+        deactivated: Int,
+        now: Instant,
+    ) {
         jdbc.update(
             """INSERT INTO hospital_dataset_imports
                (import_id,source,dataset_version,file_sha256,imported_count,skipped_count,deactivated_count,imported_at)
                VALUES(?,?,?,?,?,?,?,?)""",
-            UUID.randomUUID(), source, version, sha256, imported, skipped, deactivated, now.toString(),
+            importId, source, version, sha256, imported, skipped, deactivated, now.toString(),
         )
     }
 }
