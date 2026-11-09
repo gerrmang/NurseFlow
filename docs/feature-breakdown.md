@@ -1,7 +1,7 @@
-# NurseFlow 기능별 개발 breakdown (초안)
+# NurseFlow 기능별 개발 breakdown
 
-상태: **2026-11-07 실행 계획. breakdown은 PR #29로 병합됐고 A1은 PR #27에서 진행 중이다.**
-현재 구현 상태표 기준 커밋: `origin/dev` `5ca51cc` (PR #26 병합 시점). 새 기능을 시작할 때는 더 최신 `dev`의 코드 근거를 다시 확인한다.
+상태: **2026-11-09 실행 기준. breakdown은 PR #29로, A1은 PR #27로, B1은 PR #30으로 `dev`에 병합됐다. 진행 중인 기능·PR은 [공유 작업 현황](work-status.md)을 확인한다. §7의 미결정 사항은 해당 기능의 선행 조건으로 남는다.**
+§1 구현 상태표는 `origin/dev` `5ca51cc` (PR #26 병합 시점)의 스냅샷이다. 현재 코드 상태를 나타내는 표가 아니므로 새 기능을 시작할 때는 최신 `dev`와 [기능별 검증 기록](../android/B1-verification.md)을 확인한다.
 
 읽은 자료: `AGENTS.md`, `docs/runbooks/git-flow.md`, `docs/pre-breakdown-scope-2026-11-04.md`, `docs/mvp-scope.md`, `docs/requirements.md`, `docs/monthly-roster-rules-and-two-person-plan.md`, `docs/hospital-roster-policy-settings.md`, `docs/openapi.yaml`, `docs/test-plan.md`, `docs/ai-development-review-workflow.md`, 그리고 `backend/`·`android/`·`.github/` 코드.
 
@@ -403,14 +403,14 @@ A16 + A18 ──► B10a/b ──► B12
 
 ---
 
-## 6. 첫 번째로 착수할 PR 2개
+## 6. 최초 착수 PR과 결과
 
 | PR | 담당 | 이유 |
 | --- | --- | --- |
-| **A1 `feat/invitation-24h-career-month`** | A | 열린 결정 사항이 없고(24시간 고정·입사 연월만은 확정), 범위가 작고, 초대 가입 화면(B3)의 계약을 먼저 고정한다. 병원 검색·병동 생성은 결정 사항 1~3과 외부 API 키가 필요해 그 사이 결정을 받는다 |
-| **B1 `feat/android-kakao-session`** | B | 필요한 서버 API가 이미 `dev`에 있고, 미병합 브랜치의 로그인 커밋이 최신 `dev`에 git 충돌 없이 적용됨을 확인했다(빌드는 PR에서 확인). A1과 파일이 전혀 겹치지 않는다 |
+| **A1 `feat/invitation-24h-career-month` · PR #27 병합 완료** | A | 초대 만료를 24시간으로 고정하고 가입 입력을 입사 연월만 받도록 해 초대 화면(B3)의 계약을 먼저 확정했다. 병원 검색·병동 생성은 후속 결정과 외부 API 키가 필요했다. |
+| **B1 `feat/android-kakao-session` · PR #30 병합 완료** | B | 서버 API를 소비해 Android Kakao 로그인·세션·병동 목록을 연결했다. 검증 결과와 미검증 범위는 [`B1 검증 기록`](../android/B1-verification.md)에 있다. |
 
-두 PR이 병합되면 A는 A3(병원 검색, 키 준비되면)·A2, B는 B9a(공개 근무표 조회)·B3a로 넘어간다.
+두 PR은 모두 `dev`에 병합됐다. 다음 기능은 §3의 선행 조건과 §7의 해당 결정 사항, 현재 [`공유 작업 현황`](work-status.md)을 확인해 선택한다. 이 절의 최초 착수 순서를 다음 작업 지시로 사용하지 않는다.
 
 ---
 
@@ -448,12 +448,15 @@ A16 + A18 ──► B10a/b ──► B12
 
 ## 8. 작업 순서와 검토 기준
 
-1. **breakdown 검토**: 이 문서는 PR #29로 `dev`에 병합됐다. A1 PR #27은 진행 중이며, 다음 서버 기능은 A1과 B1의 검토·병합 후 시작한다.
+1. **breakdown 검토**: 이 문서는 PR #29로 `dev`에 병합됐다. A1 PR #27과 B1 PR #30도 `dev`에 병합됐다. 현재 기능별 진행은 [공유 작업 현황](work-status.md)을 확인한다.
 2. **기능 브랜치**: 최신 `dev`에서 `feat/...`(또는 `fix/`, `chore/`, `test/`)를 만든다. 쌓인 브랜치는 만들지 않는다. 한 사람이 동시에 여는 기능 PR은 1개, 목업 PR을 포함해도 2개까지로 한다.
 3. **설계 기록**: 각 PR 시작 시 API·DB·권한·예외·인수 기준을 PR 설명 초안에 먼저 적는다(`ai-development-review-workflow.md`). 서버 PR은 OpenAPI 변경을 첫 커밋으로 올리고 B가 소비자 관점에서 검토한다.
-4. **구현·검증**: 백엔드 `./gradlew check`(CI는 현재 `test`), Android `./gradlew :app:assembleDebug`, 웹은 B2 이후 빌드·테스트. 실행하지 못한 검사는 PR에 적는다. 실제 Kakao·외부 API 연동 여부를 "목업/실연동"으로 구분해 적는다.
+4. **구현·검증**:
+   - **로컬 필수 검사**: 백엔드는 `./gradlew test`와 설정된 검사 항목을 확인한다. Android는 `./gradlew :app:testDebugUnitTest :app:assembleDebug :app:assembleDebugAndroidTest`를 실행한다. 웹은 B2 이후 빌드·테스트를 실행한다.
+   - **CI 검사**: `.github/workflows/verify.yml` 기준으로 백엔드는 `./gradlew test --no-daemon`, Android는 `./gradlew :app:testDebugUnitTest :app:assembleDebug :app:assembleDebugAndroidTest --no-daemon`을 실행한다.
+   - **기기 검사**: 에뮬레이터/기기에서 `./gradlew :app:connectedAndroidTest`를 실행한다. CI에서는 실행하지 않으므로 결과 또는 생략 사유를 PR에 기록한다. 실제 Kakao·외부 API 연동 여부도 "목업/실연동"으로 구분해 적는다.
 5. **CI**: PR에서 CI 통과. GitHub의 필수 검사·브랜치 보호는 설정 확인 전까지 강제된다고 적지 않는다.
-6. **Codex 리뷰**: 병합 전 변경 전체를 리뷰한다. P1(권한 우회·초안 노출·필수 규칙 위반·잘못된 공개)과 P2(회귀·동시성·월 경계)는 병합 전 수정, 실행 오류 가능성이 있는 P3도 수정한다.
+6. **Codex 리뷰**: 병합 전 변경 전체를 리뷰한다. 우선순위는 실제 영향도로 정하고 결함 종류는 태그로 붙인다(`ai-development-review-workflow.md`). P1·P2는 병합 전 수정, 실행 오류 가능성이 있는 P3도 수정한다.
 7. **병합**: `dev`로 **스쿼시 병합**(`git-flow.md`). 병합된 브랜치는 삭제한다. 최근 PR들이 일반 병합 커밋으로 들어간 점은 이 단계부터 바로잡는다.
 8. **다음 기능 착수**: 병합 후 최신 `dev`에서 다음 브랜치를 만든다. 상대 담당자의 계약 PR이 열려 있으면 목업 작업만 진행한다.
 9. **릴리스**: 단계(§3.1~§3.5)가 끝날 때마다 검증된 `dev → main` PR을 검토한다. `main`에 기능 브랜치를 직접 병합하지 않는다.
