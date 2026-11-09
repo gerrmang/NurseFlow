@@ -24,8 +24,6 @@ data class ReplayProbe(val label: String, val revision: Int)
 
 @SpringBootTest(properties = [
     "spring.datasource.url=jdbc:h2:mem:roster_repository;DB_CLOSE_DELAY=-1",
-    "spring.security.oauth2.resourceserver.jwt.issuer-uri=https://issuer.example.invalid",
-    "spring.security.oauth2.resourceserver.jwt.audiences=nurseflow-api",
 ])
 class RosterJdbcRepositoryTest @Autowired constructor(
     private val jdbc: JdbcTemplate,

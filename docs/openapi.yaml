@@ -3,33 +3,128 @@ info:
   title: NurseFlow Scheduling API
   version: 0.1.0
   description: |
-    개발 전 계약 초안. Android Kotlin 앱과 반응형 웹이 공유하는 Kotlin/Spring Boot REST API.
+    Android 앱과 반응형 웹이 공유하는 Kotlin/Spring Boot REST API.
     확정된 결정: 간호사는 병동 전체 공개표 또는 본인 공개표 조회, 미충원 표 공개 허용,
     관리자 확정 전 draft는 비공개, 관리자 confirm 성공 시 해당 revision을 활성 달력에 공개 적용.
-    시연 MVP는 Kakao 로그인 후 관리자 초대 수락으로 병동 소속을 얻고 H2를 사용한다.
-    Kakao 세션·초대·권한 변경 API는 docs/mvp-scope.md에 결정 사항을 기록했으며,
-    이 파일에는 아직 해당 endpoint/schema를 반영하지 않았다. 해당 부분은 구현 전 계약 확정이 필요하다.
-    병동 내 팀별 편성 및 관리자 확인을 거친 근무연차·직급의 1~5 경력 단계 구성 목표도
-    docs/mvp-scope.md에 추가되었다. 현재 StaffInput/StaffMember와 근무 수요 스키마에는
-    팀·프로필·단계 정책·경력 구성 진단·관리자 허용형 팀 간 지원근무 필드가 없으므로
-    관련 기능 구현 전에 계약을 확장해야 한다.
+    현재 구현은 Kakao 세션(/auth/*), 운영자 코드가 설정된 시연용 1회 첫 병동 생성(POST /wards),
+    24시간 초대 발급·철회·수락과 팀·경력 프로필 API를 제공한다. 신규 제품 결정은
+    docs/pre-breakdown-scope-2026-11-04.md를 따른다. 최초 관리자의 실제 병원 검색·선택과 병동명 자기 공간 생성,
+    실제 병원 검색·선택과 병동명 자기 공간 생성, 관리자 확정 희망 오프는 아직 구현되지 않았다.
+    클라이언트는 Kakao SDK/웹 로그인으로 받은 ID 토큰을 /auth/kakao/session에 보내고,
+    이후 모든 요청에는 NurseFlow가 발급한 access token을 사용한다. Kakao 토큰은 API bearer로 받지 않는다.
+    가입 시 간호사는 병원 입사 연월(hospitalJoinedOn)을 제출한다. 실제 경력 시작 연월(careerStartedOn)과 직급은
+    관리자가 설정한다. 팀별 드래그 순서가 상대 경력순을 정하며 병원 입사 연월보다 우선하는 기능은 아직 구현되지 않았다.
+    팀별 수요·경력 구성 진단·관리자 허용형 팀 간 지원근무는 해당 기능 구현 전에 계약을 확장한다.
     추가 확정된 병원별 근무 시각·환산시간, 휴일 달력·월 목표시간, VY/SOF,
     Night 전담 3개월 순환, 연속근무 상한, 희망 오프·선임 최소 인원 계약도
     docs/monthly-roster-rules-and-two-person-plan.md를 기준으로 기능별 PR에서 설계한다.
+    관리자 설정 입력 항목과 첨부 정책 조정은 docs/hospital-roster-policy-settings.md에 정리했지만,
+    정책 설정 API/스키마는 아직 이 계약에 정의되거나 구현되지 않았다. 설정 API 기능 PR에서 추가한다.
 servers:
   - url: /api/v1
     description: API base path (host is environment-specific)
 security:
   - bearerAuth: []
 tags:
+  - name: Auth
   - name: Identity
   - name: Wards
+  - name: Invitations
+  - name: Staff
   - name: Rosters
   - name: Absences
   - name: Assignments
   - name: Generation
   - name: Published calendars
 paths:
+  /auth/kakao/session:
+    post:
+      tags: [Auth]
+      operationId: loginWithKakao
+      summary: Kakao ID 토큰으로 NurseFlow 세션 시작
+      description: |
+        서명(RS256, Kakao JWKS), iss, aud(허용된 Kakao 앱 키), exp, iat(10분 이내)를 검증한다.
+        클라이언트가 인가 요청에 nonce를 썼다면 같은 값을 보내야 한다.
+        로그인은 병동 권한을 주지 않는다. 처음 로그인한 사용자는 memberships가 비어 있다.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/KakaoLoginRequest'
+      responses:
+        '200':
+          description: 세션 발급 (Cache-Control no-store)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Session'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          description: INVALID_ID_TOKEN
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ApiProblem'
+        '503':
+          description: IDENTITY_PROVIDER_UNAVAILABLE 또는 IDENTITY_PROVIDER_NOT_CONFIGURED
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ApiProblem'
+
+  /auth/session/refresh:
+    post:
+      tags: [Auth]
+      operationId: refreshSession
+      summary: 로그인 상태 유지 — refresh token 회전
+      description: |
+        성공 시 access/refresh token 쌍을 새로 발급하고 이전 refresh token은 사용할 수 없다.
+        이미 교체·철회된 refresh token을 다시 쓰면 같은 세션 계열 전체를 철회한다.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RefreshTokenRequest'
+      responses:
+        '200':
+          description: 새 세션
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Session'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          description: INVALID_REFRESH_TOKEN — 다시 로그인 필요
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ApiProblem'
+
+  /auth/logout:
+    post:
+      tags: [Auth]
+      operationId: logout
+      summary: 로그아웃 — refresh token 세션 계열 철회 (멱등)
+      description: 이미 발급된 access token은 만료(기본 10분)까지 유효하므로 클라이언트가 즉시 폐기한다.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RefreshTokenRequest'
+      responses:
+        '204':
+          description: 로그아웃 완료
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
   /me:
     get:
       tags: [Identity]
@@ -67,19 +162,490 @@ paths:
                       $ref: '#/components/schemas/WardMembership'
         '401':
           $ref: '#/components/responses/Unauthorized'
+    post:
+      tags: [Wards]
+      operationId: bootstrapWard
+      summary: 시연용 첫 병동과 관리자 생성
+      description: |
+        서버의 NURSEFLOW_BOOTSTRAP_CODE와 일치할 때만 병동을 만들고 호출자를 WARD_ADMIN으로 등록한다.
+        코드가 설정되지 않으면 404 BOOTSTRAP_DISABLED. 다른 구성원은 초대로만 가입한다.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BootstrapWardRequest'
+      responses:
+        '201':
+          description: 생성된 병동 소속
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WardMembership'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: BOOTSTRAP_CODE_INVALID
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ApiProblem'
+        '404':
+          description: BOOTSTRAP_DISABLED
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ApiProblem'
+
+  /wards/{wardId}/invitations:
+    parameters:
+      - $ref: '#/components/parameters/WardId'
+    post:
+      tags: [Invitations]
+      operationId: createInvitation
+      summary: 관리자 초대 링크 발급
+      description: |
+        정확히 24시간 만료되는 1회용 초대를 만든다. token은 이 응답에서 한 번만 보여 주며
+        서버에는 SHA-256 해시만 저장한다. inviteUrl은 서버에 링크 기본 주소가 설정된 경우에만 오며
+        token은 URL fragment(#token=)에 붙는다. WARD_ADMIN 초대에는 nurseId를 넣을 수 없다.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateInvitationRequest'
+      responses:
+        '201':
+          description: 발급된 초대 (Cache-Control no-store)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreatedInvitation'
+        '400':
+          description: INVALID_REQUEST(fieldErrors) 또는 INVALID_INVITATION
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ApiProblem'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: WARD_ADMIN_REQUIRED
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ApiProblem'
+        '404':
+          description: WARD_NOT_FOUND 또는 NURSE_NOT_FOUND
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ApiProblem'
+        '409':
+          description: NURSE_ALREADY_LINKED 또는 INVITATION_ALREADY_PENDING
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ApiProblem'
+    get:
+      tags: [Invitations]
+      operationId: listInvitations
+      summary: 병동 초대 목록 (token 미포함)
+      responses:
+        '200':
+          description: 최근 발급순
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Invitation'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /wards/{wardId}/invitations/{invitationId}:
+    parameters:
+      - $ref: '#/components/parameters/WardId'
+      - name: invitationId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    delete:
+      tags: [Invitations]
+      operationId: revokeInvitation
+      summary: 미사용 초대 철회 (이미 철회된 초대는 204)
+      responses:
+        '204':
+          description: 철회됨
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          description: WARD_NOT_FOUND 또는 INVITATION_NOT_FOUND
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ApiProblem'
+        '409':
+          description: INVITATION_ALREADY_REDEEMED
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ApiProblem'
+
+  /wards/{wardId}/invitations/{invitationId}/reissue:
+    parameters:
+      - $ref: '#/components/parameters/WardId'
+      - name: invitationId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    post:
+      tags: [Invitations]
+      operationId: reissueInvitation
+      summary: 같은 역할·대상으로 초대 링크 재발급
+      description: 이전 미사용 링크를 자동 철회하고 정확히 24시간 유효한 새 링크를 발급한다. 철회되었거나 이미 사용된 초대는 재발급할 수 없다.
+      responses:
+        '201':
+          description: 새 링크 (Cache-Control no-store)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreatedInvitation'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          description: WARD_NOT_FOUND, INVITATION_NOT_FOUND 또는 NURSE_NOT_FOUND
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ApiProblem'
+        '409':
+          description: INVITATION_ALREADY_REDEEMED, NURSE_ALREADY_LINKED 또는 INVITATION_ALREADY_PENDING
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ApiProblem'
+        '410':
+          description: INVITATION_REVOKED
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ApiProblem'
+
+  /invitations/preview:
+    post:
+      tags: [Invitations]
+      operationId: previewInvitation
+      summary: 초대 확인 — 병동·역할 미리보기 (초대를 소모하지 않음)
+      description: 로그인 필요. token은 URL이 아닌 본문으로 보낸다.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InvitationTokenRequest'
+      responses:
+        '200':
+          description: 수락 가능한 초대
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvitationPreview'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: INVITATION_NOT_FOUND
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ApiProblem'
+        '409':
+          description: INVITATION_ALREADY_REDEEMED
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ApiProblem'
+        '410':
+          description: INVITATION_EXPIRED 또는 INVITATION_REVOKED
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ApiProblem'
+
+  /invitations/redeem:
+    post:
+      tags: [Invitations]
+      operationId: redeemInvitation
+      summary: 초대 수락 — 병동 가입
+      description: |
+        초대 소진, 병동 소속 생성, (WARD_MEMBER) 간호사 기록 연결 또는 생성을 한 트랜잭션에서 처리한다.
+        역할은 초대에 저장된 값만 사용하며 요청에 역할 필드를 넣으면 400이다.
+        이미 그 병동 소속인 사용자는 409 ALREADY_WARD_MEMBER이고 초대는 그대로 남는다.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RedeemInvitationRequest'
+      responses:
+        '201':
+          description: 생성된 병동 소속
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WardMembership'
+        '400':
+          description: INVALID_REQUEST 또는 WARD_MEMBER 가입에 필요한 HOSPITAL_JOIN_MONTH_REQUIRED
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ApiProblem'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: INVITATION_NOT_FOUND
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ApiProblem'
+        '409':
+          description: INVITATION_ALREADY_REDEEMED, ALREADY_WARD_MEMBER, NURSE_ALREADY_LINKED 또는 ADMIN_NURSE_RECORD_CONFLICT
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ApiProblem'
+        '410':
+          description: INVITATION_EXPIRED 또는 INVITATION_REVOKED
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ApiProblem'
+
+  /wards/{wardId}/teams:
+    parameters:
+      - $ref: '#/components/parameters/WardId'
+    get:
+      tags: [Staff]
+      operationId: listTeams
+      summary: 병동 팀 목록 (소속 구성원 조회 가능)
+      responses:
+        '200':
+          description: sortOrder 순
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TeamItems'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: WARD_NOT_FOUND (병동 소속 아님)
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ApiProblem'
+    post:
+      tags: [Staff]
+      operationId: createTeam
+      summary: 팀 추가 (관리자)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TeamInput'
+      responses:
+        '201':
+          description: 생성된 팀
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Team'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: WARD_ADMIN_REQUIRED
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ApiProblem'
+        '409':
+          description: TEAM_NAME_DUPLICATE
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ApiProblem'
+
+  /wards/{wardId}/teams/{teamId}:
+    parameters:
+      - $ref: '#/components/parameters/WardId'
+      - name: teamId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    put:
+      tags: [Staff]
+      operationId: updateTeam
+      summary: 팀 이름·순서 변경 (관리자)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TeamInput'
+      responses:
+        '200':
+          description: 변경된 팀
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Team'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: WARD_ADMIN_REQUIRED
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ApiProblem'
+        '404':
+          description: TEAM_NOT_FOUND
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ApiProblem'
+        '409':
+          description: TEAM_NAME_DUPLICATE
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ApiProblem'
+    delete:
+      tags: [Staff]
+      operationId: deleteTeam
+      summary: 팀 삭제 (활성 간호사가 없을 때만)
+      responses:
+        '204':
+          description: 삭제됨
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: WARD_ADMIN_REQUIRED
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ApiProblem'
+        '404':
+          description: TEAM_NOT_FOUND
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ApiProblem'
+        '409':
+          description: TEAM_NOT_EMPTY
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ApiProblem'
+
+  /wards/{wardId}/career-policy:
+    parameters:
+      - $ref: '#/components/parameters/WardId'
+    get:
+      tags: [Staff]
+      operationId: getCareerPolicy
+      summary: 경력 단계 기준과 직급 목록 (소속 구성원 조회 가능)
+      description: 저장된 값이 없으면 기본값 [12,36,72,120]개월, [팀장, 과장, 신규]와 isDefault=true.
+      responses:
+        '200':
+          description: 현재 정책
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CareerPolicy'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: WARD_NOT_FOUND (병동 소속 아님)
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ApiProblem'
+    put:
+      tags: [Staff]
+      operationId: updateCareerPolicy
+      summary: 경력 단계 기준·직급 목록 변경 (관리자, 즉시 적용)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CareerPolicyInput'
+      responses:
+        '200':
+          description: 저장된 정책
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CareerPolicy'
+        '400':
+          description: INVALID_CAREER_POLICY
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ApiProblem'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: WARD_ADMIN_REQUIRED
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ApiProblem'
 
   /wards/{wardId}/staff:
     parameters:
       - $ref: '#/components/parameters/WardId'
     get:
-      tags: [Wards]
+      tags: [Staff]
       operationId: listWardStaff
-      summary: 병동 간호사 및 배치 자격 조회
-      description: 관리자만 사용 가능. 페이지 크기 상한을 적용한다.
+      summary: 병동 간호사 목록 (관리자)
+      description: 팀 순서 → 경력 많은 순(입사 년월 빠른 순) → 이름 순. 시연 규모라 한 페이지로 모두 반환한다.
       x-required-role: WARD_ADMIN
       parameters:
-        - $ref: '#/components/parameters/Page'
-        - $ref: '#/components/parameters/PageSize'
+        - name: teamId
+          in: query
+          schema:
+            type: string
+            format: uuid
+        - name: includeInactive
+          in: query
+          schema:
+            type: boolean
+            default: false
       responses:
         '200':
           description: 간호사 목록
@@ -90,16 +656,18 @@ paths:
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
-          $ref: '#/components/responses/Forbidden'
+          description: WARD_ADMIN_REQUIRED
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ApiProblem'
         '404':
           $ref: '#/components/responses/NotFound'
     post:
-      tags: [Wards]
+      tags: [Staff]
       operationId: createWardStaff
-      summary: 병동 간호사 등록
+      summary: 가상 간호사 기록 등록 (관리자, 이후 초대로 계정 연결)
       x-required-role: WARD_ADMIN
-      parameters:
-        - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         required: true
         content:
@@ -118,18 +686,26 @@ paths:
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
-          $ref: '#/components/responses/Forbidden'
-        '409':
-          $ref: '#/components/responses/Conflict'
+          description: WARD_ADMIN_REQUIRED
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ApiProblem'
+        '404':
+          description: TEAM_NOT_FOUND
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ApiProblem'
 
   /wards/{wardId}/staff/{nurseId}:
     parameters:
       - $ref: '#/components/parameters/WardId'
       - $ref: '#/components/parameters/NurseId'
     put:
-      tags: [Wards]
+      tags: [Staff]
       operationId: updateWardStaff
-      summary: 간호사 자격 또는 활성 상태 수정
+      summary: 이름·자격·활성 상태 수정 (active=false는 편성 제외)
       x-required-role: WARD_ADMIN
       requestBody:
         required: true
@@ -139,7 +715,7 @@ paths:
               $ref: '#/components/schemas/StaffInput'
       responses:
         '200':
-          description: 간호사 정보 갱신됨
+          description: 갱신됨
           content:
             application/json:
               schema:
@@ -147,9 +723,203 @@ paths:
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
-          $ref: '#/components/responses/Forbidden'
+          description: WARD_ADMIN_REQUIRED
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ApiProblem'
         '404':
-          $ref: '#/components/responses/NotFound'
+          description: NURSE_NOT_FOUND
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ApiProblem'
+
+  /wards/{wardId}/staff/{nurseId}/team:
+    parameters:
+      - $ref: '#/components/parameters/WardId'
+      - $ref: '#/components/parameters/NurseId'
+    put:
+      tags: [Staff]
+      operationId: assignTeam
+      summary: 팀 지정·해제 (관리자만, teamId=null이면 해제)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TeamAssignment'
+      responses:
+        '200':
+          description: 갱신됨
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StaffMember'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: WARD_ADMIN_REQUIRED
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ApiProblem'
+        '404':
+          description: NURSE_NOT_FOUND 또는 TEAM_NOT_FOUND
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ApiProblem'
+
+  /wards/{wardId}/staff/{nurseId}/profile:
+    parameters:
+      - $ref: '#/components/parameters/WardId'
+      - $ref: '#/components/parameters/NurseId'
+    put:
+      tags: [Staff]
+      operationId: setStaffProfile
+      summary: 관리자가 실제 경력 정보 입력·수정 (즉시 확인 상태)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CareerProfileInput'
+      responses:
+        '200':
+          description: 갱신됨
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StaffMember'
+        '400':
+          description: INVALID_REQUEST, INVALID_CAREER_START 또는 RANK_NOT_IN_POLICY
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ApiProblem'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: WARD_ADMIN_REQUIRED
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ApiProblem'
+        '404':
+          description: NURSE_NOT_FOUND
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ApiProblem'
+
+  /wards/{wardId}/staff/{nurseId}/profile/confirm:
+    parameters:
+      - $ref: '#/components/parameters/WardId'
+      - $ref: '#/components/parameters/NurseId'
+    post:
+      tags: [Staff]
+      operationId: confirmStaffProfile
+      summary: 간호사가 입력한 경력 정보 확인 (이미 확인됐으면 변화 없음)
+      responses:
+        '200':
+          description: 확인됨
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StaffMember'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: WARD_ADMIN_REQUIRED
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ApiProblem'
+        '404':
+          description: NURSE_NOT_FOUND
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ApiProblem'
+        '400':
+          description: INVALID_CAREER_START 또는 RANK_NOT_IN_POLICY (현재 병동 정책 기준으로 확인 불가)
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ApiProblem'
+        '409':
+          description: PROFILE_NOT_SUBMITTED
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ApiProblem'
+
+  /wards/{wardId}/my-profile:
+    parameters:
+      - $ref: '#/components/parameters/WardId'
+    get:
+      tags: [Staff]
+      operationId: getMyProfile
+      summary: 본인 간호사 기록과 경력 정보
+      responses:
+        '200':
+          description: 본인 기록
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StaffMember'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: NURSE_IDENTITY_REQUIRED (간호사 기록이 없는 관리자 등)
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ApiProblem'
+        '404':
+          description: WARD_NOT_FOUND
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ApiProblem'
+    put:
+      tags: [Staff]
+      operationId: submitMyProfile
+      summary: 본인 병원 입사 년월 입력/수정
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/HospitalJoinMonthInput'
+      responses:
+        '200':
+          description: 갱신됨
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StaffMember'
+        '400':
+          description: INVALID_REQUEST 또는 INVALID_HOSPITAL_JOIN_MONTH
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ApiProblem'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: NURSE_IDENTITY_REQUIRED
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ApiProblem'
+        '404':
+          description: WARD_NOT_FOUND
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ApiProblem'
 
   /wards/{wardId}/shift-types:
     parameters:
@@ -783,7 +1553,7 @@ components:
       type: http
       scheme: bearer
       bearerFormat: JWT
-      description: OIDC provider가 발급한 access token. Spring Security Resource Server가 검증한다.
+      description: POST /auth/kakao/session 또는 /auth/session/refresh가 발급한 NurseFlow access token. sub는 NurseFlow userId다.
   parameters:
     WardId:
       name: wardId
@@ -932,6 +1702,164 @@ components:
           schema:
             $ref: '#/components/schemas/ApiProblem'
   schemas:
+    InvitationTokenRequest:
+      type: object
+      additionalProperties: false
+      required: [token]
+      properties:
+        token:
+          type: string
+          pattern: '^[A-Za-z0-9_-]{43}$'
+    RedeemInvitationRequest:
+      type: object
+      additionalProperties: false
+      required: [token]
+      description: WARD_MEMBER는 가입 시 이 병원에 입사한 년월(YYYY-MM)을 제출해야 한다. 실제 경력 시작일·직급·팀 내 경력 순서는 관리자가 정한다. WARD_ADMIN은 이 값을 받지 않는다.
+      properties:
+        token:
+          type: string
+          pattern: '^[A-Za-z0-9_-]{43}$'
+        hospitalJoinedOn:
+          type: string
+          pattern: '^\d{4}-(0[1-9]|1[0-2])$'
+    InvitationPreview:
+      type: object
+      required: [wardId, wardName, role, expiresAt, linksExistingNurse]
+      properties:
+        wardId:
+          type: string
+          format: uuid
+        wardName:
+          type: string
+        role:
+          type: string
+          enum: [WARD_ADMIN, WARD_MEMBER]
+        expiresAt:
+          type: string
+          format: date-time
+        linksExistingNurse:
+          type: boolean
+    CreateInvitationRequest:
+      type: object
+      additionalProperties: false
+      required: [role]
+      properties:
+        role:
+          type: string
+          enum: [WARD_ADMIN, WARD_MEMBER]
+        nurseId:
+          type: string
+          format: uuid
+          description: WARD_MEMBER가 이어받을 기존 가상 간호사 기록(선택). 없으면 수락 시 새 기록을 만든다.
+    Invitation:
+      type: object
+      required: [invitationId, wardId, role, status, createdAt, expiresAt]
+      properties:
+        invitationId:
+          type: string
+          format: uuid
+        wardId:
+          type: string
+          format: uuid
+        role:
+          type: string
+          enum: [WARD_ADMIN, WARD_MEMBER]
+        nurseId:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [PENDING, REDEEMED, REVOKED, EXPIRED]
+        createdAt:
+          type: string
+          format: date-time
+        expiresAt:
+          type: string
+          format: date-time
+        redeemedAt:
+          type: string
+          format: date-time
+        revokedAt:
+          type: string
+          format: date-time
+    CreatedInvitation:
+      type: object
+      required: [invitation, token]
+      properties:
+        invitation:
+          $ref: '#/components/schemas/Invitation'
+        token:
+          type: string
+          pattern: '^[A-Za-z0-9_-]{43}$'
+          description: 한 번만 반환. 다시 조회할 수 없다.
+        inviteUrl:
+          type: string
+          format: uri
+    KakaoLoginRequest:
+      type: object
+      additionalProperties: false
+      required: [idToken]
+      properties:
+        idToken:
+          type: string
+          maxLength: 8192
+          description: Kakao OIDC ID 토큰. 서버는 저장하거나 기록하지 않는다.
+        nonce:
+          type: string
+          minLength: 1
+          maxLength: 255
+    RefreshTokenRequest:
+      type: object
+      additionalProperties: false
+      required: [refreshToken]
+      properties:
+        refreshToken:
+          type: string
+          pattern: '^[A-Za-z0-9_-]{43}$'
+    Session:
+      type: object
+      required: [tokenType, accessToken, accessTokenExpiresAt, refreshToken, refreshTokenExpiresAt, user]
+      properties:
+        tokenType:
+          type: string
+          enum: [Bearer]
+        accessToken:
+          type: string
+          description: NurseFlow access JWT (HS256, 기본 10분). 모든 보호 API의 Bearer 토큰.
+        accessTokenExpiresAt:
+          type: string
+          format: date-time
+        refreshToken:
+          type: string
+          description: 불투명 refresh token (기본 30일). Android는 암호화 저장소, 웹은 메모리/보안 저장소에 둔다.
+        refreshTokenExpiresAt:
+          type: string
+          format: date-time
+        user:
+          type: object
+          required: [userId, displayName, newUser]
+          properties:
+            userId:
+              type: string
+              format: uuid
+            displayName:
+              type: string
+            newUser:
+              type: boolean
+    BootstrapWardRequest:
+      type: object
+      additionalProperties: false
+      required: [name, bootstrapCode]
+      properties:
+        name:
+          type: string
+          maxLength: 100
+        timeZone:
+          type: string
+          default: Asia/Seoul
+        bootstrapCode:
+          type: string
+          maxLength: 200
     CurrentUser:
       type: object
       required: [userId, displayName, memberships]
@@ -981,7 +1909,7 @@ components:
     StaffInput:
       type: object
       additionalProperties: false
-      required: [displayName, qualifications, active]
+      required: [displayName]
       properties:
         displayName:
           type: string
@@ -990,15 +1918,165 @@ components:
         qualifications:
           type: array
           maxItems: 50
-          uniqueItems: true
+          default: []
           items:
             type: string
+            minLength: 1
             maxLength: 64
         active:
           type: boolean
+          default: true
+        teamId:
+          type: string
+          format: uuid
+          description: 등록 시에만 사용. 이후 변경은 /staff/{nurseId}/team.
+    Team:
+      type: object
+      required: [teamId, name, sortOrder]
+      properties:
+        teamId:
+          type: string
+          format: uuid
+        name:
+          type: string
+          maxLength: 50
+        sortOrder:
+          type: integer
+    TeamItems:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Team'
+    TeamInput:
+      type: object
+      additionalProperties: false
+      required: [name]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 50
+        sortOrder:
+          type: integer
+          minimum: 1
+          maximum: 1000
+    TeamAssignment:
+      type: object
+      additionalProperties: false
+      required: [teamId]
+      properties:
+        teamId:
+          type: [string, 'null']
+          format: uuid
+    CareerPolicy:
+      type: object
+      required: [stageThresholdMonths, ranks, isDefault]
+      properties:
+        stageThresholdMonths:
+          type: array
+          minItems: 4
+          maxItems: 4
+          items:
+            type: integer
+          description: 2~5단계의 하한(개월). [12,36,72,120] = 1년 미만 1, 1~3년 2, 3~6년 3, 6~10년 4, 10년 이상 5
+        ranks:
+          type: array
+          items:
+            type: string
+          description: 직급 이름 목록. 현재 단계 계산에는 쓰지 않는다.
+        isDefault:
+          type: boolean
+    CareerPolicyInput:
+      type: object
+      additionalProperties: false
+      required: [stageThresholdMonths, ranks]
+      properties:
+        stageThresholdMonths:
+          type: array
+          minItems: 4
+          maxItems: 4
+          items:
+            type: integer
+            minimum: 1
+            maximum: 600
+          description: 엄격히 증가해야 한다.
+        ranks:
+          type: array
+          minItems: 1
+          maxItems: 20
+          uniqueItems: true
+          items:
+            type: string
+            minLength: 1
+            maxLength: 30
+    CareerProfileInput:
+      type: object
+      additionalProperties: false
+      required: [careerStartedOn, rank]
+      description: 관리자가 설정하는 실제 간호 경력 시작 년월과 직급
+      properties:
+        careerStartedOn:
+          type: string
+          pattern: '^\d{4}-(0[1-9]|1[0-2])$'
+          description: 실제 간호 경력 시작 년월(YYYY-MM). 병원 입사 년월과 다를 수 있다.
+        rank:
+          type: string
+          maxLength: 30
+          description: 병동 직급 목록 중 하나
+    HospitalJoinMonthInput:
+      type: object
+      additionalProperties: false
+      required: [hospitalJoinedOn]
+      properties:
+        hospitalJoinedOn:
+          type: string
+          pattern: '^\d{4}-(0[1-9]|1[0-2])$'
+          description: 이 병원에 입사한 년월(YYYY-MM). 실제 경력순은 관리자가 팀별로 조정한다.
+    CareerProfile:
+      type: object
+      required: [status, hospitalJoinedOn]
+      properties:
+        status:
+          type: string
+          enum: [MISSING, PENDING, CONFIRMED]
+          description: 실제 경력 정보의 상태. PENDING은 관리자가 확인하기 전
+        hospitalJoinedOn:
+          type: [string, 'null']
+          description: 이 병원에 입사한 년월
+        careerStartedOn:
+          type: [string, 'null']
+          description: 관리자가 입력한 실제 간호 경력 시작 년월
+        rank:
+          type: [string, 'null']
+        submittedAt:
+          type: [string, 'null']
+          format: date-time
+        confirmedCareerStartedOn:
+          type: [string, 'null']
+        confirmedRank:
+          type: [string, 'null']
+        confirmedAt:
+          type: [string, 'null']
+          format: date-time
+        experienceMonths:
+          type: [integer, 'null']
+          description: 실제 간호 경력 시작 년월부터 병동 기준 이번 달까지 개월 수
+        submittedStage:
+          type: [integer, 'null']
+          minimum: 1
+          maximum: 5
+          description: 입력값 기준 단계(관리자 확인용, 점수에 사용 안 함)
+        scoringStage:
+          type: [integer, 'null']
+          minimum: 1
+          maximum: 5
+          description: CONFIRMED일 때만 값이 있으며 팀 경력 구성 점수에 사용
     StaffMember:
       type: object
-      required: [nurseId, displayName, qualifications, active]
+      required: [nurseId, displayName, qualifications, active, linkedAccount, profile]
       properties:
         nurseId:
           type: string
@@ -1013,6 +2091,15 @@ components:
             maxLength: 64
         active:
           type: boolean
+        linkedAccount:
+          type: boolean
+          description: 초대 수락으로 로그인 계정과 연결됐는지
+        team:
+          oneOf:
+            - $ref: '#/components/schemas/Team'
+            - type: 'null'
+        profile:
+          $ref: '#/components/schemas/CareerProfile'
     ShiftType:
       type: object
       additionalProperties: false

@@ -8,15 +8,28 @@ spring:
   sql:
     init:
       mode: always
-  security:
-    oauth2:
-      resourceserver:
-        jwt:
-          issuer-uri: ${NURSEFLOW_OIDC_ISSUER_URI}
-          audiences: ${NURSEFLOW_OIDC_AUDIENCE}
   jackson:
     deserialization:
       fail-on-unknown-properties: true
+
+nurseflow:
+  auth:
+    kakao:
+      issuer: https://kauth.kakao.com
+      jwk-set-uri: https://kauth.kakao.com/.well-known/jwks.json
+      # Comma-separated Kakao app keys accepted as the ID token "aud" (Android native key, web key).
+      audiences: ${NURSEFLOW_KAKAO_AUDIENCES:}
+    session:
+      # HMAC key for NurseFlow access tokens: at least 32 bytes, never committed.
+      secret: ${NURSEFLOW_SESSION_SECRET}
+      access-token-ttl: 10m
+      refresh-token-ttl: 30d
+  invitation:
+    # Page that opens an invitation, e.g. https://<web-host>/invite. The token is appended as #token=...
+    link-base-url: ${NURSEFLOW_INVITE_LINK_BASE:}
+  bootstrap:
+    # Demo-only first-admin ward creation. Empty disables POST /api/v1/wards.
+    code: ${NURSEFLOW_BOOTSTRAP_CODE:}
 
 server:
   port: 8080

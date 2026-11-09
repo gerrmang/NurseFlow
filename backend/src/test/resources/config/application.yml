@@ -1,0 +1,11 @@
+# Test-only overrides. Fictional values; never real Kakao keys or secrets.
+nurseflow:
+  auth:
+    kakao:
+      audiences: nurseflow-test-android,nurseflow-test-web
+    session:
+      secret: test-only-session-secret-0123456789-abcdef
+  bootstrap:
+    code: test-bootstrap-code
+  invitation:
+    link-base-url: https://nurseflow.test/invite
