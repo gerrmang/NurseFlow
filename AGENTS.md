@@ -9,5 +9,7 @@ Before changing application code, configuration, documentation, tests, or deploy
 5. Follow the PR template and record verification, skipped checks, API/DB changes, deployment impact, and rollback where applicable.
 6. Do not include secrets, leave reasons, or health information in logs, examples, or fixtures.
 7. Write commit intent/body, pull request title/body, and user-facing review reports in Korean where possible. Keep Git trailer keys, Conventional Commit types, code identifiers, API paths, and commands in their required original form.
+8. Before starting work, check the current feature row and its owned paths in `docs/feature-breakdown.md` (section 2) and the current progress in `docs/work-status.md`. For review work, also read `docs/ai-development-review-workflow.md`.
+9. After finishing a feature unit, PR, or review, update `docs/work-status.md` on the same branch with factual progress and verification results.
 
 The repository's `origin` is `https://github.com/gerrmang/NurseFlow.git`. Do not claim GitHub PR review, branch protection, or CI enforcement until those settings and checks are verified.

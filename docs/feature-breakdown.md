@@ -448,12 +448,15 @@ A16 + A18 ──► B10a/b ──► B12
 
 ## 8. 작업 순서와 검토 기준
 
-1. **breakdown 검토**: 이 문서는 PR #29로 `dev`에 병합됐다. A1 PR #27은 진행 중이며, 다음 서버 기능은 A1과 B1의 검토·병합 후 시작한다.
+1. **breakdown 검토**: 이 문서는 PR #29로 `dev`에 병합됐다. A1 PR #27과 B1 PR #30도 `dev`에 병합됐다. 현재 기능별 진행은 [공유 작업 현황](work-status.md)을 확인한다.
 2. **기능 브랜치**: 최신 `dev`에서 `feat/...`(또는 `fix/`, `chore/`, `test/`)를 만든다. 쌓인 브랜치는 만들지 않는다. 한 사람이 동시에 여는 기능 PR은 1개, 목업 PR을 포함해도 2개까지로 한다.
 3. **설계 기록**: 각 PR 시작 시 API·DB·권한·예외·인수 기준을 PR 설명 초안에 먼저 적는다(`ai-development-review-workflow.md`). 서버 PR은 OpenAPI 변경을 첫 커밋으로 올리고 B가 소비자 관점에서 검토한다.
-4. **구현·검증**: 백엔드 `./gradlew check`(CI는 현재 `test`), Android `./gradlew :app:assembleDebug`, 웹은 B2 이후 빌드·테스트. 실행하지 못한 검사는 PR에 적는다. 실제 Kakao·외부 API 연동 여부를 "목업/실연동"으로 구분해 적는다.
+4. **구현·검증**:
+   - **로컬 필수 검사**: 백엔드는 `./gradlew test`와 설정된 검사 항목을 확인한다. Android는 `./gradlew :app:testDebugUnitTest :app:assembleDebug :app:assembleDebugAndroidTest`를 실행한다. 웹은 B2 이후 빌드·테스트를 실행한다.
+   - **CI 검사**: `.github/workflows/verify.yml` 기준으로 백엔드는 `./gradlew test --no-daemon`, Android는 `./gradlew :app:testDebugUnitTest :app:assembleDebug :app:assembleDebugAndroidTest --no-daemon`을 실행한다.
+   - **기기 검사**: 에뮬레이터/기기에서 `./gradlew :app:connectedAndroidTest`를 실행한다. CI에서는 실행하지 않으므로 결과 또는 생략 사유를 PR에 기록한다. 실제 Kakao·외부 API 연동 여부도 "목업/실연동"으로 구분해 적는다.
 5. **CI**: PR에서 CI 통과. GitHub의 필수 검사·브랜치 보호는 설정 확인 전까지 강제된다고 적지 않는다.
-6. **Codex 리뷰**: 병합 전 변경 전체를 리뷰한다. P1(권한 우회·초안 노출·필수 규칙 위반·잘못된 공개)과 P2(회귀·동시성·월 경계)는 병합 전 수정, 실행 오류 가능성이 있는 P3도 수정한다.
+6. **Codex 리뷰**: 병합 전 변경 전체를 리뷰한다. 우선순위는 실제 영향도로 정하고 결함 종류는 태그로 붙인다(`ai-development-review-workflow.md`). P1·P2는 병합 전 수정, 실행 오류 가능성이 있는 P3도 수정한다.
 7. **병합**: `dev`로 **스쿼시 병합**(`git-flow.md`). 병합된 브랜치는 삭제한다. 최근 PR들이 일반 병합 커밋으로 들어간 점은 이 단계부터 바로잡는다.
 8. **다음 기능 착수**: 병합 후 최신 `dev`에서 다음 브랜치를 만든다. 상대 담당자의 계약 PR이 열려 있으면 목업 작업만 진행한다.
 9. **릴리스**: 단계(§3.1~§3.5)가 끝날 때마다 검증된 `dev → main` PR을 검토한다. `main`에 기능 브랜치를 직접 병합하지 않는다.
