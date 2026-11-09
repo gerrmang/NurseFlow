@@ -4,6 +4,7 @@ nurseflow:
     kakao:
       audiences: nurseflow-test-android,nurseflow-test-web
       rest-api-key: nurseflow-test-rest
+      client-secret: nurseflow-test-client-secret
       redirect-uris: http://localhost:5173/auth/kakao/callback
     session:
       secret: test-only-session-secret-0123456789-abcdef
