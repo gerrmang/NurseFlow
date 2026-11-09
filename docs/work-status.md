@@ -19,7 +19,7 @@
 | B2 웹 기반 세션 | `feat/web-foundation-session` | 미개설 | 미착수. A2 PR #33이 `dev`에 병합되어 선행 조건 충족 | 해당 없음 | 없음 |
 | B9a Android 공개 근무표 조회 | `feat/android-published-roster` | #34 | PR 열림, 스쿼시 병합 대기 | GitHub Verify run 42613978040: Backend tests·Android debug build 성공. Vercel 성공 | P3: 간호사 기록 없는 관리자에게 첫 화면이 잘못된 권한 오류를 표시함. Codex COMMENT 리뷰 게시 |
 | 에이전트 지침 정합성 | `docs/agent-guidance-alignment` | #32 | `dev` 병합 완료 (2026-11-09, 일반 병합 커밋 `ab8347d`. 스쿼시 원칙에서 벗어남) | `git diff --check` 통과. GitHub Actions `Verify` PR 실행 성공, `dev` push 실행 성공 | 없음 |
-| A3 병원 검색 API | `feat/hospital-search` | 개설 예정 | 구현 완료. 결정 5(2026-11-10)에 따라 공식 파일 데이터 「전국 병의원 및 약국 현황」을 서버 DB에 복제해 검색하고, 실시간 API는 목록 미적재 시 대체 경로로 둔다. Codex 리뷰·hyen11 계약 검토(`aa1915c`) 대기 | 2026-11-10 로컬 `./gradlew test --offline`: 128건 통과, 건너뜀 3. 실제 2026.9. 파일 79,899곳 적재 0.7초, 검색 15ms 안팎. 실시간 API 실키 호출은 200 정상이나 10~17초 소요(사용자 PC curl 측정) | 없음 |
+| A3 병원 검색 API | `feat/hospital-search` | #35 | PR 열림. Codex 리뷰 P2 1건(CSV 따옴표 누락 시 대량 비활성화) 수정. hyen11 계약 검토(`aa1915c`)·스쿼시 병합 대기 | 2026-11-10 로컬 `./gradlew test --offline`: 132건 통과, 건너뜀 3. 실제 2026.9. 파일 79,899곳 누락 없이 적재 0.7초, 검색 15~19ms. 실시간 API 실키 호출은 200 정상이나 10~17초 소요(사용자 PC curl 측정) | 없음 |
 | A4 이후 | 해당 없음 | 미개설 | 미착수. A3 검색 계약·서버 기능에 의존 | 해당 없음 | 없음 |
 
 ## 리뷰 상태
@@ -47,5 +47,7 @@ Claude와 Codex가 같은 진행 기록을 사용한다. PR 또는 정기 리뷰
 | `/private/tmp/NurseFlow-a2-review` | `feat/auth-web-session-v2` | `0ab0a5449d2e3a5aef5ac3eb2e6c5500ea65b6f0` | `e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855` | 2026-11-09 | Claude | 위 P2를 동시 콜백 테스트로 수정. Claude가 지적을 코드와 대조해 확인한 뒤 수정했고 Codex 재리뷰는 하지 않음 |
 | GitHub PR #33 리뷰 | `feat/auth-web-session-v2` | `f30a59bd971b4cd7304b5bbc9a6478354e439f46` | 해당 없음(PR diff 기준) | 2026-11-09 | hyen11 | P1·P2 없음. P3 기본 포트 Origin 정규화, P4 client_secret 회귀 테스트, P5 OpenAPI cross-site 조건 |
 | `/private/tmp/NurseFlow-a2-review` | `feat/auth-web-session-v2` | `00cbffff08cbc17490bd8db2f8194fde3d23b0ad` | `e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855`(미커밋 변경 없음) | 2026-11-09 | Claude | 위 P3(`b6d56aa`)·P4(`e371fa5`)·P5(`00cbfff`) 수정. 재리뷰 전 |
+| `/Users/sihwan/Documents/ChatGPT/NurseFlow` | `feat/hospital-search` | `08180db18edd7512e5033390c6469a76f2b8e75e` | `e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855`(미커밋 변경 없음) | 2026-11-10 | Codex | A3 전체 읽기 전용 리뷰. P2(데이터) 1건: 닫히지 않은 따옴표가 뒤 행을 삼켜 최소 행 수만 넘으면 대량 비활성화. 트랜잭션 롤백, 해시 건너뛰기, zip 선택, LIKE 와일드카드 비노출, 키 비로깅, OpenAPI 일치 확인. Gradle 실행은 샌드박스 제한으로 못 함 |
+| `/Users/sihwan/Documents/ChatGPT/NurseFlow` | `feat/hospital-search` | `56434503bf8c763e837071a10890fd58580c32a4` | `e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855` | 2026-11-10 | Claude | 위 P2 수정: 닫는 따옴표 뒤 구분자 강제·미종결 따옴표 오류·10% 초과 비활성화 거부·적재 ID 기반 비활성화. Codex 재리뷰 전 |
 
 이 문서는 Claude와 Codex가 각 기능 단위 작업 후 진행 결과를 함께 기록하는 단일 공유 현황이다.
