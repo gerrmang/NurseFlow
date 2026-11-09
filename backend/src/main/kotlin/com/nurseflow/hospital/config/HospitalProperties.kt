@@ -15,7 +15,8 @@ data class HospitalProperties(val hira: Hira = Hira()) {
     data class Hira(
         val baseUri: String = "https://apis.data.go.kr/B551182/hospInfoServicev2",
         val serviceKey: String = "",
-        val timeout: Duration = Duration.ofSeconds(3),
+        /** data.go.kr often takes several seconds per search. */
+        val timeout: Duration = Duration.ofSeconds(10),
     ) {
         val configured: Boolean get() = serviceKey.isNotBlank()
     }

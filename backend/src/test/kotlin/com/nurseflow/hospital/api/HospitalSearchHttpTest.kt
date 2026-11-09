@@ -70,6 +70,7 @@ class HospitalSearchHttpTest : ApiTestBase() {
             FakeHiraServer.SERVER_ERROR,
             FakeHiraServer.SLOW,
             FakeHiraServer.QUOTA_EXCEEDED,
+            FakeHiraServer.GATEWAY_JSON_ERROR,
             FakeHiraServer.NOT_JSON,
             FakeHiraServer.RESULT_ERROR,
         ).forEach { query ->

@@ -22,6 +22,7 @@ object FakeHiraServer {
     const val SERVER_ERROR = "장애가상병원"
     const val SLOW = "지연가상병원"
     const val QUOTA_EXCEEDED = "한도초과가상병원"
+    const val GATEWAY_JSON_ERROR = "게이트웨이JSON가상병원"
     const val NOT_JSON = "깨진응답가상병원"
     const val RESULT_ERROR = "결과오류가상병원"
 
@@ -37,7 +38,8 @@ object FakeHiraServer {
                 URLDecoder.decode(k, Charsets.UTF_8) to URLDecoder.decode(v, Charsets.UTF_8)
             }
             lastQuery.set(params)
-            if (params["serviceKey"] != SERVICE_KEY) return@createContext exchange.reply(200, gatewayError(30), xml = true)
+            // Real data.go.kr answers an unregistered key with 403 and a JSON OpenAPI_ServiceResponse.
+            if (params["serviceKey"] != SERVICE_KEY) return@createContext exchange.reply(403, gatewayErrorJson(30))
             when (params["yadmNm"]) {
                 TWO_HITS -> exchange.reply(200, normal(
                     """[${item("FAKE-YKIHO-0001", "가상병원", "서울특별시 가상구 가상로 1", "종합병원")},""" +
@@ -54,6 +56,7 @@ object FakeHiraServer {
                     exchange.reply(200, normal("[]", total = 0))
                 }
                 QUOTA_EXCEEDED -> exchange.reply(200, gatewayError(22), xml = true)
+                GATEWAY_JSON_ERROR -> exchange.reply(200, gatewayErrorJson(22))
                 NOT_JSON -> exchange.reply(200, "this is not json")
                 RESULT_ERROR -> exchange.reply(200, """{"response":{"header":{"resultCode":"99","resultMsg":"UNKNOWN_ERROR"}}}""")
                 else -> exchange.reply(200, normal("""[${item("FAKE-YKIHO-9999", params["yadmNm"].orEmpty(), "가상 주소", "의원")}]""", total = 1))
@@ -75,6 +78,17 @@ object FakeHiraServer {
     private fun gatewayError(reason: Int) =
         "<OpenAPI_ServiceResponse><cmmMsgHeader><errMsg>SERVICE ERROR</errMsg>" +
             "<returnReasonCode>$reason</returnReasonCode></cmmMsgHeader></OpenAPI_ServiceResponse>"
+
+    private fun gatewayErrorJson(reason: Int) =
+        """{
+  "OpenAPI_ServiceResponse": {
+    "cmmMsgHeader": {
+      "errMsg": "SERVICE ERROR",
+""" +
+            """      "returnReasonCode": "$reason"
+    }
+  }
+}"""
 
     private fun HttpExchange.reply(status: Int, body: String, xml: Boolean = false) {
         val bytes = body.toByteArray()

@@ -25,4 +25,13 @@ class HospitalSearchServiceTest {
         assertEquals("abc+def/ghi==", HiraHospitalClient.decodedKey("abc+def/ghi=="))
         assertEquals("abc+def/ghi==", HiraHospitalClient.decodedKey(" abc%2Bdef%2Fghi%3D%3D "))
     }
+
+    @Test
+    fun `an unregistered key is unavailable, not a crash`() {
+        val properties = HospitalProperties(
+            HospitalProperties.Hira(baseUri = com.nurseflow.support.FakeHiraServer.baseUri, serviceKey = "unregistered-key"),
+        )
+        val ex = assertThrows<BusinessException> { HiraHospitalClient(properties, JsonMapper()).search("가상병원", 1, 10) }
+        assertEquals(ErrorCode.HOSPITAL_SEARCH_UNAVAILABLE, ex.errorCode)
+    }
 }

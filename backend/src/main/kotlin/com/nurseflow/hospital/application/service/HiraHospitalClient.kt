@@ -50,19 +50,21 @@ class HiraHospitalClient(private val properties: HospitalProperties, private val
         val body = try {
             client.get().uri(uri).accept(MediaType.APPLICATION_JSON).retrieve().body(String::class.java)
         } catch (ex: RestClientResponseException) {
-            log.warn("HIRA hospital search failed: status={}", ex.statusCode.value())
+            // data.go.kr gateway errors (unregistered key 30, quota exceeded 22, ...) come back as 4xx.
+            log.warn("HIRA hospital search failed: status={} reasonCode={}", ex.statusCode.value(), reasonCode(ex.responseBodyAsString))
             throw unavailable()
         } catch (ex: RestClientException) {
-            log.warn("HIRA hospital search unavailable: {}", ex.javaClass.simpleName)
+            val cause = generateSequence<Throwable>(ex) { it.cause }.last()
+            log.warn("HIRA hospital search unavailable: {} ({})", ex.javaClass.simpleName, cause.javaClass.simpleName)
             throw unavailable()
         }
         return parse(body.orEmpty(), page, size)
     }
 
     private fun parse(body: String, page: Int, size: Int): HospitalSearchResult {
-        if (body.trimStart().startsWith("<")) {
-            // data.go.kr gateway errors (unregistered key, quota exceeded, ...) arrive as XML even for _type=json.
-            log.warn("HIRA hospital search rejected: reasonCode={}", REASON_CODE.find(body)?.groupValues?.get(1))
+        // Gateway errors may also arrive with 200, as XML or as JSON `OpenAPI_ServiceResponse`.
+        reasonCode(body)?.let {
+            log.warn("HIRA hospital search rejected: reasonCode={}", it)
             throw unavailable()
         }
         val response = runCatching { mapper.readTree(body) }.getOrNull()?.path("response") ?: run {
@@ -100,6 +102,9 @@ class HiraHospitalClient(private val properties: HospitalProperties, private val
     private fun result(items: List<HospitalCandidate>, page: Int, size: Int, total: Int) =
         HospitalSearchResult(items, page, size, maxOf(total, items.size), ATTRIBUTION)
 
+    /** data.go.kr `returnReasonCode` from an XML or JSON gateway error; a number only, never echoed input. */
+    private fun reasonCode(body: String?): String? = body?.let { REASON_CODE.find(it)?.groupValues?.get(1) }
+
     private fun unavailable() = BusinessException(ErrorCode.HOSPITAL_SEARCH_UNAVAILABLE)
 
     companion object {
@@ -107,7 +112,7 @@ class HiraHospitalClient(private val properties: HospitalProperties, private val
         const val ATTRIBUTION = "건강보험심사평가원 병원정보서비스"
         private const val NORMAL = "00"
         private const val NO_DATA = "03"
-        private val REASON_CODE = Regex("<returnReasonCode>\\s*(\\d{1,3})\\s*</returnReasonCode>")
+        private val REASON_CODE = Regex("returnReasonCode\\W{1,6}(\\d{1,3})")
         private val PERCENT_ESCAPE = Regex("%[0-9A-Fa-f]{2}")
 
         /** data.go.kr issues each key in a "Decoding" and a URL-encoded "Encoding" form; send the decoded one. */

@@ -41,7 +41,8 @@ nurseflow:
       # data.go.kr key for 건강보험심사평가원 병원정보서비스 (Decoding or Encoding form). Never committed.
       # Empty: GET /api/v1/hospitals/search returns 503 HOSPITAL_SEARCH_NOT_CONFIGURED.
       service-key: ${NURSEFLOW_HOSPITAL_API_KEY:}
-      timeout: 3s
+      # data.go.kr often answers in several seconds; a 3s limit timed out real searches.
+      timeout: 10s
   invitation:
     # Page that opens an invitation, e.g. https://<web-host>/invite. The token is appended as #token=...
     link-base-url: ${NURSEFLOW_INVITE_LINK_BASE:}
