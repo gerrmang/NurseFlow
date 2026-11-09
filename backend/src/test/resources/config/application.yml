@@ -14,5 +14,7 @@ nurseflow:
     hira:
       service-key: nurseflow+test/hira=key==
       timeout: 500ms
+    dataset:
+      min-rows: 1
   invitation:
     link-base-url: https://nurseflow.test/invite

@@ -7,7 +7,17 @@ import java.time.Duration
 
 /** Official hospital lookup used when an administrator picks the hospital for a new ward. */
 @ConfigurationProperties("nurseflow.hospital")
-data class HospitalProperties(val hira: Hira = Hira()) {
+data class HospitalProperties(val hira: Hira = Hira(), val dataset: Dataset = Dataset()) {
+    /**
+     * Local copy of 건강보험심사평가원 「전국 병의원 및 약국 현황」 (data.go.kr 15051059, updated quarterly).
+     * `path` is the downloaded zip, or its `병원정보서비스` CSV; it is imported at startup when its content changed.
+     * `minRows` rejects a truncated file before it can deactivate the existing list.
+     */
+    data class Dataset(
+        val path: String = "",
+        val minRows: Int = 10_000,
+    )
+
     /**
      * 건강보험심사평가원 병원정보서비스 on data.go.kr. `serviceKey` is the personal data.go.kr key:
      * either the "Decoding" form or the already URL-encoded "Encoding" form is accepted.

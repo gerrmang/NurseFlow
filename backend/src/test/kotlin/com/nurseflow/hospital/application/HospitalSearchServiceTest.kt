@@ -5,19 +5,30 @@ import com.nurseflow.common.error.ErrorCode
 import com.nurseflow.hospital.application.service.HiraHospitalClient
 import com.nurseflow.hospital.application.service.HospitalSearchService
 import com.nurseflow.hospital.config.HospitalProperties
+import com.nurseflow.hospital.persistence.repository.HospitalJdbcRepository
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
+import org.springframework.jdbc.core.JdbcTemplate
 import tools.jackson.databind.json.JsonMapper
 
 class HospitalSearchServiceTest {
     @Test
     fun `search without a service key is not configured`() {
         val properties = HospitalProperties(HospitalProperties.Hira(serviceKey = " "))
-        val service = HospitalSearchService(properties, HiraHospitalClient(properties, JsonMapper()))
+        val noDataset = object : HospitalJdbcRepository(JdbcTemplate()) {
+            override fun latestImport(source: String) = null
+        }
+        val service = HospitalSearchService(properties, noDataset, HiraHospitalClient(properties, JsonMapper()))
 
         val ex = assertThrows<BusinessException> { service.search("가상병원", 1, 10) }
         assertEquals(ErrorCode.HOSPITAL_SEARCH_NOT_CONFIGURED, ex.errorCode)
+    }
+
+    @Test
+    fun `attribution names the dataset period`() {
+        assertEquals("건강보험심사평가원 전국 병의원 및 약국 현황 (2026.9. 기준)", HospitalSearchService.attribution("2026-09"))
+        assertEquals("건강보험심사평가원 전국 병의원 및 약국 현황", HospitalSearchService.attribution("unknown"))
     }
 
     @Test

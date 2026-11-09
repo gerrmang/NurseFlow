@@ -196,3 +196,30 @@ ALTER TABLE nurses ADD COLUMN IF NOT EXISTS confirmed_career_started_on VARCHAR(
 ALTER TABLE nurses ADD COLUMN IF NOT EXISTS confirmed_rank_name VARCHAR(30);
 ALTER TABLE nurses ADD COLUMN IF NOT EXISTS profile_confirmed_at VARCHAR(40);
 ALTER TABLE nurses ADD COLUMN IF NOT EXISTS profile_confirmed_by VARCHAR(255);
+
+-- Local copy of the official HIRA hospital list (data.go.kr 15051059, quarterly). Hospital search reads this
+-- table. Institutions missing from a newer file are deactivated, not deleted. search_name is the name in
+-- lower case without spaces or punctuation; search_rank puts hospital-level institutions before clinics.
+CREATE TABLE IF NOT EXISTS hospitals (
+    external_id VARCHAR(255) PRIMARY KEY,
+    source VARCHAR(20) NOT NULL,
+    name VARCHAR(200) NOT NULL,
+    search_name VARCHAR(200) NOT NULL,
+    search_rank INT NOT NULL,
+    category_name VARCHAR(50),
+    address VARCHAR(500) NOT NULL,
+    active BOOLEAN NOT NULL,
+    dataset_version VARCHAR(20) NOT NULL
+);
+CREATE INDEX IF NOT EXISTS ix_hospitals_search ON hospitals(active, search_name);
+
+CREATE TABLE IF NOT EXISTS hospital_dataset_imports (
+    import_id UUID PRIMARY KEY,
+    source VARCHAR(20) NOT NULL,
+    dataset_version VARCHAR(20) NOT NULL,
+    file_sha256 VARCHAR(64) NOT NULL,
+    imported_count INT NOT NULL,
+    skipped_count INT NOT NULL,
+    deactivated_count INT NOT NULL,
+    imported_at VARCHAR(40) NOT NULL
+);
