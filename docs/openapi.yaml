@@ -30,6 +30,7 @@ tags:
   - name: Auth
   - name: Identity
   - name: Wards
+  - name: Hospitals
   - name: Invitations
   - name: Staff
   - name: Rosters
@@ -342,6 +343,67 @@ paths:
                 $ref: '#/components/schemas/ApiProblem'
         '404':
           description: BOOTSTRAP_DISABLED
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ApiProblem'
+
+  /hospitals/search:
+    get:
+      tags: [Hospitals]
+      operationId: searchHospitals
+      summary: 병원 이름으로 공식 의료기관 검색
+      description: |
+        병동을 만들 때 병원을 고르기 위한 검색이다. 로그인 사용자면 누구나 호출할 수 있고 병원 단위 권한은 없다.
+        서버가 건강보험심사평가원 병원정보서비스를 호출해 필요한 필드만 정규화해 돌려준다. 검색 결과는 저장하지 않는다.
+        결과가 없으면 200과 빈 `items`를 돌려준다. 외부 서비스 장애·시간 초과·호출 한도 초과는 503 `HOSPITAL_SEARCH_UNAVAILABLE`이다.
+        화면에는 응답의 `attribution`을 출처로 표시한다.
+      parameters:
+        - name: query
+          in: query
+          required: true
+          description: 병원 이름 일부. 앞뒤 공백을 제거한 뒤 2~50자, 제어 문자 불가
+          schema:
+            type: string
+            minLength: 2
+            maxLength: 50
+            example: 가상대학교병원
+        - name: page
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 1
+        - name: size
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 20
+            default: 10
+      responses:
+        '200':
+          description: 검색 결과(없으면 빈 목록)
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+                example: private, no-store
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HospitalSearchPage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          description: |
+            HOSPITAL_SEARCH_NOT_CONFIGURED — 서버에 병원 정보 API 키가 설정되지 않음.
+            HOSPITAL_SEARCH_UNAVAILABLE — 외부 서비스 장애·시간 초과·호출 한도 초과·응답 형식 오류.
           content:
             application/problem+json:
               schema:
@@ -2714,6 +2776,49 @@ components:
         endsAt:
           type: string
           format: date-time
+    HospitalSearchPage:
+      type: object
+      required: [items, page, size, totalCount, attribution]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/HospitalCandidate'
+        page:
+          type: integer
+          minimum: 1
+        size:
+          type: integer
+          minimum: 1
+        totalCount:
+          type: integer
+          minimum: 0
+          description: 외부 서비스가 알려 준 전체 결과 수
+        attribution:
+          type: string
+          description: 화면에 표시할 데이터 출처
+          example: 건강보험심사평가원 병원정보서비스
+    HospitalCandidate:
+      type: object
+      required: [source, externalId, name, address]
+      properties:
+        source:
+          type: string
+          enum: [HIRA]
+          description: 데이터 출처. HIRA는 건강보험심사평가원
+        externalId:
+          type: string
+          description: 출처가 발급한 요양기관 식별자(암호화된 요양기관기호). 병동 생성(A4) 때 그대로 보낸다
+        name:
+          type: string
+          example: 가상대학교병원
+        address:
+          type: string
+          example: 서울특별시 가상구 가상로 1
+        category:
+          type: [string, 'null']
+          description: 의료기관 종별(예 상급종합, 종합병원, 병원, 의원). 같은 이름의 기관을 구분하는 데 쓴다
+          example: 종합병원
     ApiProblem:
       type: object
       additionalProperties: true
