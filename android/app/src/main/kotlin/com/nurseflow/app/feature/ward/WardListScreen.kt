@@ -9,9 +9,10 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.nurseflow.app.core.network.MembershipDto
 
 @Composable
-fun WardListScreen(viewModel: WardsViewModel, onLogout: () -> Unit) {
+fun WardListScreen(viewModel: WardsViewModel, onSelect: (MembershipDto) -> Unit, onLogout: () -> Unit) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     Column(Modifier.fillMaxSize().padding(20.dp)) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
@@ -37,13 +38,13 @@ fun WardListScreen(viewModel: WardsViewModel, onLogout: () -> Unit) {
                     }
                 }
                 items(current.wards, key = { it.wardId }) { ward ->
-                    Card(Modifier.fillMaxWidth()) {
+                    Card(onClick = { onSelect(ward) }, modifier = Modifier.fillMaxWidth()) {
                         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             Text(ward.wardName, style = MaterialTheme.typography.titleMedium)
                             Text(ward.roles.joinToString(" · ") {
                                 when (it) { "WARD_ADMIN" -> "관리자"; "WARD_MEMBER" -> "간호사"; else -> "기타 역할" }
                             })
-                            Text("서버 근무표 화면은 준비 중이에요.")
+                            Text("눌러서 공개된 근무표 보기")
                         }
                     }
                 }

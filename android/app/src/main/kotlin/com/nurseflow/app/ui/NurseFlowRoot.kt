@@ -4,6 +4,7 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -13,7 +14,10 @@ import com.nurseflow.app.AppContainer
 import com.nurseflow.app.core.session.SessionState
 import com.nurseflow.app.feature.auth.LoginScreen
 import com.nurseflow.app.feature.auth.LoginViewModel
+import com.nurseflow.app.feature.roster.PublishedRosterScreen
+import com.nurseflow.app.feature.roster.PublishedRosterViewModel
 import com.nurseflow.app.feature.ward.WardListScreen
+import com.nurseflow.app.feature.ward.WardsUiState
 import com.nurseflow.app.feature.ward.WardsViewModel
 
 @Composable
@@ -22,6 +26,10 @@ fun NurseFlowRoot(container: AppContainer) {
     val sessionModels: SessionViewModelStore = viewModel()
     val owner = sessionModels.ownerFor(session)
     var demo by remember { mutableStateOf(false) }
+    // Selection belongs to one signed-in session; a new session identity starts without one.
+    val sessionKey = (session as? SessionState.SignedIn)?.let { "${it.userId}:${it.generation}" }
+    var selectedWardId by rememberSaveable(sessionKey) { mutableStateOf<String?>(null) }
+    var wardEntry by rememberSaveable(sessionKey) { mutableStateOf(0) }
     Column(Modifier.fillMaxSize().safeDrawingPadding()) {
         if (demo) {
             BackHandler { demo = false }
@@ -43,11 +51,27 @@ fun NurseFlowRoot(container: AppContainer) {
                             Button(onClick = { container.restoreSession() }) { Text("세션 복원 재시도") }
                             TextButton(onClick = container::logout) { Text("로그아웃하고 다시 로그인") }
                         }
-                        is SessionState.SignedIn -> WardListScreen(viewModel { WardsViewModel(container.api) }, container::logout)
+                        is SessionState.SignedIn -> {
+                            val wardsModel = viewModel { WardsViewModel(container.api) }
+                            val wards by wardsModel.state.collectAsStateWithLifecycle()
+                            val ward = (wards as? WardsUiState.Loaded)?.wards?.firstOrNull { it.wardId == selectedWardId }
+                            if (ward == null) {
+                                WardListScreen(wardsModel, { selectedWardId = it.wardId; wardEntry += 1 }, container::logout)
+                            } else {
+                                BackHandler { selectedWardId = null }
+                                val roster = viewModel(key = "roster-${ward.wardId}") {
+                                    PublishedRosterViewModel(container.api, ward.wardId, ward.canViewWardCalendar)
+                                }
+                                PublishedRosterScreen(ward.wardName, wardEntry, roster) { selectedWardId = null }
+                            }
+                        }
                     }
                 }
             }
-            TextButton(onClick = { demo = true }) { Text("가상 근무표 시연 보기 (서버 미연동)") }
+            // Demo data is reachable only outside a signed-in session and never substitutes for server data.
+            if (session !is SessionState.SignedIn) {
+                TextButton(onClick = { demo = true }) { Text("가상 근무표 시연 보기 (서버 미연동)") }
+            }
         }
     }
 }
