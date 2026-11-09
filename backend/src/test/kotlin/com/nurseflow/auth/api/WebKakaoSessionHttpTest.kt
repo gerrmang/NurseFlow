@@ -13,6 +13,9 @@ import java.net.URI
 import java.net.URLDecoder
 import java.time.Instant
 import java.util.UUID
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 
 class WebKakaoSessionHttpTest : ApiTestBase() {
     private val webHeaders = mapOf("X-NurseFlow-Client" to "web", "Origin" to FakeOidcProvider.WEB_ORIGIN)
@@ -125,6 +128,30 @@ class WebKakaoSessionHttpTest : ApiTestBase() {
         val replay = exchange(FakeOidcProvider.approve("fake-web-once", s.nonce), s.state, s.loginCookie)
         assertEquals("INVALID_LOGIN_STATE", replay.code)
         assertEquals(before, FakeOidcProvider.tokenRequests.get(), "replayed state must not reach Kakao")
+    }
+
+    @Test
+    fun `concurrent callbacks with the same state reach kakao only once`() {
+        val s = started()
+        val code = FakeOidcProvider.approve("fake-web-race", s.nonce)
+        val before = FakeOidcProvider.tokenRequests.get()
+        val start = CountDownLatch(1)
+        val executor = Executors.newFixedThreadPool(4)
+        try {
+            val results = (1..4).map {
+                executor.submit<HttpTestClient.Response> {
+                    start.await()
+                    exchange(code, s.state, s.loginCookie)
+                }
+            }
+            start.countDown()
+            val responses = results.map { it.get(10, TimeUnit.SECONDS) }
+            assertEquals(1, responses.count { it.status == 200 }, responses.joinToString { it.body })
+            assertEquals(3, responses.count { it.code == "INVALID_LOGIN_STATE" }, responses.joinToString { it.body })
+            assertEquals(before + 1, FakeOidcProvider.tokenRequests.get(), "only the consuming callback may reach Kakao")
+        } finally {
+            executor.shutdownNow()
+        }
     }
 
     @Test
