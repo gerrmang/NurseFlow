@@ -27,7 +27,7 @@ abstract class ApiTestBase {
     @BeforeEach
     fun resetDatabase() {
         http = HttpTestClient(port, mapper)
-        listOf("audit_events", "ward_invitations", "ward_career_policies", "auth_refresh_tokens", "mutation_replays", "generation_jobs", "approved_absences",
+        listOf("audit_events", "auth_web_login_attempts", "ward_invitations", "ward_career_policies", "auth_refresh_tokens", "mutation_replays", "generation_jobs", "approved_absences",
             "roster_slots", "rosters", "shift_types", "nurses", "ward_teams", "ward_memberships", "users", "wards",
         ).forEach { table -> runCatching { jdbc.update("DELETE FROM $table") } }
         jdbc.update("UPDATE bootstrap_state SET consumed=FALSE WHERE state_id=1")
@@ -66,6 +66,8 @@ abstract class ApiTestBase {
         fun fakeKakao(registry: DynamicPropertyRegistry) {
             registry.add("nurseflow.auth.kakao.issuer") { FakeOidcProvider.ISSUER }
             registry.add("nurseflow.auth.kakao.jwk-set-uri") { FakeOidcProvider.jwkSetUri }
+            registry.add("nurseflow.auth.kakao.token-uri") { FakeOidcProvider.tokenUri }
+            registry.add("nurseflow.auth.kakao.authorize-uri") { FakeOidcProvider.AUTHORIZE_URI }
             registry.add("spring.datasource.url") { "jdbc:h2:mem:api_tests;DB_CLOSE_DELAY=-1" }
         }
     }

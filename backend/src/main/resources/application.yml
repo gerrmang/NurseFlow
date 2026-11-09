@@ -19,11 +19,23 @@ nurseflow:
       jwk-set-uri: https://kauth.kakao.com/.well-known/jwks.json
       # Comma-separated Kakao app keys accepted as the ID token "aud" (Android native key, web key).
       audiences: ${NURSEFLOW_KAKAO_AUDIENCES:}
+      # Web login (authorization code flow). The REST API key is the client_id and the ID token "aud".
+      rest-api-key: ${NURSEFLOW_KAKAO_REST_API_KEY:}
+      # Optional; only when "Client Secret" is enabled for the Kakao app. Never committed.
+      client-secret: ${NURSEFLOW_KAKAO_CLIENT_SECRET:}
+      # Comma-separated exact web callback URIs, also registered in Kakao Developers.
+      redirect-uris: ${NURSEFLOW_KAKAO_REDIRECT_URIS:}
     session:
       # HMAC key for NurseFlow access tokens: at least 32 bytes, never committed.
       secret: ${NURSEFLOW_SESSION_SECRET}
       access-token-ttl: 10m
       refresh-token-ttl: 30d
+    web:
+      login-attempt-ttl: 10m
+      # Keep true. Browsers treat http://localhost as secure, so local development still works.
+      cookie-secure: ${NURSEFLOW_WEB_COOKIE_SECURE:true}
+      # Comma-separated Origins allowed to call /api/v1/auth/web/*. Empty: origins of the redirect URIs.
+      allowed-origins: ${NURSEFLOW_WEB_ALLOWED_ORIGINS:}
   invitation:
     # Page that opens an invitation, e.g. https://<web-host>/invite. The token is appended as #token=...
     link-base-url: ${NURSEFLOW_INVITE_LINK_BASE:}

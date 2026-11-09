@@ -10,16 +10,31 @@ Java 21 is required. Set these environment variables in the run configuration (n
 | --- | --- |
 | `NURSEFLOW_SESSION_SECRET` | Required. HMAC key (32+ bytes) for NurseFlow access tokens. Startup fails without it. |
 | `NURSEFLOW_KAKAO_AUDIENCES` | Comma-separated Kakao app keys accepted as the ID token `aud` (Android native app key, web key). Empty → Kakao login returns 503 `IDENTITY_PROVIDER_NOT_CONFIGURED`. |
+| `NURSEFLOW_KAKAO_REST_API_KEY` | Web login only. Kakao REST API key: `client_id` for the code exchange and the only accepted ID token `aud` on the web path. Empty → web login returns 503 `IDENTITY_PROVIDER_NOT_CONFIGURED`. |
+| `NURSEFLOW_KAKAO_CLIENT_SECRET` | Optional, web login. Set only if Client Secret is enabled for the Kakao app. Never commit it. |
+| `NURSEFLOW_KAKAO_REDIRECT_URIS` | Web login. Comma-separated **exact** callback URIs (for example `http://localhost:5173/auth/kakao/callback`), also registered in Kakao Developers. |
+| `NURSEFLOW_WEB_ALLOWED_ORIGINS` | Optional. Comma-separated `Origin` values allowed on `/api/v1/auth/web/*`. Empty → the origins of the redirect URIs. |
+| `NURSEFLOW_WEB_COOKIE_SECURE` | Optional, default `true`. Keep `true`; browsers treat `http://localhost` as secure. |
 | `NURSEFLOW_BOOTSTRAP_CODE` | Optional, demo only. Enables `POST /api/v1/wards` so the first signed-in user can create a ward and become `WARD_ADMIN`. Leave empty otherwise. |
 | `NURSEFLOW_INVITE_LINK_BASE` | Optional. Invitation page URL; responses then include `inviteUrl`. |
 
 ### Sign-in and session
 
-1. Android (Kakao SDK) or web (Kakao login) obtains a Kakao **OIDC ID token** (enable OpenID Connect in Kakao Developers).
+1. Android (Kakao SDK) obtains a Kakao **OIDC ID token** (enable OpenID Connect in Kakao Developers).
 2. `POST /api/v1/auth/kakao/session {idToken, nonce?}` verifies it against Kakao's JWKS, issuer, audience, expiry and issue time, creates or finds the `users` row, and returns a NurseFlow access token (10 min) and refresh token (30 days).
 3. Every other API call uses `Authorization: Bearer <NurseFlow access token>`. Kakao tokens are not accepted as API tokens.
 4. `POST /api/v1/auth/session/refresh` keeps the user signed in by rotating the refresh token; reuse of a rotated token revokes the whole session. `POST /api/v1/auth/logout` revokes it (idempotent). Only SHA-256 hashes of refresh tokens are stored.
 5. `GET /api/v1/me` and `GET /api/v1/wards` return the user and server-side ward memberships. Signing in alone grants no ward access.
+
+### Web login (authorization code, HttpOnly cookie)
+
+The web app does not handle Kakao tokens or the refresh token. Every `/api/v1/auth/web/*` call must send `X-NurseFlow-Client: web`; a browser `Origin` must be an allowed origin (CSRF defence). The web app is expected to call the API from the same site (for example through the Vite dev proxy or one reverse proxy), because the cookies are `SameSite=Strict`.
+
+1. `POST /api/v1/auth/web/kakao/authorization {redirectUri}` → `{authorizationUrl, expiresAt}` and an HttpOnly `nf_kakao_login` cookie. The server generates and stores `state` and `nonce` (10 minutes, single use) and the web app simply navigates to `authorizationUrl`.
+2. Kakao redirects to the callback with `code` and `state`. `POST /api/v1/auth/web/kakao/code {code, state}` checks that the state belongs to this browser (cookie), is unexpired and unused, consumes it, exchanges the code at Kakao's token endpoint with the stored redirect URI, and verifies the ID token (`aud` = REST API key, `nonce` = stored value). The response has the access token only; the refresh token is set as `nf_refresh` (HttpOnly, Secure, SameSite=Strict, Path=/api/v1/auth/web).
+3. `POST /api/v1/auth/web/session/refresh` (no body) rotates the cookie with the same reuse detection as Android. `POST /api/v1/auth/web/logout` (no body) revokes the session and clears the cookie.
+
+The Android routes above are unchanged and never set cookies.
 
 Tests use an in-process fake OIDC provider (`src/test/kotlin/com/nurseflow/support/FakeOidcProvider.kt`) instead of Kakao. Real Kakao end-to-end login has not been verified until the Kakao Developers app, keys and redirect URIs are registered.
 
