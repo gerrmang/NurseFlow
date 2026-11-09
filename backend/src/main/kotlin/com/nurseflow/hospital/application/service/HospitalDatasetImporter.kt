@@ -188,15 +188,15 @@ internal object HospitalCsv {
                         reader.reset()
                     }
                 }
-                quoted -> field.append(ch).also {
-                    if (field.length > MAX_FIELD) throw HospitalDatasetException("quoted field longer than $MAX_FIELD")
-                }
+                quoted -> field.append(ch)
                 ch == '"' && field.isEmpty() -> quoted = true
                 ch == ',' -> { fields += field.toString(); field.clear() }
                 ch == '\r' && !quoted -> Unit
                 ch == '\n' -> { fields += field.toString(); return fields }
                 else -> field.append(ch)
             }
+            // Any field this long means a broken file; stop before it grows without bound.
+            if (field.length > MAX_FIELD) throw HospitalDatasetException("field longer than $MAX_FIELD")
         }
     }
 }

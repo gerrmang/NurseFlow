@@ -158,6 +158,18 @@ class HospitalDatasetSearchHttpTest : ApiTestBase() {
     }
 
     @Test
+    fun `text after a closing quote and overlong fields fail the import`() {
+        importer.importIfChanged(zip("data.zip", september))
+        val afterQuote = "FAKE-202,\"가상병원\"x,21,병원,110000,서울,주소,02-000-0000"
+        val longUnquoted = "FAKE-203,가상${"긴".repeat(2_001)}병원,21,병원,110000,서울,주소,02-000-0000"
+
+        assertThrows<HospitalDatasetException> { importer.importIfChanged(csv("after-quote.csv", september + afterQuote)) }
+        assertThrows<HospitalDatasetException> { importer.importIfChanged(csv("long-field.csv", september + longUnquoted)) }
+
+        assertEquals(4, search("가상병원").json!!.get("totalCount").asInt())
+    }
+
+    @Test
     fun `a file that would deactivate too many institutions is rejected`() {
         importer.importIfChanged(zip("data.zip", september))
 
