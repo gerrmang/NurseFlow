@@ -48,6 +48,14 @@ adb -s emulator-5556 shell am instrument -w -r -e rosterE2e true -e class com.nu
 
 `am instrument`의 프로세스 종료 코드만으로 성공을 판정하지 않는다. `OK (1 test)` 및 성공 status와 서버 Gradle의 `BUILD SUCCESSFUL`을 모두 확인한다. 실패 후 재실행은 새로운 fixture 서버로 시작한다. 끝나면 추가한 reverse 포트를 제거한다.
 
+## PR 및 최신 dev 통합 검증 (2026-11-09)
+
+- [PR #34](https://github.com/gerrmang/NurseFlow/pull/34), 대상 `dev`, **Squash and merge**. PR 생성은 사용자 지시에 따라 수행했으며 병합하지 않았다.
+- A2가 병합된 `dev` `fa47a5a`로 rebase해 공유 기록만 충돌 해결했다. 서버/Android 구현 충돌은 없었다. 신규 화면 파일의 EOF 공백을 정리하고 신규 파일을 포함한 diff 검사를 통과했다.
+- 통합 후 백엔드 `test --no-daemon`: 109개 중 107개 통과·2개 opt-in 건너뜀·실패/오류 0.
+- 통합 후 B9a 실서버 기기 검사를 재실행해 **`OK (1 test)`, 13.549초**, 서버 fixture **`BUILD SUCCESSFUL`** 확인.
+- 구현 head `f4cd1ed64a19097973be1cbff0dcf7066391daad`에서 GitHub [Verify run 42613579824](https://github.com/gerrmang/NurseFlow/actions/runs/42613579824) 성공: Backend tests·Android debug build 모두 통과. Vercel 및 Preview Comments도 성공했다. 이 기록의 후속 문서 커밋 CI는 별도로 확인한다.
+
 ## API·데이터·설정 변경
 
 - 운영 API·DB 스키마·환경변수 변경 없음. Android가 기존 공개 조회 계약을 소비한다.
@@ -60,7 +68,7 @@ Android 앱 업데이트만 필요하다. 서버 배포·데이터 이전은 없
 
 ## 남은 위험과 후속 작업
 
-외부 Kakao 인증 성공 및 운영 서버·물리 기기 검증은 이번 로컬 실서버 검사에 포함하지 않는다. GitHub CI·브랜치 보호·독립 리뷰 여부는 확인하지 않았다. 전체 근무 코드 표시에는 후속 서버 계약이 필요하다.
+외부 Kakao 인증 성공 및 운영 서버·물리 기기 검증은 이번 로컬 실서버 검사에 포함하지 않는다. GitHub CI 성공은 위 실행에서 확인했으며 브랜치 보호·독립 승인 여부는 확인하지 않았다. 전체 근무 코드 표시에는 후속 서버 계약이 필요하다.
 
 ## 최종 확인
 
@@ -68,4 +76,5 @@ Android 앱 업데이트만 필요하다. 서버 배포·데이터 이전은 없
 - [x] 근무 필수 규칙과 공개·권한 판단은 서버에 유지했다.
 - [x] 실제 개인정보·부재 사유·초안 데이터를 테스트에 사용하지 않았다.
 - [x] 검증 결과·생략한 검사·재현 절차를 기록했다.
-- [ ] GitHub PR 생성·CI·병합 검토 (이번 로컬 마무리 범위에서 수행하지 않음)
+- [x] GitHub PR 생성 및 구현 head CI 성공 확인
+- [ ] 최종 병합 검토 및 스쿼시 병합

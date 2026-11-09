@@ -17,7 +17,7 @@
 | B1 Android Kakao 세션 | `feat/android-kakao-session` | #30 | `dev` 병합 완료 (2026-11-09, 일반 병합 커밋 `9239fa6`) | 로컬 단위·기기·실서버 검증은 [`B1 검증 기록`](../android/B1-verification.md)에 기록. GitHub CI·PR 리뷰 여부는 별도 확인 | 기록된 미해결 P1 없음. 병합 방식은 아래 참고 |
 | A2 웹 세션 API | `feat/auth-web-session-v2` | #33 | PR 열림. Codex 리뷰(P2 1건)와 hyen11 리뷰(P3·P4·P5 각 1건) 지적 모두 수정. 스쿼시 병합 대기 | 2026-11-09 로컬 `./gradlew test --offline`: 108건 통과, 건너뜀 1. 동시 state 테스트(`FOR UPDATE` 제거 변이 3/3 실패)와 client_secret 전달(전달 줄 제거 변이 실패) 검출력 확인. 실제 Kakao E2E 미검증(목업만) | 없음 |
 
-| B9a Android 공개 근무표 조회 | `feat/android-published-roster` (`dev` `ab8347d` 기준, 미커밋 작업 트리) | 미개설 | 구현·로컬 기기·실서버 연동 검증 완료, PR/CI/병합 대기 | [B9a 검증 기록](../android/B9a-verification.md), 아래 최종 검증 참조 | 기존 P2 해결, 확인된 미해결 지적 없음 |
+| B9a Android 공개 근무표 조회 | `feat/android-published-roster` (`dev` `fa47a5a` 통합) | [#34](https://github.com/gerrmang/NurseFlow/pull/34) | 구현·기기·실서버 검증 완료, 구현 head `f4cd1ed` CI 통과. PR 열림·스쿼시 병합 대기 | [B9a 검증 기록](../android/B9a-verification.md), 아래 최종 검증 참조 | 기존 P2 해결, 확인된 미해결 지적 없음 |
 | B2 웹 기반 세션 | `feat/web-foundation-session` | 미개설 | 미착수. A2 계약에 의존 | 해당 없음 | 없음 |
 | 에이전트 지침 정합성 | `docs/agent-guidance-alignment` | #32 | `dev` 병합 완료 (2026-11-09, 일반 병합 커밋 `ab8347d`. 스쿼시 원칙에서 벗어남) | `git diff --check` 통과. GitHub Actions `Verify` PR 실행 성공, `dev` push 실행 성공 | 없음 |
 | A3 이후 | 해당 없음 | 미개설 | 미착수 | 해당 없음 | 없음 |
@@ -69,6 +69,14 @@
 - 앞선 인계의 실서버 미검증 제한은 이번 검증으로 해소됐다. B9a 구현·로컬 인수 검증은 완료했으며 PR/CI/병합은 별도다. 외부 Kakao 인증 성공·운영 서버·물리 기기, GitHub CI·보호 설정은 이번에 검증하지 않았다.
 - 인계: 같은 `C:\Users\jjang\IdeaProjects\NurseFlow`, `feat/android-published-roster`의 미커밋 변경을 이어간다. 커밋·푸시·PR 생성·병합하지 않았다. 테스트 fixture는 앱/서버 배포에 포함되지 않으며 롤백은 B9a 앱 변경을 되돌리면 된다.
 - 최종 테스트 대기 보완 후 `:app:lintDebug`도 재실행해 성공했다. 검증 서버 정상 종료와 추가한 reverse 포트 18083/18084 제거, 이번에 시작한 읽기 전용 에뮬레이터 종료를 확인했다. 신규 기기 테스트 SHA256 `d2109000511e3917ed2f2f34e615e3ec51c0fb6d81e1c76d8236dfdea65d7a8f`, 신규 서버 fixture SHA256 `5cefdf9031fdb6e06e009df36c1b3374c4bb0de7c8c8634461e100da5fee8935`; 나머지 구현·단위 테스트의 해시는 위 P2 재검토 기준과 같다.
+
+## B9a PR 개설 (2026-11-09, Codex)
+
+- 사용자 지시에 따라 B9a 파일 12개만 커밋·푸시하고 [PR #34](https://github.com/gerrmang/NurseFlow/pull/34)를 `dev` 대상으로 열었다. 원격 `dev`의 A2 스쿼시 커밋 `fa47a5a`에 rebase했고, 공유 상태 문서 충돌은 A2의 최신 기록과 B9a의 기록을 모두 보존해 해결했다. PR 본문에 **Squash and merge**를 명시했으며 병합·자동 병합 설정은 하지 않았다.
+- A2 통합 후 `backend/ .\gradlew.bat test --no-daemon`: `BUILD SUCCESSFUL`, XML 109개 중 107개 통과·2개 opt-in 건너뜀·실패/오류 0. 신규 파일까지 포함한 `git diff origin/dev...HEAD --check`에서 발견한 화면 파일 EOF 공백은 커밋 전에 정리했다.
+- PR 구현 head `f4cd1ed64a19097973be1cbff0dcf7066391daad`에서 GitHub Actions [Verify run 42613579824](https://github.com/gerrmang/NurseFlow/actions/runs/42613579824)의 `Backend tests`(1분)·`Android debug build`(1분 14초) 성공을 확인했다. Vercel 및 Vercel Preview Comments도 성공. 강제 보호·승인 규칙은 확인하지 않았다.
+- A2 통합 상태의 B9a 실서버 기기 E2E를 재실행해 `OK (1 test)`, 13.549초, 테스트 status 0과 대응 서버 `BUILD SUCCESSFUL`을 확인했다. 최종 문서 갱신 뒤 후속 CI도 확인한다. 병합은 하지 않는다.
+- GitHub 연결 도구는 PR 생성에서 403을 반환해, 정상 인증된 로컬 GitHub CLI로 생성했다. 로컬 DB 파일은 미추적 상태로 보존했다. 같은 worktree·브랜치에서 PR #34의 후속 검토를 이어간다.
 
 ## 기타 브랜치
 
