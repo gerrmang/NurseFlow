@@ -19,3 +19,6 @@ data class SessionResult(
 )
 
 data class IssuedAccessToken(val value: String, val expiresAt: Instant)
+
+/** Started web login: where to send the browser, the binding value for the HttpOnly cookie, and expiry. */
+data class WebLoginStart(val authorizationUrl: String, val browserBinding: String, val expiresAt: Instant)

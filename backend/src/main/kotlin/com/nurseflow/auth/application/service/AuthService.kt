@@ -30,7 +30,11 @@ class AuthService(
 ) {
     fun loginWithKakao(command: KakaoLoginCommand): SessionResult {
         // Verify outside the transaction: it may fetch Kakao's JWKS over the network.
-        val identity = verifier.verify(command.idToken, command.nonce)
+        return loginWithVerifiedIdentity(verifier.verify(command.idToken, command.nonce))
+    }
+
+    /** Starts a session for an identity already proven by a verified Kakao ID token. */
+    fun loginWithVerifiedIdentity(identity: VerifiedIdentity): SessionResult {
         return try {
             transactions.execute { startSession(identity) }!!
         } catch (_: DuplicateKeyException) {

@@ -34,7 +34,6 @@ class KakaoIdTokenVerifier(private val properties: AuthProperties) {
             .apply {
                 setJwtValidator(DelegatingOAuth2TokenValidator(
                     JwtValidators.createDefaultWithIssuer(kakao.issuer),
-                    jwtCheck("audience") { jwt -> jwt.audience.orEmpty().any { it in kakao.audiences } },
                     jwtCheck("subject") { jwt -> jwt.subject.let { !it.isNullOrBlank() && it.length <= 255 } },
                     jwtCheck("issued_at") { jwt ->
                         val now = Instant.now()
@@ -47,8 +46,19 @@ class KakaoIdTokenVerifier(private val properties: AuthProperties) {
             }
     }
 
-    fun verify(idToken: String, expectedNonce: String?): VerifiedIdentity {
-        if (kakao.audiences.none { it.isNotBlank() }) throw BusinessException(ErrorCode.IDENTITY_PROVIDER_NOT_CONFIGURED)
+    /** Android SDK login: `aud` must be one of the configured app keys (`nurseflow.auth.kakao.audiences`). */
+    fun verify(idToken: String, expectedNonce: String?): VerifiedIdentity =
+        verify(idToken, expectedNonce, kakao.audiences.map { it.trim() }.filter { it.isNotEmpty() })
+
+    /**
+     * Web code flow: the token came straight from Kakao's token endpoint for our REST API key, so
+     * only that key is accepted as `aud`, and the nonce is the one the server stored for the login.
+     */
+    fun verifyWebLogin(idToken: String, expectedNonce: String): VerifiedIdentity =
+        verify(idToken, expectedNonce, listOf(kakao.restApiKey.trim()).filter { it.isNotEmpty() })
+
+    private fun verify(idToken: String, expectedNonce: String?, allowedAudiences: List<String>): VerifiedIdentity {
+        if (allowedAudiences.isEmpty()) throw BusinessException(ErrorCode.IDENTITY_PROVIDER_NOT_CONFIGURED)
         val jwt = try {
             decoder.decode(idToken)
         } catch (_: BadJwtException) {
@@ -57,6 +67,7 @@ class KakaoIdTokenVerifier(private val properties: AuthProperties) {
             // JWKS could not be fetched or parsed: a provider problem, not a client error.
             throw BusinessException(ErrorCode.IDENTITY_PROVIDER_UNAVAILABLE)
         }
+        if (jwt.audience.orEmpty().none { it in allowedAudiences }) throw BusinessException(ErrorCode.INVALID_ID_TOKEN)
         checkNonce(jwt, expectedNonce)
         return VerifiedIdentity(PROVIDER, requireNotNull(jwt.subject), nickname(jwt))
     }

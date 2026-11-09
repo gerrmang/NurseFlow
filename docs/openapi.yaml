@@ -10,7 +10,8 @@ info:
     24시간 초대 발급·철회·수락과 팀·경력 프로필 API를 제공한다. 신규 제품 결정은
     docs/pre-breakdown-scope-2026-11-04.md를 따른다. 최초 관리자의 실제 병원 검색·선택과 병동명 자기 공간 생성,
     실제 병원 검색·선택과 병동명 자기 공간 생성, 관리자 확정 희망 오프는 아직 구현되지 않았다.
-    클라이언트는 Kakao SDK/웹 로그인으로 받은 ID 토큰을 /auth/kakao/session에 보내고,
+    Android는 Kakao SDK로 받은 ID 토큰을 /auth/kakao/session에 보내고 refresh token을 본문으로 주고받는다.
+    웹은 /auth/web/* 경로로 서버가 state·nonce를 관리하는 인가 코드 교환을 하고 refresh token을 HttpOnly 쿠키로만 받는다.
     이후 모든 요청에는 NurseFlow가 발급한 access token을 사용한다. Kakao 토큰은 API bearer로 받지 않는다.
     가입 시 간호사는 병원 입사 연월(hospitalJoinedOn)을 제출한다. 실제 경력 시작 연월(careerStartedOn)과 직급은
     관리자가 설정한다. 팀별 드래그 순서가 상대 경력순을 정하며 병원 입사 연월보다 우선하는 기능은 아직 구현되지 않았다.
@@ -124,6 +125,153 @@ paths:
           description: 로그아웃 완료
         '400':
           $ref: '#/components/responses/BadRequest'
+
+  /auth/web/kakao/authorization:
+    post:
+      tags: [Auth]
+      operationId: startWebKakaoLogin
+      summary: 웹 Kakao 로그인 시작 — state·nonce 발급과 인가 주소 반환
+      description: |
+        웹 전용. 서버가 1회용 state·nonce를 만들어 저장하고(기본 10분), Kakao 인가 주소를 돌려준다.
+        브라우저 결속용 `nf_kakao_login` 쿠키(HttpOnly, Secure, SameSite=Strict, Path=/api/v1/auth/web)를 함께 설정한다.
+        클라이언트는 응답의 authorizationUrl로 이동하기만 하고 state·nonce를 만들거나 저장하지 않는다.
+        `redirectUri`는 서버 허용 목록(NURSEFLOW_KAKAO_REDIRECT_URIS)과 정확히 같아야 한다.
+        웹 공통 요구: `X-NurseFlow-Client: web` 헤더가 있어야 하고, Origin 헤더가 있으면 허용 출처여야 한다.
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/WebClientHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WebKakaoAuthorizationRequest'
+      responses:
+        '200':
+          description: 인가 주소 (Cache-Control no-store, Set-Cookie nf_kakao_login)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WebKakaoAuthorization'
+        '400':
+          description: INVALID_REQUEST 또는 INVALID_REDIRECT_URI
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ApiProblem'
+        '403':
+          description: WEB_CLIENT_REQUIRED — 웹 헤더 누락, 허용되지 않은 Origin 또는 교차 사이트 요청(Sec-Fetch-Site cross-site)
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ApiProblem'
+        '503':
+          description: IDENTITY_PROVIDER_NOT_CONFIGURED — REST API 키 또는 Redirect URI 미설정
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ApiProblem'
+
+  /auth/web/kakao/code:
+    post:
+      tags: [Auth]
+      operationId: completeWebKakaoLogin
+      summary: 웹 Kakao 인가 코드 교환으로 NurseFlow 세션 시작
+      description: |
+        웹 전용. Kakao가 Redirect URI로 돌려준 `code`와 `state`를 보낸다.
+        서버는 `nf_kakao_login` 쿠키와 state가 같은 로그인 시도인지, 만료·재사용되지 않았는지 확인하고 state를 즉시 소진한다.
+        그 뒤 저장된 Redirect URI와 REST API 키(필요하면 client secret)로 Kakao 토큰 엔드포인트에서 코드를 교환하고,
+        받은 ID 토큰을 `/auth/kakao/session`과 같은 규칙으로 검증하되 nonce는 서버가 저장한 값과 비교한다.
+        Kakao access/refresh token은 저장하거나 기록하지 않는다.
+        refresh token은 응답 본문에 넣지 않고 `nf_refresh` 쿠키(HttpOnly, Secure, SameSite=Strict, Path=/api/v1/auth/web)로만 준다.
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/WebClientHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WebKakaoCodeRequest'
+      responses:
+        '200':
+          description: 세션 발급 (Cache-Control no-store, Set-Cookie nf_refresh, nf_kakao_login 삭제)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WebSession'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          description: |
+            INVALID_LOGIN_STATE(쿠키 없음·state 불일치·만료·재사용), INVALID_AUTHORIZATION_CODE(Kakao가 코드 거부),
+            INVALID_ID_TOKEN(서명·aud·nonce 등 검증 실패)
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ApiProblem'
+        '403':
+          description: WEB_CLIENT_REQUIRED — 웹 헤더 누락, 허용되지 않은 Origin 또는 교차 사이트 요청(Sec-Fetch-Site cross-site)
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ApiProblem'
+        '503':
+          description: IDENTITY_PROVIDER_UNAVAILABLE 또는 IDENTITY_PROVIDER_NOT_CONFIGURED
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ApiProblem'
+
+  /auth/web/session/refresh:
+    post:
+      tags: [Auth]
+      operationId: refreshWebSession
+      summary: 웹 로그인 상태 유지 — 쿠키의 refresh token 회전
+      description: |
+        본문 없이 호출한다. `nf_refresh` 쿠키의 refresh token을 `/auth/session/refresh`와 같은 규칙으로 회전하고
+        새 쿠키를 설정한다. 이미 교체·철회된 값을 다시 쓰면 세션 계열 전체를 철회한다.
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/WebClientHeader'
+      responses:
+        '200':
+          description: 새 세션 (Cache-Control no-store, Set-Cookie nf_refresh)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WebSession'
+        '401':
+          description: INVALID_REFRESH_TOKEN — 쿠키 없음·만료·재사용, 다시 로그인 필요
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ApiProblem'
+        '403':
+          description: WEB_CLIENT_REQUIRED — 웹 헤더 누락, 허용되지 않은 Origin 또는 교차 사이트 요청(Sec-Fetch-Site cross-site)
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ApiProblem'
+
+  /auth/web/logout:
+    post:
+      tags: [Auth]
+      operationId: logoutWeb
+      summary: 웹 로그아웃 — 쿠키 세션 계열 철회와 쿠키 삭제 (멱등)
+      description: 본문 없이 호출한다. 쿠키가 없거나 이미 철회된 값이어도 204와 쿠키 삭제를 돌려준다.
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/WebClientHeader'
+      responses:
+        '204':
+          description: 로그아웃 완료 (Set-Cookie nf_refresh Max-Age=0)
+        '403':
+          description: WEB_CLIENT_REQUIRED — 웹 헤더 누락, 허용되지 않은 Origin 또는 교차 사이트 요청(Sec-Fetch-Site cross-site)
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ApiProblem'
 
   /me:
     get:
@@ -1555,6 +1703,20 @@ components:
       bearerFormat: JWT
       description: POST /auth/kakao/session 또는 /auth/session/refresh가 발급한 NurseFlow access token. sub는 NurseFlow userId다.
   parameters:
+    WebClientHeader:
+      name: X-NurseFlow-Client
+      in: header
+      required: true
+      description: |
+        웹 인증 경로의 CSRF 방어. 값은 `web`. 사용자 정의 헤더라 다른 사이트의 폼·단순 요청으로는 보낼 수 없다.
+        Origin 헤더가 있으면 허용 출처(NURSEFLOW_WEB_ALLOWED_ORIGINS, 비우면 Redirect URI들의 출처)여야 한다.
+        출처는 브라우저처럼 기본 포트(https 443, http 80)를 생략해 비교한다.
+        허용 출처여도 `Sec-Fetch-Site: cross-site` 요청은 거부한다. 서버는 CORS를 열지 않으며 쿠키는 SameSite=Strict다.
+        따라서 웹은 API와 같은 사이트에서 호출해야 한다(같은 도메인, 개발 서버 프록시 또는 단일 리버스 프록시).
+        허용 출처 목록에 다른 사이트를 등록해도 교차 사이트 호출은 지원되지 않는다.
+      schema:
+        type: string
+        enum: [web]
     WardId:
       name: wardId
       in: path
@@ -1831,7 +1993,68 @@ components:
           format: date-time
         refreshToken:
           type: string
-          description: 불투명 refresh token (기본 30일). Android는 암호화 저장소, 웹은 메모리/보안 저장소에 둔다.
+          description: 불투명 refresh token (기본 30일). Android는 암호화 저장소에 둔다. 웹은 이 경로 대신 /auth/web/*의 쿠키 방식을 쓴다.
+        refreshTokenExpiresAt:
+          type: string
+          format: date-time
+        user:
+          type: object
+          required: [userId, displayName, newUser]
+          properties:
+            userId:
+              type: string
+              format: uuid
+            displayName:
+              type: string
+            newUser:
+              type: boolean
+    WebKakaoAuthorizationRequest:
+      type: object
+      additionalProperties: false
+      required: [redirectUri]
+      properties:
+        redirectUri:
+          type: string
+          maxLength: 2048
+          description: 웹 콜백 주소. 서버 허용 목록·Kakao Developers 등록값과 정확히 같아야 한다.
+    WebKakaoAuthorization:
+      type: object
+      required: [authorizationUrl, expiresAt]
+      properties:
+        authorizationUrl:
+          type: string
+          description: client_id, redirect_uri, response_type=code, state, nonce가 채워진 Kakao 인가 주소
+        expiresAt:
+          type: string
+          format: date-time
+          description: 이 로그인 시도(state)의 만료 시각
+    WebKakaoCodeRequest:
+      type: object
+      additionalProperties: false
+      required: [code, state]
+      properties:
+        code:
+          type: string
+          maxLength: 2048
+          description: Kakao가 Redirect URI의 쿼리로 준 인가 코드. 서버는 저장하거나 기록하지 않는다.
+        state:
+          type: string
+          pattern: '^[A-Za-z0-9_-]{43}$'
+          description: Kakao가 Redirect URI로 되돌려준 state 값 그대로
+    WebSession:
+      type: object
+      description: 웹 세션. refresh token은 본문에 없고 HttpOnly 쿠키로만 전달된다.
+      required: [tokenType, accessToken, accessTokenExpiresAt, refreshTokenExpiresAt, user]
+      properties:
+        tokenType:
+          type: string
+          enum: [Bearer]
+        accessToken:
+          type: string
+          description: NurseFlow access JWT. 웹은 메모리에만 두고 localStorage·sessionStorage에 저장하지 않는다.
+        accessTokenExpiresAt:
+          type: string
+          format: date-time
         refreshTokenExpiresAt:
           type: string
           format: date-time

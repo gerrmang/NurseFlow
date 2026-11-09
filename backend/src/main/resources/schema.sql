@@ -125,6 +125,20 @@ CREATE TABLE IF NOT EXISTS auth_refresh_tokens (
 );
 CREATE INDEX IF NOT EXISTS ix_auth_refresh_tokens_family ON auth_refresh_tokens(family_id);
 
+-- Web Kakao login attempts (authorization code flow). One row per started login; consumed once.
+-- Only hashes of state and the browser-binding cookie are stored. Kakao codes and tokens are never stored.
+CREATE TABLE IF NOT EXISTS auth_web_login_attempts (
+    attempt_id UUID PRIMARY KEY,
+    state_hash VARCHAR(64) NOT NULL UNIQUE,
+    browser_binding_hash VARCHAR(64) NOT NULL,
+    nonce VARCHAR(64) NOT NULL,
+    redirect_uri VARCHAR(2048) NOT NULL,
+    created_at VARCHAR(40) NOT NULL,
+    expires_at VARCHAR(40) NOT NULL,
+    consumed_at VARCHAR(40)
+);
+CREATE INDEX IF NOT EXISTS ix_auth_web_login_attempts_created ON auth_web_login_attempts(created_at);
+
 -- ── Audit trail for ward access changes (no tokens, leave reasons or health data) ──
 CREATE TABLE IF NOT EXISTS audit_events (
     event_id UUID PRIMARY KEY,

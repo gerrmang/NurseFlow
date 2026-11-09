@@ -13,3 +13,12 @@ data class DbRefreshToken(
     val replacedAt: Instant?,
     val revokedAt: Instant?,
 )
+
+data class DbWebLoginAttempt(
+    val id: UUID,
+    val browserBindingHash: String,
+    val nonce: String,
+    val redirectUri: String,
+    val expiresAt: Instant,
+    val consumedAt: Instant?,
+)

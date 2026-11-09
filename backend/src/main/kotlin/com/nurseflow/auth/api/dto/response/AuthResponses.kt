@@ -20,3 +20,14 @@ data class CurrentUserResponse(
     val displayName: String,
     val memberships: List<WardMembershipResponse>,
 )
+
+data class WebKakaoAuthorizationResponse(val authorizationUrl: String, val expiresAt: Instant)
+
+/** Web session: the refresh token is only in the HttpOnly cookie, never in this body. */
+data class WebSessionResponse(
+    val tokenType: String = "Bearer",
+    val accessToken: String,
+    val accessTokenExpiresAt: Instant,
+    val refreshTokenExpiresAt: Instant,
+    val user: SessionUserResponse,
+)
