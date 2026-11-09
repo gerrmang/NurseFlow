@@ -1,0 +1,288 @@
+# B1 Android 로그인·세션 검증 기록
+
+현재 보완 상태: 아래 과거 기록의 “삭제 실패 후 재시작 시 복원 가능” 위험은 후속 Keystore 키 폐기로 보완했습니다. 실제 프로세스 재시작과 OAuth 거절 딥링크의 OS/SDK 복귀 자동검증 결과는 문서 마지막에 기록합니다. 실제 계정의 외부 인증 성공은 별도 미검증 범위입니다.
+
+## 변경 목적과 내용
+
+- 최신 확인한 `origin/dev` `e4ba671`에서 `feat/android-kakao-session`을 분기했습니다.
+- `c060bf9`의 인증·네트워크·Keystore 기반을 선택적으로 이식했습니다. `9a27241`·`a6b0103`의 디버그 진단 의도는 키 해시 안내로 반영하되 오류 원문 로깅은 제외했습니다. `c1e6a51`의 소속 없음 안내만 반영하고 병동 생성 기능은 포함하지 않았습니다.
+- 로그인·병동 조회는 기존 서버 계약을 호출하는 구현입니다. 자동 검사는 목업 HTTP 서버·가짜 인증 공급자를 사용하며, 아래 추가 검증에서 실제 Kakao 계정과 로컬 서버의 로그인·빈 병동 조회·세션 복원·로그아웃·재로그인도 확인했습니다.
+- 초대 가입·직급 입력·병동 생성은 후속 B3a/B4a, 서버 근무표는 B9a 범위입니다.
+
+## 관련 이슈
+
+- 없음. 기준: `docs/feature-breakdown.md`의 B1.
+
+## 검증
+
+2026-11-07 로컬 검증:
+
+- `./gradlew.bat :app:testDebugUnitTest :app:assembleDebug :app:lintDebug`: 최종 토큰 재전송 방지·백업 제외 수정까지 포함하여 통과(`BUILD SUCCESSFUL`, 24초).
+- JVM 11개: 동시 401의 단일 회전, 만료/재사용 토큰 폐기, 오프라인 복원 재시도, 시작 시 만료 처리, 오프라인 로그아웃과 늦은 401, 회전/재로그인 화면 식별자, HTTP 재시도 상한, Bearer와 refresh body 계약, 병동 역할 목록, 오류 원문 비노출, 네트워크 오류 매핑.
+- 빌드 도중 테스트 의존성이 추가된 첫 실행은 MockWebServer 미인식으로 실패했습니다. 설정을 다시 읽은 실행에서 해결했습니다.
+- Lint는 오류 없이 통과했습니다. 라이브러리 업데이트 권고, 기존 프로토타입 리소스·아이콘·Modifier 관련 경고, 디버그 HTTP 허용 경고는 남아 있습니다.
+- `git diff --check`: 통과.
+- 설치된 `Pixel_10` AVD(Android 17)를 실행하고 Debug APK 설치·실행을 확인했습니다. 초기 검은 화면은 기기 절전 상태였고, 깨운 뒤 ADB 캡처로 정상 화면을 확인했습니다.
+- 기기 UI 수동 확인: 로그인 첫 화면, Kakao 키 미설정 오류 안내, 가상 시연 진입, 서버 미공유 표시, 시연 나가기 후 로그인 복귀가 정상입니다.
+- `./gradlew.bat :app:connectedDebugAndroidTest`: **3개 통과, 실패/오류/건너뜀 0**, `BUILD SUCCESSFUL`. 실제 Android Keystore/DataStore 암호문 저장과 새 저장소 인스턴스의 복호화, 새 SessionManager의 복원·회전·로그아웃, refresh 거절 시 기기 자격정보 폐기를 확인했습니다. 인증 API는 가짜 구현입니다.
+
+2026-11-07 키 해시 수정 후 추가 검증:
+
+- `./gradlew.bat :app:testDebugUnitTest :app:assembleDebug :app:lintDebug`: `BUILD SUCCESSFUL`(1분 7초). JVM 11개, 실패/오류/건너뜀 0. Lint 오류 없이 통과했으며 기존 경고는 남아 있습니다.
+- 실제 Kakao 인증 후 앱의 내 병동 화면과 소속 없음 안내를 확인했습니다. 사용자 인증 조작은 사용자가 직접 수행했습니다. 키 해시 수정 뒤에는 앞서 발생한 `Auth/Misconfigured HTTP 401` 없이 로컬 서버 연동 화면에 도달했습니다.
+- 로그인 상태에서 `adb shell am force-stop` 후 `am start`로 앱 프로세스를 재시작했습니다. PID 변경과 재인증 없이 내 병동 화면으로 복원되는 것을 확인했습니다.
+- 앱의 로그아웃 버튼으로 로그인 화면에 복귀하고 이전 사용자·병동 표시가 사라지는 것을 확인했습니다.
+- 로그아웃된 상태에서 `./gradlew.bat :app:connectedDebugAndroidTest`: 실제 Keystore/DataStore 기기 테스트 **3개 통과, 실패/오류/건너뜀 0**, `BUILD SUCCESSFUL`(26초).
+- 기기 테스트 종료 후 대상 앱이 제거되어 동일 Debug APK를 재설치했습니다. 로그인 버튼 → 사용자의 Kakao `Continue` 직접 선택 → 앱 복귀 → 내 병동·소속 없음 안내까지 재로그인을 확인했습니다. 재설치가 포함되므로 이 단계만으로 로그아웃 상태의 프로세스 재시작 유지까지 검증했다고 보지는 않습니다.
+- `backend/`에서 `./gradlew.bat test --tests com.nurseflow.auth.api.KakaoAuthHttpTest --tests com.nurseflow.invitation.api.InvitationRedemptionHttpTest --tests com.nurseflow.ward.api.WardBootstrapHttpTest`: **30개 통과, 실패/오류/건너뜀 0**, `BUILD SUCCESSFUL`(33초). 이 검사는 가짜 OIDC 공급자를 사용하며 실제 계정의 역할별 앱 시연을 대신하지 않습니다.
+- 키·토큰·실사용자 식별자를 검증 문서나 별도 캡처 파일에 기록하지 않았습니다. 서버 코드·API·DB 스키마 변경은 없습니다.
+
+2026-11-07 남은 B1 인수 검증 완료:
+
+- 사용자가 두 번째 실제 Kakao 계정 대신 가상 계정 전환 자동 검증을 선택했습니다. `RealBackendSessionDeviceTest`에서 실제 Android `NurseFlowRoot`·네트워크 클라이언트와 실제 Spring HTTP 인증 필터·서비스·H2를 연결했습니다. Kakao OIDC만 가짜 공급자이며, 관리자·간호사 계정에는 서로 다른 가상 병동을 부여했습니다.
+- 관리자 로그인 시 해당 병동·`관리자`, 간호사 계정으로 전환 시 다른 병동·`간호사`가 표시되는 것을 UI 접근성 트리로 검증했습니다. 전환 후 이전 사용자 인사말·병동·관리자 역할이 남지 않는 것도 확인했습니다.
+- 별도 서버에서 access token 수명을 2초로 설정하고 기본 시간 오차 허용까지 포함해 64초를 기다렸습니다. 원래 토큰의 실제 `/me` 응답이 401임을 먼저 확인하고, 앱의 정상 API 조회가 access/refresh token을 교체해 성공하며 서버 DB의 회전 횟수가 정확히 1회인 것을 확인했습니다. 화면의 세션 식별자는 유지됐습니다.
+- 로그아웃 후 메모리 자격정보·화면 제거, 서버 refresh 철회, 같은 빈 저장소를 사용하는 새 SessionManager가 로그아웃 상태로 시작하는 것을 확인했습니다. 이 E2E는 별도 메모리 TokenStore를 사용합니다. 실제 Keystore/DataStore는 앞서 통과한 기기 검사 3개로 검증했습니다.
+- 첫 실서버 만료 검사는 `unexpected end of stream`으로 실패했습니다. 일반 조회와 인증 클라이언트 모두 끊긴 유휴 연결을 재사용할 수 있던 문제를 수정했습니다. 일반 GET만 연결 복구 재시도를 허용하고, 인증 API는 유휴 연결을 보관하지 않으며 refresh 자동 재전송은 계속 금지합니다. JVM 회귀 검사 2개를 추가했습니다.
+- 수정 후 `:app:testDebugUnitTest :app:assembleDebug :app:assembleDebugAndroidTest :app:lintDebug` 통과. JVM **13개 통과, 실패/오류/건너뜀 0**. 테스트 정리 보완 후 테스트 APK 빌드와 Lint도 다시 통과했습니다.
+- `adb shell am instrument -w -e backendE2e true -e class com.nurseflow.app.core.session.RealBackendSessionDeviceTest com.nurseflow.app.test/androidx.test.runner.AndroidJUnitRunner`: **`OK (1 test)`**, 67.835초. 서버 fixture도 기기의 성공 완료 신호를 확인한 뒤 정상 종료했습니다.
+- `backend/`의 `./gradlew.bat check`: **84개 통과, 실패/오류 0**. 명시적으로 켜야 하는 E2E 서버 fixture 1개는 이 일반 실행에서 건너뛰었습니다(위 별도 실행에서 통과). 기존 Kotlin 경고는 남아 있습니다.
+- 테스트 서버는 loopback의 18081·18082와 별도 메모리 DB만 사용했습니다. 서버 종료·ADB reverse 제거 후 기존 8080 서버를 쓰는 앱을 다시 실행하여 원래 로그인 세션과 소속 없음 화면이 보존된 것을 확인했습니다. 사용자 DB 파일과 로컬 키 설정은 변경하지 않았습니다.
+- **B1 로컬 구현·인수 검증 완료**. 재현 절차는 `android/README.md`에 기록했습니다. GitHub CI·PR 리뷰·병합 완료를 뜻하지 않습니다.
+
+미검증:
+
+- KakaoTalk 설치 경로, 사용자 취소와 키 해시 불일치에 대한 재현 회귀 검사.
+- 기기 이전 차단과 오프라인 동작의 기기 E2E. 오프라인 상태 처리는 JVM 검사로 확인했습니다.
+- 두 실제 Kakao 계정의 전환. 사용자 선택에 따라 역할 표시·계정 전환은 가상 계정과 실제 Android/서버로 검증했습니다. 실제 Kakao 인증·로컬 서버 연동은 앞선 사용자 직접 로그인으로 확인했습니다.
+- 로그아웃 후 재설치 없이 프로세스를 재시작했을 때 로그인 화면 유지.
+- GitHub CI·브랜치 보호·독립 PR 리뷰: 확인하지 않았습니다.
+
+## API·데이터·설정 변경
+
+- API 계약 및 DB 변경 없음.
+- Android 로컬 설정: `kakao.nativeAppKey`, `nurseflow.apiBaseUrl`, `nurseflow.releaseApiBaseUrl`. 실제 값은 저장소에 기록하지 않습니다.
+- Kakao SDK, Retrofit/OkHttp, Kotlin serialization, lifecycle, DataStore 및 JVM 테스트 의존성을 추가했습니다.
+- 기존 사용자 파일 `nurseflow.mv.db`는 수정하지 않았습니다.
+- 후속 검증에서 `AppContainer`에 기본 동작을 유지하는 서버 주소·저장소 주입 인자를 추가했습니다. 별도 테스트 컨테이너가 실제 사용자 자격정보를 덮어쓰지 않도록 하기 위한 변경입니다.
+- 백엔드에는 opt-in 기기 검사용 테스트 fixture만 추가했습니다. 운영 API·설정·DB 스키마 변경은 없습니다.
+
+## 배포 영향
+
+- 앱 시작 화면이 로그인/세션 복원으로 바뀝니다. 기존 시연 화면은 별도 진입합니다.
+- 릴리스는 HTTPS 서버 주소와 Kakao 앱 등록 후 별도 검증해야 합니다. 현재 기본 릴리스 주소는 의도적으로 연결되지 않습니다.
+- 서버 배포·DB 이전은 필요하지 않습니다.
+- 일반 GET은 유휴 연결 단절을 복구하며, 인증 API는 매번 새 연결을 사용합니다. 인증 토큰 회전의 전송 오류 재시도는 계속 비활성입니다. 테스트 fixture는 배포 코드에 포함되지 않습니다.
+
+## 되돌리기
+
+- 병합 전에는 이 작업 브랜치를 배포하지 않습니다. 병합 후 문제 시 B1 변경 커밋을 되돌린 앱을 배포합니다.
+- 서버와 DB는 변경되지 않으며 로컬 세션 저장소는 이 앱에만 속합니다.
+
+## 남은 위험과 후속 작업
+
+- 실제 Kakao 로그인·프로세스 재시작 복원·로그아웃·재로그인과, 사용자가 선택한 가상 계정 기반 역할별 병동·계정 전환·실제 서버 만료 갱신까지 로컬 인수 검증을 완료했습니다. GitHub CI·PR 리뷰·병합은 별도 단계입니다.
+- 실로그인 검증용 서버는 기존 DB와 분리된 `jdbc:h2:mem:b1-device-e2e`를 사용합니다. 키와 임시 세션 서명 비밀값은 프로세스 환경으로만 전달하며 기록하지 않습니다.
+- 초기 SDK 실패에는 구체적인 오류 코드가 없어서 디버그 화면에 SDK enum/HTTP 상태와 고정 분류만 표시하도록 보완했습니다(오류 설명·URL·토큰 원문은 출력하지 않음). 동의 후 발생했던 `Auth/Misconfigured HTTP 401`은 사용자의 키 해시 수정 이후 정상 로그인으로 재확인했습니다.
+- 오프라인 로그아웃은 기기에서만 즉시 반영됩니다. 서버 철회 요청 실패 시 서버 토큰 수명 정책이 적용됩니다.
+- 기기 시연: 로그인 → 소속 없음 안내 → 사전 준비된 가상 관리자/간호사 계정의 병동·역할 확인 → 앱 종료/재실행 → 토큰 만료 후 조회 → 로그아웃 → 다른 계정 로그인 → 이전 사용자 목록이 남지 않는지 확인합니다.
+- 키·토큰·실사용자 정보를 포함한 로그나 스크린샷을 기록하지 않습니다.
+
+## 최종 확인
+
+- [x] 작업 브랜치는 `dev` 기반
+- [x] 근무 필수 규칙·권한은 서버 책임 유지
+- [x] 초대·직급·병동 생성 기능 제외
+- [x] 문서에 검증과 미검증 구분
+- [x] 실제 Kakao/로컬 서버 기본 로그인·복원·로그아웃·재로그인
+- [x] 가상 계정 + 실제 Android/서버의 병동 역할·계정 전환·토큰 만료 갱신
+- [x] B1 로컬 구현·인수 검증 완료
+- [ ] GitHub CI와 PR 리뷰
+
+## PR P2 리뷰 보완 (2026-11-07)
+
+### 변경 목적과 내용
+
+- 화면 회전으로 composition이 제거될 때 로그인 ViewModel과 진행 중인 인증 작업이 취소되는 문제를 수정했습니다. Activity의 유지되는 ViewModel에 화면별 ViewModelStore를 두고, 세션 식별자 변경 또는 Activity의 최종 종료 때 정리합니다. 동일 세션의 토큰 갱신·표시 이름 변경과 시연 화면 진입은 화면 작업을 정리하지 않습니다.
+- 인증 요청 직렬화와 로컬 자격정보 잠금을 분리했습니다. 로그아웃은 진행 중인 네트워크 응답을 기다리지 않고 메모리·저장소의 자격정보를 지운 뒤 서버 철회를 요청합니다. 세션 revision을 비교하여 로그아웃 전 시작된 로그인·복원·갱신의 늦은 성공과 복원 오류가 로컬 세션을 되살리지 못하게 했습니다.
+- 관련 이슈: 별도 이슈 없음. 사용자가 전달한 P2 리뷰 2건에 대응합니다.
+
+### 검증
+
+- `android/`에서 `./gradlew.bat :app:testDebugUnitTest :app:assembleDebug :app:lintDebug`: `BUILD SUCCESSFUL`. JVM **20개 통과, 실패/오류/건너뜀 0**. Lint **오류 0, 경고 33개**.
+- 추가 회귀 검사 7개: 유지된 Activity 저장소를 새 소유자가 다시 조회한 뒤 진행 중인 인증 코루틴 완료, 갱신 시 화면 유지와 로그아웃·재로그인 시 교체, 세션 종료·최종 파괴 시 작업 취소, 진행 중인 갱신과 무관한 로그아웃 및 새 SessionManager의 로그아웃 유지, 늦은 복원 성공·오프라인/401 오류 무시, 늦은 로그인 응답 무시, 서버 철회 지연 중 로컬 폐기·새 로그인.
+- `git diff --check`: 통과.
+- 이번 보완에서는 실제 Activity 회전 중 Kakao SDK 인증, 기기 계측 검사, 실제 서버 E2E를 다시 실행하지 않았습니다. 회전 시 수명은 JVM에서 유지된 ViewModelStore와 실제 ViewModel 코루틴을 사용해 검사했으며 실제 Activity 재생성은 후속 기기 확인 대상입니다. GitHub CI·리뷰 상태는 조회하지 않았습니다.
+
+### API·데이터·설정 변경과 배포 영향
+
+- API 계약·DB 스키마·환경변수·의존성 변경 없음. 근무 필수 규칙과 권한의 서버 검증 책임을 유지합니다.
+- Android 앱 업데이트가 필요하며 서버 배포·데이터 이전은 없습니다. 기존 사용자 DB 파일과 로컬 키 설정은 수정하지 않았습니다.
+
+### 되돌리기와 남은 위험
+
+- 문제 발생 시 이번 리뷰 보완 변경을 되돌린 Android 앱을 재배포합니다. 저장 형식을 바꾸지 않아 별도 데이터 복구는 필요하지 않습니다.
+- 서버 철회는 로컬 폐기 뒤 최선 노력으로 수행합니다. 오프라인 또는 갱신과 철회의 서버 경합 시에도 기기 토큰은 복원하지 않으며, 서버 측 만료·철회 정책은 기존 계약을 따릅니다.
+- 실제 Kakao 인증 도중 화면 회전 및 로그아웃 후 재설치 없는 프로세스 재시작의 기기 검증은 남아 있습니다. 키·실사용자 정보·토큰을 로그나 fixture에 추가하지 않았습니다.
+
+## PR P3·P4 저장소 오류 보완 (2026-11-07)
+
+### 변경 목적과 내용
+
+- 관련 이슈: 별도 이슈 없음. 로그아웃 중 TokenStore `read()`·`clear()` 오류 전파(P3)와 회귀 검사 누락(P4)을 보완했습니다.
+- 로그아웃에서 저장소 읽기가 실패해도 메모리 세션과 진행 중 요청의 revision을 폐기하고 저장소 삭제를 시도합니다. 읽지 못한 토큰의 서버 철회 요청은 생략합니다. 코루틴 취소는 그대로 전파하되 로컬 폐기는 수행합니다.
+- 삭제 오류는 예외를 UI 코루틴으로 전파하지 않고 `LogoutFailed` 상태와 로그아웃 재시도 버튼으로 안내합니다. 삭제 성공을 가장하지 않으며, 같은 프로세스의 복원 재시도는 남은 토큰을 읽거나 갱신하지 않고 삭제를 다시 시도합니다. 읽을 수 있는 토큰은 삭제 실패 시에도 서버 철회를 시도합니다.
+- 세션 복원 실패 화면의 “로그아웃하고 다시 로그인”도 동일한 오류 처리를 사용합니다. 삭제 성공 후 로그인 화면으로 돌아갑니다. 오류 원문·토큰은 화면이나 로그에 추가하지 않았습니다.
+
+### 검증
+
+- `android/`에서 `./gradlew.bat :app:testDebugUnitTest :app:assembleDebug :app:lintDebug`: `BUILD SUCCESSFUL`(14초). JVM **26개 통과, 실패/오류/건너뜀 0**. Lint **오류 0, 경고 33개**.
+- 추가 회귀 검사 6개: 읽기 실패 시에도 로컬 폐기, 복원 읽기 실패 뒤 로그아웃·재로그인, 삭제 실패의 재시도·잔존 토큰 복원 차단·서버 철회, 읽기와 삭제의 동시 실패, 갱신 401 처리 중 삭제 실패, 읽기 취소의 전파와 로컬 폐기. IOException·IllegalStateException을 가짜 저장소에 주입했습니다.
+- `git diff --check`: 통과.
+- 미실행: 기기의 실제 DataStore 장애 재현, 기기 UI 계측, 실제 Kakao·서버 E2E. 이번 검증은 JVM 오류 주입과 Android 컴파일·Lint이며 GitHub CI 상태는 조회하지 않았습니다.
+
+### API·데이터·설정 변경과 배포 영향
+
+- API 계약·DB·환경변수·저장 형식·의존성 변경 없음. 근무 규칙과 권한의 서버 검증 책임을 유지합니다. Android 앱 업데이트만 필요하며 서버 배포·데이터 이전은 없습니다.
+- 사용자 DB 파일과 로컬 키 설정은 변경하지 않았습니다.
+
+### 되돌리기와 남은 위험
+
+- 문제 발생 시 이번 저장소 오류 보완 커밋을 되돌린 앱을 배포합니다. DB 복구는 필요하지 않습니다.
+- 당시 구현은 디스크 삭제와 서버 철회가 모두 실패하면 재시작 후 복원을 막지 못했습니다. 아래 후속 “삭제 실패·프로세스 재시작과 OAuth 복귀 보완”에서 DataStore 삭제 전에 Keystore 키를 폐기하고 실제 재시작으로 복원 차단을 확인했습니다. 이 문단은 보완 전의 위험 기록입니다.
+- 저장소 오류 처리와 재시도 UI를 추가했으며 독립 PR 승인·GitHub CI 통과를 확인했다는 의미는 아닙니다.
+
+## PR P2 복원 재시도 수명 보완 (2026-11-07)
+
+### 변경 목적과 내용
+
+- 관련 이슈: 별도 이슈 없음. 세션 복원 재시도 중 화면 회전 후 로딩 화면에 머무르는 P2 리뷰를 보완했습니다.
+- 재시도 버튼의 `rememberCoroutineScope`를 제거하고 `AppContainer.restoreSession()`을 호출합니다. 최초 복원과 재시도가 같은 Application 소유 범위에서 실행되어 Activity 재생성·composition 종료로 취소되지 않습니다. 완료 시 기존 세션 상태 스트림을 통해 새 화면이 성공·실패 결과를 받습니다.
+- 재시도 버튼은 작업을 시작하는 역할만 맡으며, 화면 생성 시 재요청을 자동 실행하지 않습니다. 로그아웃의 revision 기반 늦은 응답 차단은 유지됩니다.
+
+### 검증
+
+- `android/`에서 `./gradlew.bat :app:testDebugUnitTest :app:assembleDebug :app:assembleDebugAndroidTest :app:lintDebug`: `BUILD SUCCESSFUL`. JVM **26개 통과, 실패/오류/건너뜀 0**. Lint **오류 0, 경고 33개**.
+- 테스트 정리 코드의 실험 API 사용을 없앤 뒤 `:app:assembleDebugAndroidTest :app:lintDebug`를 다시 실행하여 통과했습니다.
+- `RestoreRetryDeviceTest` 2개를 추가했습니다. 실제 AppContainer 재시도 진입점을 UI 코루틴에서 호출하고 해당 UI 범위를 취소한 뒤에도 요청이 살아 있는지 확인합니다. 지연된 응답의 성공 시 로딩 종료, 실패 시 오류 표시 상태와 후속 재시도를 검증합니다. 별도 메모리 TokenStore를 사용하고 Kakao·HTTP 요청은 하지 않습니다.
+- 별도 임시 데이터 이미지를 쓰는 창 없는 `Pixel_10` 에뮬레이터에서 `adb -s emulator-5556 shell am instrument -w -e class com.nurseflow.app.core.session.RestoreRetryDeviceTest com.nurseflow.app.test/androidx.test.runner.AndroidJUnitRunner`: **`OK (2 tests)`**, 0.278초. 기존 AVD의 사용자 데이터 이미지는 사용하지 않았습니다. 첫 부팅 직후 실행은 테스트 결과 없이 `Process crashed`로 종료되었고, 같은 APK로 다시 실행하여 2개 모두 통과했습니다.
+- `git diff --check`: 통과.
+- 미실행: 실제 Kakao·서버 E2E와 Activity 회전 UI 조작. 수명 회귀 검사는 회전 때 사라지는 UI 코루틴 범위를 직접 취소하는 방식입니다. GitHub CI 상태는 조회하지 않았습니다.
+
+### API·데이터·설정 변경과 배포 영향
+
+- API 계약·DB·환경변수·저장 형식·의존성 변경 없음. 근무 규칙과 권한의 서버 검증 책임을 유지합니다. Android 앱 업데이트만 필요하며 서버 배포·데이터 이전은 없습니다.
+- 기존 사용자 DB 파일과 로컬 키 설정은 변경하지 않았습니다.
+
+### 되돌리기와 남은 위험
+
+- 문제 발생 시 이번 복원 재시도 수명 보완 커밋을 되돌린 앱을 배포합니다. DB 복구는 필요하지 않습니다.
+- 앱 프로세스 종료는 실행 중인 요청도 종료합니다. 다음 프로세스는 기존 최초 세션 복원 경로를 따릅니다. 화면 회전 시 진행 중인 요청을 재전송하지 않습니다.
+
+## PR P4 Android JVM 검사 CI 연결 (2026-11-07)
+
+- 변경 목적·관련 이슈: 별도 이슈 없음. Verify의 Android 단계가 APK만 빌드하여 JVM 회귀 검사를 놓치는 리뷰를 보완했습니다.
+- `.github/workflows/verify.yml`의 Android 명령을 `./gradlew :app:testDebugUnitTest :app:assembleDebug --no-daemon`으로 변경했습니다. 기존 `dev`·`main` 대상 PR과 해당 브랜치 push에서 테스트 컴파일·실행 실패가 Android 작업 실패로 이어집니다. 작업 이름 `Android debug build`는 유지하고 단계 이름을 `Test and build Android app`으로 명확히 했습니다.
+- 검증: `android/`에서 `./gradlew.bat :app:cleanTestDebugUnitTest :app:testDebugUnitTest :app:assembleDebug --no-daemon` 통과(`BUILD SUCCESSFUL`, 14초). 이전 실행 결과를 지운 뒤 JVM **26개를 다시 실행하여 실패/오류/건너뜀 0**을 확인했습니다. `git diff --check` 통과.
+- 미실행: GitHub의 변경 후 Verify 실행, 기기 계측 테스트, 백엔드·Lint 재검사. 이번 변경은 기존 JVM 테스트와 빌드를 CI에 연결하는 범위입니다. 기기 테스트는 이 명령에 포함되지 않습니다. 브랜치 보호·필수 검사 설정은 확인하지 않았습니다.
+- API·DB·환경변수·의존성 변경 없음. 앱 동작과 서버 근무 규칙·권한 검증은 변경하지 않았습니다. 비공개 정보나 사용자 DB 파일은 수정·추가하지 않았습니다.
+- 배포 영향: 앱·서버 재배포나 데이터 이전은 필요하지 않습니다. PR CI에 JVM 검사 시간이 추가됩니다.
+- 되돌리기: 이번 워크플로 변경 커밋을 되돌립니다. 남은 확인은 GitHub에서 새 명령이 실행된 결과이며, 로컬 검증을 원격 CI 통과로 표현하지 않습니다.
+
+## PR P4 실제 Activity 재생성·인증 콜백 검증 보완 (2026-11-07)
+
+### 변경 목적과 내용
+
+- 관련 이슈: 별도 이슈 없음. 확정된 제품 결함 수정이 아니라, 실제 Activity 재생성과 인증 콜백을 연결하지 못했던 검증 공백을 보완했습니다.
+- `ActivityRotationDeviceTest` 6개는 실제 `MainActivity`를 띄우고 `ActivityScenario.recreate()`로 인스턴스 교체 및 이전 Activity 파괴를 확인합니다. KakaoTalk·계정 로그인의 대기 중 콜백을 재생성 후 전달해 로그인 완료·취소·오류·재로그인을 검사합니다. 복원 재시도의 성공·실패도 실제 재생성 전후로 확인합니다.
+- `KakaoLoginSdk`로 외부 SDK 호출 경계만 주입 가능하게 했습니다. 기본 구현은 동일한 `UserApiClient` API를 호출합니다. 테스트는 SDK의 `OAuthToken`·`ClientError` 형식 콜백을 가짜 구현에서 전달하고, 실제 `KakaoLoginClient`의 continuation·취소 처리, 로그인 ViewModel, nonce, 세션 HTTP 클라이언트와 화면을 사용합니다. 성공 시 원래 nonce와 ID 토큰이 정확히 한 번 서버에 전달되고 화면과 저장소가 갱신되는 것도 확인합니다.
+- `IsolatedSessionTestRunner`의 테스트 Application은 시작부터 메모리 저장소를 사용합니다. 계측 실행 자체가 개발자의 기존 NurseFlow 저장 세션을 읽거나 회전시키지 않습니다. 앱의 기본 Application·저장소·SDK 선택은 기존 동작을 유지합니다.
+- PR Verify에 `:app:assembleDebugAndroidTest`를 추가해 JVM 실행 외에 계측 코드 컴파일도 확인하도록 했습니다. 기기 테스트 실행은 CI에 추가하지 않았습니다. 재현 명령과 새 Runner는 `android/README.md`에 기록했습니다.
+
+### 검증
+
+- `android/`에서 `./gradlew.bat :app:testDebugUnitTest :app:assembleDebug :app:assembleDebugAndroidTest :app:lintDebug`: 통과. JVM **26개, 실패/오류/건너뜀 0**, 앱·테스트 APK 빌드 성공. 최종 테스트 수정 후 테스트 APK와 Lint를 다시 검증했습니다. Lint **오류 0, 기존 경고 33개**.
+- 별도 임시 데이터 이미지의 `Pixel_10`(Android 17)에서 `adb -s emulator-5556 shell am instrument -w -e class com.nurseflow.app.ui.ActivityRotationDeviceTest com.nurseflow.app.test/com.nurseflow.app.test.IsolatedSessionTestRunner`: **`OK (6 tests)`**, 12.208초.
+- 새 Runner로 기존 `RestoreRetryDeviceTest`·`SecureSessionDeviceTest` 실행: **`OK (5 tests)`**, 0.276초. 복원 작업 수명과 실제 Keystore/DataStore 저장·복원·폐기도 호환됩니다.
+- 하네스 초기 실행에서 구형 Espresso의 Android 17 입력 API 비호환과 테스트 서버 주소 확인의 UI 스레드 접근을 발견했습니다. Espresso 의존성을 제거하고 기존 접근성 기반 UI 검사로 통일했으며 주소 확인은 테스트 스레드로 옮겼습니다. 최종 하네스에서 6개 모두 통과했습니다.
+- `git diff --check`: 통과. 비밀값·실사용자 정보·실제 자격정보를 fixture나 로그에 추가하지 않았습니다.
+- 미실행: 외부 KakaoTalk·브라우저 인증 UI, OAuth 딥링크 복귀, 실제 계정·서버 E2E, 변경 후 GitHub CI 실행. 이번 검사는 SDK 외부 호출 경계에서 콜백을 전달하므로 실제 Kakao 서비스 인증을 재현했다고 표현하지 않습니다. 실제 기기 방향 센서 조작 대신 Activity 재생성을 직접 수행합니다.
+
+### API·데이터·설정 변경과 배포 영향
+
+- 서버 API·DB·환경변수·저장 형식 변경 없음. 서버 근무 규칙·권한 검증 책임을 유지합니다. 사용자 DB 파일과 로컬 키 설정은 변경하지 않았습니다.
+- Android의 SDK 호출 경계와 Application 컨테이너 생성에 테스트 주입 지점을 추가했습니다. 기본 생성은 기존 실제 SDK·저장소를 사용합니다. MockWebServer를 계측 테스트 의존성에도 추가했고 테스트 Runner를 변경했습니다. 테스트 구현·가상 서버는 앱 배포 코드에 포함되지 않습니다.
+- 서버 배포·데이터 이전은 필요하지 않습니다. PR CI의 계측 APK 컴파일 시간이 추가됩니다. Runner 클래스 변경으로 수동 `am instrument` 명령은 README의 새 컴포넌트 이름을 사용해야 합니다.
+
+### 되돌리기와 남은 위험
+
+- 이번 검증 보완 커밋을 되돌리면 SDK 직접 호출·기존 Runner·이전 CI 명령으로 돌아갑니다. DB 복구는 필요하지 않습니다.
+- 실제 Kakao 앱·브라우저와 운영 콜백 경로의 수동 인수 검증은 별도입니다. GitHub CI·브랜치 보호·독립 리뷰 상태는 확인하지 않았습니다.
+
+## 회전 후 KakaoTalk 실패·계정 로그인 전환 진단 (2026-11-07)
+
+- 목적·관련 이슈: 별도 이슈 없음. 파괴된 Activity Context가 브라우저 전환 실패를 일으키는지 확인해 달라는 요청에 따라 제품 코드는 수정하지 않고 기기 검사 2개를 추가했습니다.
+- 실제 Activity 재생성 뒤 KakaoTalk 실패 콜백을 전달하고, 계정 로그인으로 한 번만 전환되며 기존 nonce를 유지하고 가짜 성공 콜백 뒤 화면·저장소가 갱신되는지 확인했습니다.
+- 별도 진단은 계정 로그인 호출을 실제 `AndroidKakaoLoginSdk`·`UserApiClient`에 전달했습니다. 파괴된 원래 Activity Context가 사용된 것을 확인하고, 실제 `AuthCodeHandlerActivity` 인스턴스 시작과 `FLAG_ACTIVITY_NEW_TASK` 적용을 확인했습니다. 외부 브라우저·선택기 Intent는 Instrumentation 모니터로 차단하며 가짜 앱 키만 사용했습니다. 이 결과는 실제 인증 성공·OAuth 복귀를 의미하지 않습니다.
+- 결과: **우려한 Activity 시작 실패는 이 환경에서 재현되지 않았습니다.** 이전 Activity 사용만으로 실패를 단정할 수 없으며, SDK 2.20.6은 새 task 플래그를 붙여 인증 Activity를 시작합니다. 최초의 “최신 Activity여야 한다”는 검사 조건은 SDK의 실제 계약을 확인하지 않은 과도한 조건이어서 실행 전 제거하고 실제 SDK 시작을 검사했습니다.
+- 검증: 별도 임시 데이터 이미지의 Pixel_10(Android 17)에서 추가 검사만 실행하여 **`OK (2 tests)`**, 6.907초. 실제 SDK 초기화·Activity 모니터 정리의 기존 검사 영향을 확인하기 위해 `ActivityRotationDeviceTest` 전체를 실행하여 **`OK (8 tests)`**, 28.498초를 확인했습니다. APK 빌드와 `:app:lintDebug`도 통과했습니다. `git diff --check` 통과.
+- 미검증: 실제 KakaoTalk 실패, 외부 브라우저 인증, 실제 OAuth 딥링크 복귀와 토큰 교환. SDK의 내부 인증 Activity를 시작하는 단계까지의 진단이며 외부 인증 전체를 대체하지 않습니다. 이번 테스트 변경에서 앱·서버 구현은 바꾸지 않아 JVM·백엔드 검사는 다시 실행하지 않았습니다.
+- API·DB·환경변수·의존성·앱 동작 변경 없음. 테스트용 SDK 앱 키는 프로세스 메모리에만 사용하며 실제 사용자 자격정보·사용자 DB·로컬 키 설정은 변경하지 않았습니다. 배포·데이터 이전은 필요하지 않습니다.
+- 되돌리기: 이번 추가 테스트와 결과 기록만 제거합니다. 남은 위험은 문서에 기재한 외부 앱·브라우저와 OAuth 복귀 검증 공백입니다. 이 진단으로 새 제품 결함을 확정하지 않았습니다.
+
+## 삭제 실패·프로세스 재시작과 OAuth 복귀 보완 (2026-11-07)
+
+### 변경 목적과 내용
+
+- 관련 이슈: 별도 이슈 없음. 사용자 요청에 따라 삭제·서버 철회 실패 후 재시작 복원 위험을 보완하고 외부 계정 조작 없이 가능한 OAuth 복귀 검증을 확대했습니다.
+- `SecureTokenStore.clear()`는 Android Keystore의 세션 암호화 키를 먼저 폐기하고 DataStore 암호문을 제거합니다. 파일 제거가 실패해도 키 폐기가 완료되면 잔존 암호문은 다음 프로세스에서 복호화할 수 없습니다. Keystore 오류가 있어도 파일 제거는 시도합니다. 파일 제거 오류는 기존 `LogoutFailed` 재시도 UI로 전달됩니다.
+- `read()`는 기존 키만 조회하고 새 키를 만들지 않습니다. 새 키 생성은 인증된 새 세션을 저장하는 `write()`에서만 수행합니다. 기존 정상 세션의 별칭·암호문 형식은 유지하며 새 로그인 후 이전 암호문을 재주입해도 복호화되지 않는 것을 검사했습니다.
+- `LogoutRestartDeviceTest`와 `scripts/verify-logout-restart.ps1`은 실제 Android Keystore·DataStore를 사용합니다. 별도 테스트 파일·키에만 삭제와 서버 철회 실패를 주입한 뒤 `am force-stop`으로 종료하고 새 OS 프로세스임을 PID로 확인합니다. 재시작 후 삭제가 계속 실패해도 refresh 0회·미인증 상태가 유지되며 삭제 복구 후 로그아웃을 완료합니다. 스크립트는 실제 성공 status를 확인하여 건너뛴 검사를 성공으로 취급하지 않습니다.
+- `OAuthReturnDeviceTest`는 실제 MainActivity 재생성 후 SDK 계정 인증 Activity를 시작하고, 외부 브라우저만 차단한 상태에서 거절 딥링크를 Android manifest 라우팅으로 전달합니다. 실제 SDK가 해당 거절 설명을 `AuthError`로 파싱하고 로그인 화면으로 복귀하며 앱 서버 인증 요청·토큰 저장이 없는 것을 확인합니다. 별도 계측 프로세스로 단독 실행하며 기존 설정된 네이티브 앱 키 값은 출력하지 않습니다.
+
+### 검증
+
+- `android/`에서 `./gradlew.bat :app:testDebugUnitTest :app:assembleDebug :app:assembleDebugAndroidTest :app:lintDebug`: `BUILD SUCCESSFUL`. JVM **26개 통과, 실패/오류/건너뜀 0**. 후속 OAuth 검사 강화 후 계측 APK 빌드·Lint 재검증 통과. Lint **오류 0, 기존 경고 33개**.
+- 별도 임시 데이터 이미지의 Pixel_10(Android 17)에서 `./scripts/verify-logout-restart.ps1 -Adb <SDK의 adb.exe> -Serial emulator-5556`: 준비·새 프로세스 검증 각각 **`OK (1 test)`**, 최종 0.198초·0.160초. 두 단계 모두 `INSTRUMENTATION_STATUS_CODE: 0` 확인. 두 번째 단계는 첫 단계와 다른 PID를 assertion으로 확인했습니다.
+- 키 폐기·읽기/새 키 생성·암호문 재주입 검사 2개와 기존 실제 저장소·복원·회전 검사 13개: **`OK (15 tests)`**, 65.076초.
+- `adb -s emulator-5556 shell am instrument -w -r -e oauthReturnProbe true -e class com.nurseflow.app.ui.OAuthReturnDeviceTest com.nurseflow.app.test/com.nurseflow.app.test.IsolatedSessionTestRunner`: **`OK (1 test)`**, 3.891초. SDK가 반환한 오류 설명까지 검증한 최종 실행이며 status 0으로 실제 실행을 확인했습니다.
+- 합계: JVM 26개, 기기 검사 **18개**(일반 15개 + 실제 프로세스 전후 2개 + OAuth 거절 복귀 1개) 통과. `git diff --check` 통과. 가상 토큰·사용자만 fixture에 사용했고 사용자 DB·실제 자격정보·로컬 설정은 변경하지 않았습니다.
+- 미실행: 실제 KakaoTalk·브라우저 서비스에서 계정 인증·동의 성공과 정상 OAuth code 교환, 실제 계정의 서버 E2E, 변경 후 GitHub CI 실행. 자동검증으로 거절 응답의 실제 OS/SDK 복귀까지 확인했으며 실제 외부 인증 성공으로 표현하지 않습니다.
+
+### API·데이터·설정 변경과 배포 영향
+
+- 서버 API·DB·환경변수·의존성·암호문 형식 변경 없음. 서버 근무 규칙·권한 검증 책임을 유지합니다. 테스트를 위해 DataStore와 Keystore 별칭을 주입할 수 있게 했으며 기본 경로·별칭은 기존 그대로입니다.
+- Android 앱 업데이트만 필요하며 서버 배포·DB 이전은 없습니다. 정상 저장 세션은 기존 키로 읽습니다. 로그아웃 시 폐기된 키는 새 로그인 저장 때 새로 생성하며 이전 암호문을 복구하지 않습니다.
+
+### 되돌리기와 남은 위험
+
+- 이번 보완 커밋을 되돌린 앱을 배포합니다. DB 복구는 필요하지 않으며 로그아웃으로 폐기한 키와 자격정보는 되살리지 않습니다. 되돌린 버전에는 이전 삭제 실패 후 복원 위험이 다시 존재합니다.
+- 키 폐기와 암호문 삭제가 모두 불가능하고 서버 철회도 실패하는 전체 저장 장애에서는 어느 영속적 폐기도 완료됐다고 보장할 수 없습니다. 이 경우 오류 상태로 안내합니다. 이번 검증은 DataStore 삭제가 실패하더라도 Keystore 키 폐기가 성공하는 경우의 프로세스 재시작 복원 차단을 실제로 확인했습니다.
+- 실제 외부 인증 성공 경로는 별도 인수 검증 대상입니다. GitHub CI·브랜치 보호·독립 리뷰 상태는 확인하지 않았습니다.
+
+## 로그아웃·재로그인 경합과 검증 수치 보완 (2026-11-08)
+
+### 변경 목적과 내용
+
+- 관련 이슈: 별도 이슈 없음. P4에서 권고한 서버 철회 지연 중 재로그인·뒤늦은 SDK 토큰 삭제 경합을 검사하고, P5의 PR 본문 JVM 수치를 최종 검증과 맞춥니다.
+- 기존 AppContainer는 NurseFlow 서버 철회 뒤 SDK 로그아웃을 호출했고, SDK 2.20.6의 원격 로그아웃도 비동기 응답 뒤 현재 토큰 캐시를 지웁니다. 앱의 SDK 캐시 정리를 서버 대기 전에 수행하도록 옮겼습니다.
+- 기본 SDK 구현은 `TokenManagerProvider.instance.manager.clear()`로 기기 토큰을 동기적으로 정리합니다. Kakao 서버의 원격 SDK 로그아웃은 호출하지 않습니다. NurseFlow 세션의 로컬 폐기·서버 refresh family 철회는 유지하며, SDK 캐시 오류가 나도 NurseFlow 로그아웃을 수행합니다. Kakao 계정 연결 해제·브라우저 SSO 종료를 추가하지 않았습니다.
+- `AppContainerLogoutDeviceTest`는 실제 AppContainer·콜백 변환·HTTP와 가짜 SDK 캐시를 사용합니다. 이전 서버 로그아웃이 멈춘 동안 새 로그인에 성공하고, 이전 요청의 성공·실패 응답이 새 SDK·NurseFlow 토큰을 지우지 않는지 검사합니다. SDK 캐시 정리 오류가 앱을 종료하거나 NurseFlow 로그아웃을 취소하지 않는 검사도 추가했습니다.
+
+### 검증
+
+- `android/`에서 `./gradlew.bat :app:testDebugUnitTest :app:assembleDebug :app:assembleDebugAndroidTest :app:lintDebug`: 통과. **JVM 26개, 실패/오류/건너뜀 0**, 앱·계측 APK 빌드 성공, Lint 오류 0·기존 경고 33개. JVM 수는 26개이며 이번 추가 3개는 기기 검사입니다.
+- 별도 임시 데이터 이미지 Pixel_10(Android 17)의 `AppContainerLogoutDeviceTest`: **`OK (3 tests)`**, 0.952초. 이후 기존 저장소·복원·회전 검사와 함께 통합 실행하여 **`OK (18 tests)`**, 65.723초.
+- 변경 후 프로세스 재시작 스크립트 재실행: 준비·새 프로세스 검증 각각 **`OK (1 test)`**, 0.197초·0.164초, status 0. 실제 SDK OAuth 거절 복귀 검사 재실행: **`OK (1 test)`**, 3.243초, status 0.
+- 이번 버전에서 JVM **26개**, 기기 **21개**(통합 18개 + 프로세스 전후 2개 + OAuth 거절 복귀 1개) 통과. `git diff --check` 통과. PR 본문의 최신 검증 수치는 JVM 26개·기기 21개를 기준으로 표기합니다.
+- 미검증: 실제 Kakao 외부 인증 성공·두 실제 계정 전환·기기 이전·네트워크 차단을 포함한 오프라인 전체 기기 E2E. 가짜 계정 전환·SDK 캐시 경합·HTTP 실패/오프라인 처리와 이 외부 환경 검증을 구분합니다. 백엔드와 실계정 E2E는 이번에 재실행하지 않았습니다. 변경 후 GitHub CI·독립 리뷰 결과는 확인하지 않았습니다.
+
+### API·데이터·설정 변경과 배포 영향
+
+- 서버 API·DB·환경변수·의존성·암호문 형식 변경 없음. 서버 근무 규칙·권한 검증 책임을 유지합니다. 사용자 DB·로컬 설정·실제 자격정보는 수정하거나 기록하지 않았습니다.
+- Android 업데이트만 필요합니다. SDK 토큰은 기기 캐시에서 삭제하며 Kakao 서버 SDK 토큰의 원격 철회는 수행하지 않는 동작 변경입니다. NurseFlow 서버 철회는 기존 계약을 유지합니다. 서버 배포·데이터 이전은 없습니다.
+
+### 되돌리기와 남은 위험
+
+- 이번 경합 보완 커밋을 되돌리면 이전 SDK 원격 로그아웃·서버 응답 뒤 SDK 정리 순서로 돌아가며 경합 가능성도 다시 생깁니다. 서버·DB 복구는 필요하지 않습니다.
+- Kakao 서버 SDK 토큰 철회·계정 연결 해제·SSO 종료와 NurseFlow 앱 로그아웃은 별도 기능입니다. 외부 실계정·기기 환경 검증과 전체 저장 장애의 영속 폐기 한계는 기존 미검증·위험 목록에 유지합니다.
