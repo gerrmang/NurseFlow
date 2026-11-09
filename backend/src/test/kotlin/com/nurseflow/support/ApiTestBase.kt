@@ -68,6 +68,7 @@ abstract class ApiTestBase {
             registry.add("nurseflow.auth.kakao.jwk-set-uri") { FakeOidcProvider.jwkSetUri }
             registry.add("nurseflow.auth.kakao.token-uri") { FakeOidcProvider.tokenUri }
             registry.add("nurseflow.auth.kakao.authorize-uri") { FakeOidcProvider.AUTHORIZE_URI }
+            registry.add("nurseflow.hospital.hira.base-uri") { FakeHiraServer.baseUri }
             registry.add("spring.datasource.url") { "jdbc:h2:mem:api_tests;DB_CLOSE_DELAY=-1" }
         }
     }

@@ -16,6 +16,7 @@ Java 21 is required. Set these environment variables in the run configuration (n
 | `NURSEFLOW_WEB_ALLOWED_ORIGINS` | Optional. Comma-separated `Origin` values allowed on `/api/v1/auth/web/*`. Empty → the origins of the redirect URIs. |
 | `NURSEFLOW_WEB_COOKIE_SECURE` | Optional, default `true`. Keep `true`; browsers treat `http://localhost` as secure. |
 | `NURSEFLOW_BOOTSTRAP_CODE` | Optional, demo only. Enables `POST /api/v1/wards` so the first signed-in user can create a ward and become `WARD_ADMIN`. Leave empty otherwise. |
+| `NURSEFLOW_HOSPITAL_API_KEY` | Optional. data.go.kr key for 건강보험심사평가원 병원정보서비스 (the Decoding or Encoding form both work). Enables `GET /api/v1/hospitals/search`; empty → 503 `HOSPITAL_SEARCH_NOT_CONFIGURED`. Never commit it. |
 | `NURSEFLOW_INVITE_LINK_BASE` | Optional. Invitation page URL; responses then include `inviteUrl`. |
 
 ### Sign-in and session
