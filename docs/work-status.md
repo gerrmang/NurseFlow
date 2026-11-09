@@ -17,13 +17,13 @@
 | B1 Android Kakao 세션 | `feat/android-kakao-session` | #30 | `dev` 병합 완료 (2026-11-09, 일반 병합 커밋 `9239fa6`) | 로컬 단위·기기·실서버 검증은 [`B1 검증 기록`](../android/B1-verification.md)에 기록. GitHub CI·PR 리뷰 여부는 별도 확인 | 기록된 미해결 P1 없음. 병합 방식은 아래 참고 |
 | A2 웹 세션 API | `feat/auth-web-session-v2` | 미개설 | `dce0002`(OpenAPI 계약), `55a1019`(구현) 푸시함 | 2026-11-09 로컬 백엔드 `./gradlew test`: 테스트 104개, 실패 0개, 건너뜀 1개(`WebKakaoSessionHttpTest` 포함). 실제 Kakao E2E 미검증(목업만) | 없음 |
 | B2 웹 기반 세션 | `feat/web-foundation-session` | 미개설 | 미착수. A2 계약에 의존 | 해당 없음 | 없음 |
-| 에이전트 지침 정합성 | `docs/agent-guidance-alignment` | #32 | GitHub에서 열린 상태. PR head `5d4f45b` | 결합 상태에서 Vercel 성공만 확인. GitHub 리뷰 없음, GitHub CI 결과는 확인되지 않음 | 아래 재검토 사항을 PR 브랜치에 반영해야 함 |
+| 에이전트 지침 정합성 | `docs/agent-guidance-alignment` | #32 | GitHub에서 열린 상태. 수정 head `f10d598` | `git diff --check` 통과. PR 결합 상태에서 Vercel 성공, GitHub Actions run 없음, GitHub 리뷰 없음 | 이전 head에서 확인한 지적을 `f10d598`에서 수정 |
 | A3 이후 | 해당 없음 | 미개설 | 미착수 | 해당 없음 | 없음 |
 
 ## 리뷰 상태
 
 - PR #30의 `RealBackendSessionDeviceTest`는 `IsolatedSessionTestRunner`와 테스트 전용 `Application`/`TokenStore`를 사용한다. 앞서 기록된 “개발자 저장 토큰에 접근할 수 있다”는 P1은 이 코드와 맞지 않아 철회했다. 실제 사용자 세션을 사용하지 않는다는 검증 기록은 [`B1 검증 기록`](../android/B1-verification.md)을 참조한다.
-- PR #32 재검토: (1) PR head의 PR #30 P1은 테스트 전용 runner를 고려하지 않은 잘못된 지적이다. (2) PR head의 `.gitignore`에서 `.codex/` 전체를 제외하면 저장소 공유 Codex 설정·에이전트 파일도 숨을 수 있다. (3) PR head에 `CLAUDE.md`와 `docs/claude-next-stage.md`가 빠져 있어, OMX가 실제 실행 중이라는 오기, Android Kakao 미구현·희망 오프 범위 밖이라는 낡은 문구, 과거 단계표·프롬프트가 남는다. (4) breakdown의 실행 상태와 최초 착수 PR 안내도 A1/B1 병합 사실을 반영하지 않는다. 이 worktree에서 각 항목을 수정했지만, GitHub PR #32의 head는 아직 갱신되지 않았다.
+- PR #32의 이전 head `5d4f45b`에서 발견한 사항은 수정 head `f10d598`에 반영했다. PR #30 P1 지적은 테스트 전용 runner를 고려하지 않은 오류로 철회했다. `.gitignore`의 광범위한 `.codex/` 제외를 제거하고, Claude·Codex 공통 worktree 규칙과 누락된 Claude 문서 갱신, breakdown의 A1/B1 병합 상태를 추가했다.
 
 ## 기타 브랜치
 
@@ -36,6 +36,6 @@ Claude와 Codex가 같은 진행 기록을 사용한다. PR 또는 정기 리뷰
 | 작업 경로 | 브랜치 | 리뷰한 HEAD SHA | 미커밋 diff 해시 | 리뷰 시각 | 검토 주체 | 범위/결과 |
 | --- | --- | --- | --- | --- | --- | --- |
 | GitHub PR #32 diff (`/private/tmp/NurseFlow-guidance`) | `docs/agent-guidance-alignment` | `5d4f45bcf7e5247d85f9f1a38fd0a59a081c499e` | `bffafc453496740f281aca22552cd1dcaf80516a2150a8bb741aa42efbdca3ab` (`git diff origin/dev...origin/pr-32 | shasum -a 256`) | 2026-11-09 | Codex | PR 메타데이터·diff·리뷰·체크 및 B1 격리 테스트 경로를 재검토. PR은 열림; GitHub 리뷰 없음, 결합 상태에서 Vercel만 성공 확인. 재검토 사항은 위에 기록 |
-| `/private/tmp/NurseFlow-guidance` | `docs/agent-guidance-alignment` | `5d4f45bcf7e5247d85f9f1a38fd0a59a081c499e` | `e638b1aa27f5c0cccc9f855d1cb5b9c19834bd1b1410a80b260b69a29cbb5fb5` (status 문서 제외 명령 기준) | 2026-11-09 | Codex | Claude·Codex가 같은 worktree·브랜치·상태 기록·검증 기준을 이어 쓰도록 정리. `git diff --check` 통과. PR 원격에는 아직 반영하지 않음 |
+| `/private/tmp/NurseFlow-guidance` | `docs/agent-guidance-alignment` | `f10d598b330de17a47a954558196e8df0be4a4ec` | `e638b1aa27f5c0cccc9f855d1cb5b9c19834bd1b1410a80b260b69a29cbb5fb5` (`git diff HEAD^ HEAD -- . ':!docs/work-status.md' | shasum -a 256`) | 2026-11-09 | Codex | Claude·Codex가 같은 worktree·브랜치·상태 기록·검증 기준을 이어 쓰도록 정리. `git diff --check` 통과. PR #32에 푸시 완료 |
 
 이 문서는 Claude와 Codex가 각 기능 단위 작업 후 진행 결과를 함께 기록하는 단일 공유 현황이다.
