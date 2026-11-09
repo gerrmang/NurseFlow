@@ -15,15 +15,17 @@
 | README | 해당 없음 | #28 | `dev` 병합 완료 | 병합 확인 | 없음 |
 | A1 초대·경력 월 | `feat/invitation-24h-career-month` | #27 | `dev` 병합 완료 | 병합 확인 | 없음 |
 | B1 Android Kakao 세션 | `feat/android-kakao-session` | #30 | `dev` 병합 완료 (2026-11-09, 일반 병합 커밋 `9239fa6`) | 로컬 단위·기기·실서버 검증은 [`B1 검증 기록`](../android/B1-verification.md)에 기록. GitHub CI·PR 리뷰 여부는 별도 확인 | 기록된 미해결 P1 없음. 병합 방식은 아래 참고 |
-| A2 웹 세션 API | `feat/auth-web-session-v2` | 미개설 | `dce0002`(OpenAPI 계약), `55a1019`(구현) 푸시함 | 2026-11-09 로컬 백엔드 `./gradlew test`: 테스트 104개, 실패 0개, 건너뜀 1개(`WebKakaoSessionHttpTest` 포함). 실제 Kakao E2E 미검증(목업만) | 없음 |
+| A2 웹 세션 API | `feat/auth-web-session-v2` | 개설 예정 | `dce0002`(OpenAPI 계약), `55a1019`(구현), 최신 `dev` 병합 후 PR 개설. Codex 전체 리뷰·B 계약 검토 대기 | 2026-11-09 로컬 백엔드 `./gradlew test`(`55a1019`): 테스트 104개, 실패 0개, 건너뜀 1개(`WebKakaoSessionHttpTest` 14건 포함). PR CI 결과 대기. 실제 Kakao E2E 미검증(목업만) | Codex 리뷰 전 |
 | B2 웹 기반 세션 | `feat/web-foundation-session` | 미개설 | 미착수. A2 계약에 의존 | 해당 없음 | 없음 |
-| 에이전트 지침 정합성 | `docs/agent-guidance-alignment` | #32 | GitHub에서 열린 상태. 수정 head `f10d598` | `git diff --check` 통과. PR 결합 상태에서 Vercel 성공, GitHub Actions run 없음, GitHub 리뷰 없음 | 이전 head에서 확인한 지적을 `f10d598`에서 수정 |
+| 에이전트 지침 정합성 | `docs/agent-guidance-alignment` | #32 | `dev` 병합 완료 (2026-11-09, 일반 병합 커밋 `ab8347d`. 스쿼시 원칙에서 벗어남) | `git diff --check` 통과. GitHub Actions `Verify` PR 실행 성공, `dev` push 실행 성공 | 없음 |
 | A3 이후 | 해당 없음 | 미개설 | 미착수 | 해당 없음 | 없음 |
 
 ## 리뷰 상태
 
 - PR #30의 `RealBackendSessionDeviceTest`는 `IsolatedSessionTestRunner`와 테스트 전용 `Application`/`TokenStore`를 사용한다. 앞서 기록된 “개발자 저장 토큰에 접근할 수 있다”는 P1은 이 코드와 맞지 않아 철회했다. 실제 사용자 세션을 사용하지 않는다는 검증 기록은 [`B1 검증 기록`](../android/B1-verification.md)을 참조한다.
 - PR #32의 이전 head `5d4f45b`에서 발견한 사항은 수정 head `f10d598`에 반영했다. PR #30 P1 지적은 테스트 전용 runner를 고려하지 않은 오류로 철회했다. `.gitignore`의 광범위한 `.codex/` 제외를 제거하고, Claude·Codex 공통 worktree 규칙과 누락된 Claude 문서 갱신, breakdown의 A1/B1 병합 상태를 추가했다.
+
+- B1(#30)과 지침 정합성(#32)이 일반 병합 커밋으로 들어갔다. 이후 기능 PR은 GitHub의 "Squash and merge"로 병합한다.
 
 ## 기타 브랜치
 
