@@ -60,15 +60,18 @@ data class AuthProperties(
         }
     }
 
-    /** Origins that may call the cookie-authenticated web endpoints. */
+    /** Origins that may call the cookie-authenticated web endpoints, in the form browsers send them. */
     val webAllowedOrigins: Set<String>
-        get() = web.allowedOrigins.map { it.trim().trimEnd('/') }.filter { it.isNotEmpty() }.toSet()
+        get() = web.allowedOrigins.map { it.trim().trimEnd('/') }.filter { it.isNotEmpty() }
+            .map { originOf(it) ?: it.lowercase() }.toSet()
             .ifEmpty { kakao.webRedirectUris.mapNotNull(::originOf).toSet() }
 
+    /** Browsers omit the scheme's default port from `Origin`, so `:443`/`:80` must be dropped here too. */
     private fun originOf(uri: String): String? = runCatching {
         val parsed = URI(uri)
         val scheme = parsed.scheme?.lowercase() ?: return null
         val host = parsed.host?.lowercase() ?: return null
-        if (parsed.port == -1) "$scheme://$host" else "$scheme://$host:${parsed.port}"
+        val defaultPort = (scheme == "https" && parsed.port == 443) || (scheme == "http" && parsed.port == 80)
+        if (parsed.port == -1 || defaultPort) "$scheme://$host" else "$scheme://$host:${parsed.port}"
     }.getOrNull()
 }
