@@ -18,7 +18,5 @@ class MainActivity : ComponentActivity() {
                 NurseFlowRoot(container)
             }
         }
-        val keyHash = com.kakao.sdk.common.util.Utility.getKeyHash(this)
-        android.util.Log.d("KAKAO_HASH", keyHash)
     }
 }
