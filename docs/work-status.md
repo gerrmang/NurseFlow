@@ -171,3 +171,23 @@ Claude와 Codex가 같은 진행 기록을 사용한다. PR 또는 정기 리뷰
 | `/Users/sihwan/Documents/ChatGPT/NurseFlow` | `feat/hospital-search` | `a3755fd3438ac30d3f168cc82e631c4a627ba12b` | 미커밋 변경 없음 | 2026-11-10 | Claude | 위 P3 2건 수정: 두 경로 공통 최소 길이 검증, 대체 경로는 외부 API 일치·정렬을 따른다고 계약에 명시. hyen11 재확인 전 |
 
 이 문서는 Claude와 Codex가 각 기능 단위 작업 후 진행 결과를 함께 기록하는 단일 공유 현황이다.
+
+## A3 PR #35 B4a/B4b 소비자 계약 검토 (2026-11-10, Codex)
+
+> 아래는 이전 head에서 수행한 계약 검토의 시점 기록이다. 현재 코드에 지적이 남아 있다는 판정이 아니다.
+
+- 후속 게시: 사용자의 행별 리뷰 요청에 따라 [COMMENT 리뷰 5837141400](https://github.com/gerrmang/NurseFlow/pull/35#pullrequestreview-5837141400)을 head `68b5981`에 게시했다. `docs/openapi.yaml` 368행(입력 검증, discussion_r4521393260), 359~361행(검색 보장 범위, discussion_r4521393265)에 대응하는 diff hunk와 position 29/22를 GitHub API로 확인했다. 연결 도구는 403이어서 인증된 로컬 GitHub CLI를 사용했다. 아래의 'GitHub 리뷰 게시 없음'은 최초 정적 검토 시점 기록이며 이 후속 요청으로 게시 완료했다. 코드 변경·커밋·푸시·병합은 하지 않았다.
+
+- 검토 대상: GitHub PR #35의 최초 OpenAPI 계약 `aa1915c`와 최신 head `68b59814641f6341e0bfe611946db8b713ef3834`. `docs/openapi.yaml`, 검색 Controller/DTO/Service, DB·실시간 검색 경로와 관련 테스트를 정적으로 대조했다. 현재 로컬에는 A3가 없으므로 GitHub 연결 도구로 읽었으며 브랜치를 전환하지 않았다.
+- 판정: 검토 범위에서 P1/P2 없음. P3(계약/입력) 1건: OpenAPI 368행은 trim 후 2~50자만 명시하지만, DB 경로는 문자·숫자만 남긴 뒤에도 2자 이상을 요구한다. `(가)`는 계약상 허용되지만 400 `INVALID_REQUEST`이며 `HospitalDatasetSearchHttpTest`에도 거절 기대가 있다. 정규화 후 최소 길이를 계약에 명시하고 DB/실시간 경로의 공통 검증으로 맞춰야 B4 입력 안내가 일치한다.
+- P3(계약/검색) 1건: OpenAPI 359~361행의 기호 무시·정확 일치/병원급 우선 정렬은 DB 경로에서만 구현된다. 실시간 경로는 trim한 query를 yadmNm으로 보내고 외부 페이지 순서를 그대로 반환한다. 공통 보장으로 구현하거나, 해당 규칙이 DB 경로에 한정됨을 계약에 명시한다. 외부 API의 실제 검색·정렬 동작은 이번에 호출해 확인하지 않았다.
+- 소비자 확인: `source`·`externalId`로 선택 항목을 식별하고 `name`·`address`로 동명 병원을 구분할 수 있다. `category`는 선택적 nullable로 소비한다. 200 빈 목록과 503 두 오류 코드를 별도 상태로 처리하고 `attribution`을 표시한다. page 100 이후는 요청하지 않고 검색어 구체화를 안내해야 한다. 검색 실행 시 호출하고 늦게 도착한 이전 검색 결과는 폐기한다.
+- 범위 제한: `POST /wards`는 여전히 BootstrapWardRequest 계약이다. 병원 후보 검색 검토가 A4 병동 생성 계약 합의나 B4 전체 실연동 완료를 뜻하지 않는다. A4에서 hospital 스냅샷·Idempotency-Key·오류 계약을 별도로 검토한다.
+- 검증: GitHub 원본 파일·PR diff·기존 테스트 기대값 대조. Gradle·기기·외부 API·실데이터 검사는 실행하지 않았다(원격 A3 정적 계약 리뷰). 최신 head의 Verify run `42672162190`은 조회 시 completed/failure였다. 이번에 CI 실패 원인을 재검증하거나 재실행하지 않았다. 코드/API/DB 변경·배포 영향 없음. GitHub 리뷰 게시·커밋·푸시·병합 없음.
+- 공유 인계: 현재 `C:\Users\jjang\IdeaProjects\NurseFlow`, `feat/android-published-roster`, HEAD `209de0db506429050885968e9cd2c3d81cc14192`를 보존했다. 기존 Android 수정 4개와 미추적 `nurseflow.mv.db`는 검토·수정하지 않았다. 이 절만 현재 공유 브랜치에 남기며, A3 구현자가 위 두 계약 항목을 반영한 뒤 재검토한다. 기록 시각 2026-11-10 14:00 KST 이후. 기존 tracked diff 해시는 `abca27372b8422cbb7f54dec0e67a5019c213e961a89a5f58cfb9e486247c36b` (`git diff HEAD -- . ':!docs/work-status.md' | Out-String`의 UTF-8 바이트 SHA256; PowerShell 줄바꿈 포함).
+
+## 미커밋 기록 보존·로컬 브랜치 정리 (2026-11-10, Codex)
+
+- 사용자 요청으로 위 A3 계약 검토 미커밋 기록을 현재 B2 브랜치의 별도 문서 커밋에 보존한다. B2 구현 커밋 `55fb61b`와 가상 검증 결과는 변경하지 않았다.
+- `git fetch origin --prune` 성공. GitHub PR #33·#34의 `merged=true`·대상 `dev`, 병합 커밋 `fa47a5a`·`d1b8729`의 `origin/dev` 포함, 로컬 A2 head의 원본 PR head 포함을 확인한 뒤 로컬 `feat/auth-web-session-v2`·`feat/android-published-roster`만 삭제했다. 원격 브랜치는 삭제하지 않았다.
+- 공유 worktree는 `C:\Users\jjang\IdeaProjects\NurseFlow`, 현재 브랜치는 `feat/web-foundation-session`으로 유지한다. `main`·`dev`·B2 브랜치와 미추적 `nurseflow.mv.db`를 보존했다. 문서 변경만이므로 앱·서버 테스트와 브라우저·Kakao·CI 검증은 재실행하지 않았다.
