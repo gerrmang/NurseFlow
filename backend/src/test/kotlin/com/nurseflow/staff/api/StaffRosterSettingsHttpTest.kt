@@ -160,6 +160,36 @@ class StaffRosterSettingsHttpTest : ApiTestBase() {
     }
 
     @Test
+    fun `a deactivated nurse leaves the order and is placed again after reactivation`() {
+        val a = team("A팀")
+        val first = nurse("가상 1", a)
+        val second = nurse("가상 2", a)
+        order(a, first, second)
+
+        http.put("${base()}/staff/$first", mapOf("displayName" to "가상 1", "active" to false), admin)
+        assertEquals(200, order(a, second).status)
+        http.put("${base()}/staff/$first", mapOf("displayName" to "가상 1", "active" to true), admin)
+
+        val listed = staff()
+        assertEquals(listOf("가상 2", "가상 1"), listed.map { it.get("displayName").asString() })
+        assertEquals(1, listed[0].get("teamOrder").asInt())
+        assertTrue(listed[1].get("teamOrder").isNull)
+        val history = http.get("${base()}/staff/$first/adjustments", admin).json!!.get("items").toList()
+        assertTrue(history.any { it.get("kind").asString() == "TEAM_ORDER" && it.get("after").isNull })
+    }
+
+    @Test
+    fun `saving the same career profile again records nothing`() {
+        val a = team("A팀")
+        val n = nurse("가상 간호사", a)
+        profile(n, "2020-03")
+        profile(n, "2020-03")
+
+        val kinds = http.get("${base()}/staff/$n/adjustments", admin).json!!.get("items").toList().map { it.get("kind").asString() }
+        assertEquals(listOf("PROFILE_SET_BY_ADMIN"), kinds)
+    }
+
+    @Test
     fun `members cannot change or read roster settings`() {
         val a = team("A팀")
         val n = nurse("가상 간호사", a)
@@ -171,6 +201,8 @@ class StaffRosterSettingsHttpTest : ApiTestBase() {
         assertEquals("WARD_ADMIN_REQUIRED", http.get("${base()}/staff/$n/adjustments", member).code)
         val (_, outsider) = userToken("가상 외부인")
         assertEquals(404, http.get("${base()}/staff/$n/adjustments", outsider).status)
+        assertEquals(404, http.put("${base()}/teams/$a/order", mapOf("nurseIds" to listOf(n)), outsider).status)
+        assertEquals(404, http.put("${base()}/staff/$n/roster-settings", mapOf("seniorEligible" to true), outsider).status)
     }
 
     @Test

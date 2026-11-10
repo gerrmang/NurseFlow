@@ -1089,7 +1089,7 @@ paths:
         병원 입사 연월이나 경력 시작 연월보다 우선한다(결정 12). 목록이 현재 팀의 활성 간호사와 정확히 같지 않으면
         다른 화면에서 팀 구성이 바뀐 것이므로 409 `TEAM_ORDER_STALE`를 돌려준다. 순서가 바뀐 간호사마다 조정 이력을 남긴다.
         관리자가 아직 순서를 정하지 않은 간호사(새로 추가·팀 이동)는 `teamOrder`가 null이며, 목록에서 순서가 정해진 간호사
-        아래에 경력 시작 연월이 이른 순으로 놓인다. 팀을 옮기면 이전 팀의 순서는 지워진다.
+        아래에 경력 시작 연월이 이른 순으로 놓인다. 팀을 옮기거나 비활성화하면 순서가 지워지고, 다시 활성화되면 새로 놓는다.
       requestBody:
         required: true
         content:
@@ -2510,7 +2510,7 @@ components:
           description: CONFIRMED일 때만 값이 있으며 팀 경력 구성 점수에 사용
     StaffMember:
       type: object
-      required: [nurseId, displayName, qualifications, active, linkedAccount, profile]
+      required: [nurseId, displayName, qualifications, active, linkedAccount, profile, teamOrder, seniorEligible, stageOverride, rosterStage]
       properties:
         nurseId:
           type: string

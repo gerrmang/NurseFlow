@@ -113,6 +113,10 @@ class StaffJdbcRepository(private val jdbc: JdbcTemplate, private val mapper: Js
         "SELECT * FROM nurses WHERE team_id=? AND active=TRUE", { rs, _ -> mapStaff(rs) }, teamId,
     )
 
+    fun clearTeamOrder(nurseId: UUID) {
+        jdbc.update("UPDATE nurses SET team_order=NULL WHERE nurse_id=?", nurseId)
+    }
+
     fun setTeamOrder(nurseId: UUID, teamOrder: Int) {
         jdbc.update("UPDATE nurses SET team_order=? WHERE nurse_id=?", teamOrder, nurseId)
     }

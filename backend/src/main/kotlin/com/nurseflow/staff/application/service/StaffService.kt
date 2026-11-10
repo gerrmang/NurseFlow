@@ -120,6 +120,9 @@ class StaffService(
     @Transactional
     fun createStaff(wardId: UUID, command: StaffInputCommand, actor: String): StaffResult {
         wards.requireAdmin(wardId, actor)
+        // Team membership changes take the ward lock that team ordering holds, so a reorder never
+        // validates against a member set that changes before it is saved.
+        repo.lockWard(wardId)
         command.teamId?.let { repo.findTeam(wardId, it) ?: throw BusinessException(ErrorCode.TEAM_NOT_FOUND) }
         val id = UUID.randomUUID()
         repo.insertStaff(id, wardId, command.displayName.trim(), command.qualifications.distinct(), command.active, command.teamId)
@@ -130,8 +133,15 @@ class StaffService(
     @Transactional
     fun updateStaff(wardId: UUID, nurseId: UUID, command: StaffInputCommand, actor: String): StaffResult {
         wards.requireAdmin(wardId, actor)
+        repo.lockWard(wardId)
         val current = requireStaff(wardId, nurseId)
         repo.updateStaff(nurseId, command.displayName.trim(), command.qualifications.distinct(), command.active)
+        if (current.active && !command.active && current.teamOrder != null) {
+            // An inactive nurse leaves the team order; on reactivation they are placed again like a new member,
+            // so they can never share a position with someone ordered meanwhile.
+            repo.clearTeamOrder(nurseId)
+            adjust(wardId, nurseId, "TEAM_ORDER", current.teamOrder.toString(), null, actor)
+        }
         if (current.active != command.active) {
             audit.record(wardId, actor, if (command.active) "STAFF_ACTIVATED" else "STAFF_DEACTIVATED", nurseId.toString())
         }
@@ -235,6 +245,9 @@ class StaffService(
         val nurse = requireStaff(wardId, nurseId)
         val context = context(wardId)
         validate(input, context)
+        val unchanged = nurse.status() == ProfileStatus.CONFIRMED &&
+            nurse.confirmedCareerStartedOn == input.careerStartedOn.toString() && nurse.confirmedRank == input.rank
+        if (unchanged) return nurse.toResult(context)
         repo.confirmProfile(nurseId, input.careerStartedOn.toString(), input.rank, actor, Instant.now())
         adjust(wardId, nurseId, "PROFILE_SET_BY_ADMIN", profileLabel(nurse.confirmedCareerStartedOn, nurse.confirmedRank),
             profileLabel(input.careerStartedOn.toString(), input.rank), actor)
