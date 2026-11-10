@@ -18,7 +18,7 @@ import java.util.UUID
 
 /**
  * Login only proves who the user is. It never grants ward access: wards and roles come
- * exclusively from ward_memberships created by bootstrap or invitation redemption.
+ * exclusively from ward_memberships created by ward creation or invitation redemption.
  */
 @Service
 class AuthService(

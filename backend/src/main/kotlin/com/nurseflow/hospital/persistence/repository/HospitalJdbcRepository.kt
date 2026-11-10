@@ -45,6 +45,21 @@ class HospitalJdbcRepository(private val jdbc: JdbcTemplate) {
         "%$searchName%", searchName, "$searchName%", offset, limit,
     )
 
+    fun findActive(source: String, externalId: String): HospitalCandidate? = jdbc.query(
+        """SELECT source, external_id, name, address, category_name FROM hospitals
+           WHERE source=? AND external_id=? AND active=TRUE""",
+        { rs, _ ->
+            HospitalCandidate(
+                source = rs.getString("source"),
+                externalId = rs.getString("external_id"),
+                name = rs.getString("name"),
+                address = rs.getString("address"),
+                category = rs.getString("category_name"),
+            )
+        },
+        source, externalId,
+    ).firstOrNull()
+
     fun count(searchName: String): Int = jdbc.queryForObject(
         "SELECT COUNT(*) FROM hospitals WHERE active=TRUE AND search_name LIKE ?", Int::class.java, "%$searchName%",
     )!!

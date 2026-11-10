@@ -76,8 +76,8 @@ class InvitationRedemptionService(
             throw BusinessException(ErrorCode.INVITATION_ALREADY_REDEEMED)
         }
         audit.record(invitation.wardId, subject, "INVITATION_REDEEMED", invitation.id.toString())
-        val wardName = wardRepo.findWardName(invitation.wardId)!!
-        return WardMembershipResult(invitation.wardId, wardName, listOf(role), canViewWardCalendar = true)
+        val ward = wardRepo.findWardLabel(invitation.wardId)!!
+        return WardMembershipResult(invitation.wardId, ward.name, listOf(role), canViewWardCalendar = true, ward.hospitalName)
     }
 
     private fun linkNurse(invitation: DbInvitation, subject: String) {
