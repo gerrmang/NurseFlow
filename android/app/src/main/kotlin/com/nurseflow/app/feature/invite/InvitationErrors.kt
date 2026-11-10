@@ -18,6 +18,8 @@ enum class InviteFailure(val message: String) {
     NURSE_NOT_FOUND("간호사 기록을 찾을 수 없어요. 목록을 새로 불러와 주세요."),
     INVALID_REQUEST("요청 형식이 올바르지 않아요."),
     UNAUTHORIZED("로그인이 필요해요. 다시 로그인해 주세요."),
+    /** USER_NOT_FOUND: the token is valid but the account no longer exists; the local session must end. */
+    USER_NOT_FOUND("계정 정보를 찾을 수 없어요. 다시 로그인해 주세요."),
     NETWORK("서버에 연결할 수 없어요. 네트워크를 확인해 주세요."),
     SERVER("서버에 일시적인 문제가 있어요. 잠시 후 다시 시도해 주세요."),
     UNKNOWN("요청을 처리하지 못했어요."),
@@ -27,6 +29,11 @@ enum class InviteFailure(val message: String) {
     val endsInvitation: Boolean get() = this in setOf(EXPIRED, REVOKED, ALREADY_REDEEMED, NOT_FOUND)
     /** The server may or may not have processed a write: the result must be checked, not resent blindly. */
     val outcomeUnknown: Boolean get() = this == NETWORK || this == SERVER
+    /**
+     * A refresh succeeds for a deleted account, so the session would not end on its own:
+     * the screen must end it and send the user back to login.
+     */
+    val endsSession: Boolean get() = this == USER_NOT_FOUND
 }
 
 fun Throwable.toInviteFailure(): InviteFailure {
@@ -44,6 +51,7 @@ fun Throwable.toInviteFailure(): InviteFailure {
         "INVALID_HOSPITAL_JOIN_MONTH" -> InviteFailure.INVALID_JOIN_MONTH
         "WARD_ADMIN_REQUIRED", "WARD_NOT_FOUND" -> InviteFailure.NOT_ADMIN
         "NURSE_NOT_FOUND" -> InviteFailure.NURSE_NOT_FOUND
+        "USER_NOT_FOUND" -> InviteFailure.USER_NOT_FOUND
         "INVALID_REQUEST", "INVALID_INVITATION" -> InviteFailure.INVALID_REQUEST
         else -> when {
             e.status == 401 -> InviteFailure.UNAUTHORIZED

@@ -73,7 +73,10 @@ fun NurseFlowRoot(container: AppContainer) {
                             val adminWard = loaded?.firstOrNull { it.wardId == adminWardId && it.isAdmin }
                             // Created for the whole session so a newer link replaces, not duplicates, the flow.
                             val join = viewModel(key = "join") {
-                                JoinInvitationViewModel(container.invitationApi, container.api, container.invites)
+                                JoinInvitationViewModel(
+                                    container.invitationApi, container.api, container.invites,
+                                    onSessionInvalid = { container.logout() },
+                                )
                             }
                             when {
                                 // An invitation being handled takes precedence over the ward screens.
@@ -89,7 +92,10 @@ fun NurseFlowRoot(container: AppContainer) {
                                 adminWard != null -> {
                                     BackHandler { adminWardId = null }
                                     val admin = viewModel(key = "invites-${adminWard.wardId}") {
-                                        InvitationAdminViewModel(container.invitationApi, adminWard.wardId, BuildConfig.INVITE_LINK_BASE)
+                                        InvitationAdminViewModel(
+                                            container.invitationApi, adminWard.wardId, BuildConfig.INVITE_LINK_BASE,
+                                            onSessionInvalid = { container.logout() },
+                                        )
                                     }
                                     InvitationAdminScreen(
                                         adminWard.wardName, admin,

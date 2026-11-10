@@ -41,6 +41,10 @@ class InviteDeepLinkDeviceTest {
     private lateinit var original: AppContainer
     private val memberToken = "m".repeat(43)
     private val expiredToken = "e".repeat(43)
+    private val adminToken = "a".repeat(43)
+    /** Error responses injected into the next join requests, in order; empty means success. */
+    private val redeemErrors = java.util.concurrent.ConcurrentLinkedQueue<Pair<Int, String>>()
+    private val tokenStore = TestTokenStore()
     private val wardJson = """{"wardId":"fake-invite-ward","wardName":"가상 초대 병동","roles":["WARD_MEMBER"],"canViewWardCalendar":true}"""
 
     @Before fun serveFictionalBackend() {
@@ -48,20 +52,24 @@ class InviteDeepLinkDeviceTest {
             override fun dispatch(request: RecordedRequest): MockResponse {
                 requestPaths += request.path.orEmpty()
                 return when (request.path) {
-                    "/api/v1/auth/kakao/session" -> json("""{"accessToken":"fake-invite-access","accessTokenExpiresAt":"2099-01-01T00:00:00Z","refreshToken":"fake-invite-refresh","refreshTokenExpiresAt":"2099-02-01T00:00:00Z","user":{"userId":"fake-invite-user","displayName":"가상 초대 사용자"}}""")
+                    "/api/v1/auth/kakao/session", "/api/v1/auth/session/refresh" -> json("""{"accessToken":"fake-invite-access","accessTokenExpiresAt":"2099-01-01T00:00:00Z","refreshToken":"fake-invite-refresh","refreshTokenExpiresAt":"2099-02-01T00:00:00Z","user":{"userId":"fake-invite-user","displayName":"가상 초대 사용자"}}""")
                     "/api/v1/auth/logout" -> MockResponse().setResponseCode(204)
                     "/api/v1/me" -> json("""{"userId":"fake-invite-user","displayName":"가상 초대 사용자","memberships":[]}""")
                     "/api/v1/wards" -> json(if (joined.get()) """{"items":[$wardJson]}""" else """{"items":[]}""")
                     "/api/v1/invitations/preview" -> {
                         val token = JSONObject(request.body.readUtf8()).getString("token")
                         previews += token
-                        if (token == expiredToken) json("""{"code":"INVITATION_EXPIRED"}""", 410)
-                        else json("""{"wardId":"fake-invite-ward","wardName":"가상 초대 병동","role":"WARD_MEMBER","expiresAt":"2099-01-01T00:00:00Z","linksExistingNurse":true}""")
+                        when (token) {
+                            expiredToken -> json("""{"code":"INVITATION_EXPIRED"}""", 410)
+                            adminToken -> json("""{"wardId":"fake-invite-ward","wardName":"가상 초대 병동","role":"WARD_ADMIN","expiresAt":"2099-01-01T00:00:00Z","linksExistingNurse":false}""")
+                            else -> json("""{"wardId":"fake-invite-ward","wardName":"가상 초대 병동","role":"WARD_MEMBER","expiresAt":"2099-01-01T00:00:00Z","linksExistingNurse":true}""")
+                        }
                     }
                     "/api/v1/invitations/redeem" -> {
                         redeems += JSONObject(request.body.readUtf8())
-                        joined.set(true)
-                        json(wardJson, 201)
+                        val error = redeemErrors.poll()
+                        if (error != null) json("""{"code":"${error.second}","detail":"untrusted detail"}""", error.first)
+                        else { joined.set(true); json(wardJson, 201) }
                     }
                     else -> if (request.path.orEmpty().startsWith("/api/v1/wards/fake-invite-ward/published-rosters"))
                         json("""{"code":"PUBLISHED_ROSTER_NOT_FOUND"}""", 404) else MockResponse().setResponseCode(404)
@@ -73,7 +81,7 @@ class InviteDeepLinkDeviceTest {
         original = application.container
         val baseUrl = server.url("/").toString() // resolves the host: not on the main thread
         instrumentation.runOnMainSync {
-            container = AppContainer(application, baseUrl, TestTokenStore())
+            container = AppContainer(application, baseUrl, tokenStore)
             application.useContainer(container)
         }
     }
@@ -170,6 +178,60 @@ class InviteDeepLinkDeviceTest {
                 .flatMap { monitor.getActivitiesInStage(it) }.filterIsInstance<MainActivity>().distinct()
         }
         return found
+    }
+
+    /** Mock-server check: an injected 400 INVALID_HOSPITAL_JOIN_MONTH (not blocked by the client precheck) stays correctable. */
+    @Test fun serverRejectedJoinMonthShowsInputErrorAndAllowsCorrection() {
+        redeemErrors += 400 to "INVALID_HOSPITAL_JOIN_MONTH"
+        launchMain()
+        awaitText("카카오 로그인")
+        login()
+        awaitText("가상 초대 사용자님, 안녕하세요.")
+        instrumentation.targetContext.startActivity(viewIntent(link(memberToken)))
+        awaitText("관리자가 등록한 간호사 기록과 연결됩니다.")
+        typeInto("병원 입사 연월 (YYYY-MM)", "1960-01")
+        click("가입하기")
+        awaitText(InviteFailure.INVALID_JOIN_MONTH.message)
+        assertFalse(hasText("untrusted detail"))
+        typeInto("병원 입사 연월 (YYYY-MM)", "2021-07")
+        click("가입하기")
+        awaitText("아직 확정된 근무표가 없습니다")
+        assertEquals(listOf("1960-01", "2021-07"), redeems.map { it.getString("hospitalJoinedOn") })
+        assertTrue(container.session.state.value is SessionState.SignedIn)
+    }
+
+    /** Mock-server check: USER_NOT_FOUND after one refresh ends the local session and returns to login. */
+    @Test fun userNotFoundOnJoinEndsSessionAndReturnsToLogin() {
+        redeemErrors += 401 to "USER_NOT_FOUND"
+        redeemErrors += 401 to "USER_NOT_FOUND" // the single refresh-and-replay is rejected the same way
+        launchMain()
+        awaitText("카카오 로그인")
+        login()
+        awaitText("가상 초대 사용자님, 안녕하세요.")
+        instrumentation.targetContext.startActivity(viewIntent(link(memberToken)))
+        awaitText("관리자가 등록한 간호사 기록과 연결됩니다.")
+        typeInto("병원 입사 연월 (YYYY-MM)", "2020-03")
+        click("가입하기")
+        awaitText("카카오 로그인")
+        await { container.session.state.value == SessionState.SignedOut }
+        assertNull("Stored session must be cleared", tokenStore.token)
+        assertNull("The invitation ends with the session", container.invites.current.value)
+        assertFalse(hasText("병동 초대를 받았어요. 초대 내용을 확인하려면 먼저 로그인해 주세요."))
+        assertEquals(2, redeems.size)
+        assertTrue(requestPaths.contains("/api/v1/auth/logout"))
+    }
+
+    /** Mock-server check: a WARD_ADMIN join sends the token only, never hospitalJoinedOn. */
+    @Test fun adminInvitationJoinSendsNoJoinMonth() {
+        launchMain()
+        awaitText("카카오 로그인")
+        login()
+        awaitText("가상 초대 사용자님, 안녕하세요.")
+        instrumentation.targetContext.startActivity(viewIntent(link(adminToken)))
+        awaitText("관리자 초대는 입사 연월 입력 없이 가입합니다.")
+        click("가입하기")
+        awaitText("아직 확정된 근무표가 없습니다")
+        assertEquals(setOf("token"), redeems.single().keys().asSequence().toSet())
     }
 
     private fun login() = runBlocking {

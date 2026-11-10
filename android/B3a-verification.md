@@ -223,6 +223,43 @@
 - 화면에서 직접 로그아웃할 때 대기 초대가 지워지는지. 가입 화면에는 로그아웃 버튼이 없으므로 세션 종료 경로로 확인했고, 명시적 로그아웃은 기기 테스트로 확인했다.
 - 물리 기기, 운영 서버, HTTPS App Links, GitHub CI.
 
+## 서버 오류 처리 보강 (2026-11-10 밤)
+
+**A 후속 브랜치와의 관계**
+- `origin/fix/kakao-diagnostics-invite-contract`(최신 `be6d78c`)에 OpenAPI 초대 수락 계약 정정이 있다. 이 브랜치는 PR이 없고 dev에 병합되지 않았다(dev는 `6a2cf29`).
+- 그래서 이 브랜치에 A 변경을 섞지 않았다. 아래 처리는 dev의 현재 서버 동작에 맞춘 것이다.
+
+**코드 대조 결과와 수정**
+- `INVALID_HOSPITAL_JOIN_MONTH`(400): 이미 처리돼 있었다. 입력 오류 문구를 보여 주고 입력란을 수정할 수 있게 유지하며, 초대는 열린 상태로 둔다. 코드 변경은 없고 서버 응답을 주입하는 테스트를 추가했다.
+- `USER_NOT_FOUND`(401): **처리가 부족해 수정했다.**
+  - 기존에는 일반 "로그인이 필요해요" 오류만 보여 주고 로컬 세션이 남았다. refresh는 성공하므로 세션이 저절로 끝나지 않는다.
+  - 이제 가입·미리보기·결과 확인과 관리자 화면의 목록·쓰기에서 이 코드를 받으면 `AppContainer.logout()`으로 로컬 세션을 끝낸다. 이때 저장된 refresh token, 대기 초대, 세션 ViewModel이 정리되고 로그인 화면으로 돌아간다.
+  - 가입 요청은 다시 보내지 않는다.
+  - 서버는 이 오류에서 가입 트랜잭션을 롤백한다. HTTP 클라이언트의 기존 규칙에 따라 401은 refresh 뒤 한 번 재요청되고, 그 뒤에는 멈춘다.
+  - 일반 401은 바꾸지 않았다. refresh가 거절되면 세션이 원래 종료되기 때문이다.
+- `WARD_ADMIN` 가입: `hospitalJoinedOn`을 보내지 않는다. 기존 JVM·HTTP 테스트에 더해 기기 화면 수준 테스트를 추가했다.
+- 범위 밖 후속: 병동 목록(`/me`, `/wards`) 등 다른 화면의 `USER_NOT_FOUND` 처리는 B3a 범위 밖이라 바꾸지 않았다.
+
+**검증**
+
+| 구분 | 검사 | 결과 |
+| --- | --- | --- |
+| 목업(JVM) | `JoinInvitationViewModelTest` 신규 4건: 서버 연월 거절 뒤 수정·재가입, 가입 중 `USER_NOT_FOUND`로 세션 종료(재전송 없음), 미리보기·결과 확인 중 `USER_NOT_FOUND`, 일반 401은 강제 로그아웃하지 않음 | 통과 |
+| 목업(JVM) | `InvitationAdminViewModelTest` 신규 1건: 관리자 쓰기·목록의 `USER_NOT_FOUND`로 세션 종료, 이후 다시 불러오지 않음 | 통과 |
+| 목업(HTTP) | `InvitationApiTest` 신규 1건: MockWebServer가 가입에 401 `USER_NOT_FOUND`를 반환하면 refresh 1회와 재요청 1회 뒤 멈추고 `USER_NOT_FOUND`로 분류 | 통과 |
+| 목업(기기) | `InviteDeepLinkDeviceTest` 신규 3건(실제 화면·HTTP, 서버는 MockWebServer) | 7건 모두 통과 |
+| | ① 클라이언트 사전 확인을 통과하는 `1960-01`에 400 `INVALID_HOSPITAL_JOIN_MONTH` 주입 → 오류 문구 표시(서버 detail 미표시) → `2021-07`로 고쳐 가입 성공 | |
+| | ② 가입에 401 `USER_NOT_FOUND` 주입 → 로그인 화면, `SignedOut`, 저장 토큰과 대기 초대 삭제, 서버 logout 호출, 가입 요청은 2회(원 요청과 refresh 뒤 재요청) | |
+| | ③ 관리자 초대 가입 요청 본문 필드가 `token` 하나뿐 | |
+| 회귀 | `:app:testDebugUnitTest` | 74건 통과 (기존 68 + 신규 6) |
+| 회귀 | `:app:assembleDebug :app:assembleDebugAndroidTest :app:lintDebug` | 성공, Lint 오류 0·기존 경고 33 |
+| 회귀 | `:app:connectedDebugAndroidTest` (임시 데이터 `Pixel_10`) | XML 31건 중 25건 통과·6건 opt-in 건너뜀·실패 0 |
+| 실서버(가짜 OIDC) | `InvitationJoinDeviceTest` + `AndroidInvitationE2eServerTest` | 기기 `OK (1 test)` 14.291초, 서버 `BUILD SUCCESSFUL` |
+
+**실제 서버로 확인하지 못한 것**
+- `INVALID_HOSPITAL_JOIN_MONTH`: 앱의 사전 확인이 미래 연월과 1950년 이전을 막기 때문에 실제 서버에서는 화면으로 재현할 수 없다. 목업 주입으로만 확인했다.
+- `USER_NOT_FOUND`: 실제 서버에서 재현하려면 사용자 행을 지워야 하므로 하지 않았다. 목업으로만 확인했다.
+
 ## 재현 명령
 
 첫 번째 터미널에서 `backend/`로 이동해 실행한다. 기기 검사가 `/finish`를 호출할 때까지 최대 10분 기다린다.

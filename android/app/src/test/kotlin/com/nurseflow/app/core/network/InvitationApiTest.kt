@@ -100,6 +100,31 @@ class InvitationApiTest {
         }
     }
 
+    @Test fun userNotFoundSurvivesOneRefreshAndIsClassifiedForSessionEnd() = runBlocking {
+        val session = """{"accessToken":"fake-access","accessTokenExpiresAt":"2099-01-01T00:00:00Z","refreshToken":"fake-refresh","refreshTokenExpiresAt":"2099-02-01T00:00:00Z","user":{"userId":"demo-user","displayName":"가상 사용자"}}"""
+        MockWebServer().use { server ->
+            server.dispatcher = object : okhttp3.mockwebserver.Dispatcher() {
+                override fun dispatch(request: okhttp3.mockwebserver.RecordedRequest) = when (request.path) {
+                    "/api/v1/auth/kakao/session", "/api/v1/auth/session/refresh" -> json(session)
+                    // The server rolls the join back and answers 401 because the account row is gone.
+                    "/api/v1/invitations/redeem" -> json("""{"code":"USER_NOT_FOUND","detail":"untrusted"}""", 401)
+                    else -> MockResponse().setResponseCode(404)
+                }
+            }
+            val base = server.url("/").toString()
+            val manager = SessionManager(ApiFactory.authApi(base), MemoryTokenStore())
+            manager.loginWithKakao("fake-id", "fake-nonce")
+            val failure = try {
+                apiCall { ApiFactory.invitationApi(base, manager).redeem(RedeemInvitationBody(token, "2020-03")) }; null
+            } catch (e: ApiException) { e.toInviteFailure() }
+            assertEquals(InviteFailure.USER_NOT_FOUND, failure)
+            assertTrue(failure!!.endsSession)
+            val paths = (1..server.requestCount).map { server.takeRequest(1, TimeUnit.SECONDS)!!.path }
+            // One refresh-and-replay (the rejected join was rolled back), then no further retries.
+            assertEquals(listOf("/api/v1/auth/kakao/session", "/api/v1/invitations/redeem", "/api/v1/auth/session/refresh", "/api/v1/invitations/redeem"), paths)
+        }
+    }
+
     @Test fun errorsAreClassifiedByCodeNotOnlyStatus() = runBlocking {
         val cases = listOf(
             Triple(410, "INVITATION_EXPIRED", InviteFailure.EXPIRED),

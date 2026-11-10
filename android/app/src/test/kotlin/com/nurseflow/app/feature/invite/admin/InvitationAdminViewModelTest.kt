@@ -112,6 +112,21 @@ class InvitationAdminViewModelTest {
         assertNull(model.state.value.link)
     }
 
+    @Test fun userNotFoundEndsSessionWithoutReloadingOrRetrying() {
+        var ended = 0
+        val model = InvitationAdminViewModel(api, "ward-1", "nurseflow://invite", scope(), onSessionInvalid = { ended++ })
+        respond(inv("aaaa-0001"))
+        model.revoke("aaaa-0001")
+        api.revokes.single().second.completeExceptionally(apiError(401, "USER_NOT_FOUND"))
+        assertEquals(1, ended)
+        assertEquals(1, api.lists.size) // no reload after the account is gone
+        assertFalse(model.state.value.busy)
+
+        val other = InvitationAdminViewModel(api, "ward-1", "nurseflow://invite", scope(), onSessionInvalid = { ended++ })
+        api.lists.last().completeExceptionally(apiError(401, "USER_NOT_FOUND"))
+        assertEquals(2, ended)
+    }
+
     @Test fun serverDeniedAdminAccessClosesScreen() {
         val model = InvitationAdminViewModel(api, "ward-1", "nurseflow://invite", scope())
         api.lists.single().completeExceptionally(apiError(403, "WARD_ADMIN_REQUIRED"))

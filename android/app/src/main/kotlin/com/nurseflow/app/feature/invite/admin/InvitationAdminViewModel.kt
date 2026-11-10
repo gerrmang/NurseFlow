@@ -53,6 +53,8 @@ class InvitationAdminViewModel(
     private val wardId: String,
     private val linkBase: String,
     scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate),
+    /** Ends the local session when the server no longer knows the account (USER_NOT_FOUND). */
+    private val onSessionInvalid: () -> Unit = {},
 ) : ViewModel(scope) {
     private val scope = scope
     private val mutable = MutableStateFlow(InvitationAdminState())
@@ -86,6 +88,7 @@ class InvitationAdminViewModel(
                 if (mine != ticket) return@launch
                 val failure = e.toInviteFailure()
                 mutable.value = mutable.value.copy(loading = false, loadError = failure, forbidden = failure == InviteFailure.NOT_ADMIN)
+                if (failure.endsSession) onSessionInvalid()
             }
         }
     }
@@ -149,6 +152,11 @@ class InvitationAdminViewModel(
                     },
                     forbidden = failure == InviteFailure.NOT_ADMIN,
                 )
+                if (failure.endsSession) {
+                    mutable.value = mutable.value.copy(busy = false)
+                    onSessionInvalid()
+                    return@launch
+                }
             } finally {
                 mutable.value = mutable.value.copy(busy = false)
             }

@@ -15,7 +15,12 @@ class JoinInvitationViewModelTest {
     private val wards = FakeWardApi()
     private val store = PendingInvitationStore()
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined)
-    private val model = JoinInvitationViewModel(api, wards, store, scope) { YearMonth.of(2026, 11) }
+    private var sessionEnded = 0
+    private val model = JoinInvitationViewModel(
+        api, wards, store, scope,
+        today = { YearMonth.of(2026, 11) },
+        onSessionInvalid = { sessionEnded++; store.clear() }, // AppContainer.logout() clears the invitation
+    )
     private fun token(c: Char) = InviteToken.of(c.toString().repeat(43))!!
     private fun ready(role: String = InvitationRoles.MEMBER): JoinState.Ready {
         store.offer(token('a'))
@@ -165,6 +170,54 @@ class JoinInvitationViewModelTest {
         model.close()
         assertNull(store.current.value)
         assertEquals(JoinState.Idle, model.state.value)
+    }
+
+    @Test fun serverRejectedJoinMonthKeepsFormEditableAndAllowsCorrection() {
+        ready()
+        model.redeem("1960-01") // passes the client precheck; the server is the final judge
+        api.redeems.single().second.completeExceptionally(apiError(400, "INVALID_HOSPITAL_JOIN_MONTH"))
+        val rejected = model.state.value as JoinState.Ready
+        assertEquals(InviteFailure.INVALID_JOIN_MONTH, rejected.error)
+        assertFalse("The month field must stay editable", rejected.submitting)
+        assertNotNull("The invitation stays open for correction", store.current.value)
+        model.redeem("2021-07")
+        assertEquals(listOf("1960-01", "2021-07"), api.redeems.map { it.first.hospitalJoinedOn })
+        api.redeems.last().second.complete(membership("ward-1"))
+        assertEquals(JoinState.Joined("ward-1"), model.state.value)
+        assertEquals(0, sessionEnded)
+    }
+
+    @Test fun userNotFoundOnJoinEndsSessionInsteadOfShowingRetryableError() {
+        ready()
+        model.redeem("2020-03")
+        api.redeems.single().second.completeExceptionally(apiError(401, "USER_NOT_FOUND"))
+        assertEquals(1, sessionEnded)
+        assertNull(store.current.value)
+        assertEquals(JoinState.Idle, model.state.value)
+        assertEquals(1, api.redeems.size) // never resent
+    }
+
+    @Test fun userNotFoundOnPreviewAndResultCheckAlsoEndsSession() {
+        store.offer(token('a'))
+        api.previews.single().second.completeExceptionally(apiError(401, "USER_NOT_FOUND"))
+        assertEquals(1, sessionEnded)
+        assertNull(store.current.value)
+
+        ready()
+        model.redeem("2020-03")
+        api.redeems.single().second.completeExceptionally(network())
+        model.checkResult()
+        wards.wardCalls.single().completeExceptionally(apiError(401, "USER_NOT_FOUND"))
+        assertEquals(2, sessionEnded)
+        assertEquals(JoinState.Idle, model.state.value)
+    }
+
+    @Test fun genericUnauthorizedDoesNotForceLogoutBecauseRefreshFailureAlreadyEndsSession() {
+        ready()
+        model.redeem("2020-03")
+        api.redeems.single().second.completeExceptionally(apiError(401, "UNAUTHORIZED"))
+        assertEquals(InviteFailure.UNAUTHORIZED, (model.state.value as JoinState.Ready).error)
+        assertEquals(0, sessionEnded)
     }
 
     @Test fun clearedViewModelCancelsWork() {

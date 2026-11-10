@@ -54,6 +54,8 @@ class JoinInvitationViewModel(
     private val store: PendingInvitationStore,
     scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate),
     private val today: () -> YearMonth = { YearMonth.now() },
+    /** Ends the local session (and with it this invitation) when the server no longer knows the account. */
+    private val onSessionInvalid: () -> Unit = {},
 ) : ViewModel(scope) {
     private val scope = scope
     private val mutable = MutableStateFlow<JoinState>(JoinState.Idle)
@@ -73,7 +75,9 @@ class JoinInvitationViewModel(
     }
 
     private fun apply(owner: PendingInvitation, next: JoinState) {
-        if (active?.seq == owner.seq) mutable.value = next
+        if (active?.seq != owner.seq) return
+        mutable.value = next
+        if ((next as? JoinState.Failed)?.failure?.endsSession == true) onSessionInvalid()
     }
 
     private fun loadPreview(owner: PendingInvitation, notice: String?) {
@@ -93,7 +97,7 @@ class JoinInvitationViewModel(
     fun retryPreview() {
         val owner = active ?: return
         val failed = mutable.value as? JoinState.Failed ?: return
-        if (!failed.failure.endsInvitation) loadPreview(owner, null)
+        if (!failed.failure.endsInvitation && !failed.failure.endsSession) loadPreview(owner, null)
     }
 
     fun redeem(joinedOnInput: String) {
@@ -123,7 +127,7 @@ class JoinInvitationViewModel(
                         if (it) JoinState.Joined(wardId) else JoinState.Failed(failure)
                     } ?: JoinState.Uncertain(ready.preview)
                     failure == InviteFailure.ALREADY_MEMBER -> JoinState.AlreadyMember(wardId)
-                    failure.endsInvitation -> JoinState.Failed(failure)
+                    failure.endsInvitation || failure.endsSession -> JoinState.Failed(failure)
                     else -> ready.copy(submitting = false, error = failure)
                 }
             }
@@ -152,7 +156,7 @@ class JoinInvitationViewModel(
                 throw e
             } catch (e: Exception) {
                 val failure = e.toInviteFailure()
-                if (failure.endsInvitation) JoinState.Failed(failure)
+                if (failure.endsInvitation || failure.endsSession) JoinState.Failed(failure)
                 else JoinState.Uncertain(preview, error = failure)
             }
             apply(owner, next)
