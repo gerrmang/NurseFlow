@@ -9,6 +9,12 @@ data class WardMembershipResult(
     val wardName: String,
     val roles: List<WardRole>,
     val canViewWardCalendar: Boolean,
+    val hospitalName: String?,
 )
 
-data class BootstrapWardCommand(val name: String, val timeZone: String, val bootstrapCode: String)
+data class CreateWardCommand(
+    val hospitalSource: String,
+    val hospitalExternalId: String,
+    val wardName: String,
+    val timeZone: String,
+)

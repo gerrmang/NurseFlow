@@ -8,8 +8,6 @@ nurseflow:
       redirect-uris: http://localhost:5173/auth/kakao/callback
     session:
       secret: test-only-session-secret-0123456789-abcdef
-  bootstrap:
-    code: test-bootstrap-code
   hospital:
     hira:
       service-key: nurseflow+test/hira=key==

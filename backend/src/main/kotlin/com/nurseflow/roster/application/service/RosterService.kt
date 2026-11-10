@@ -18,10 +18,10 @@ import com.nurseflow.roster.persistence.entity.DbRoster
 import com.nurseflow.roster.persistence.entity.DbSlot
 import com.nurseflow.roster.persistence.entity.NewSlot
 import com.nurseflow.roster.persistence.repository.RosterJdbcRepository
-import com.nurseflow.roster.persistence.repository.ReplayLookup
+import com.nurseflow.common.idempotency.MutationReplayRepository
+import com.nurseflow.common.idempotency.ReplayLookup
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
-import java.security.MessageDigest
 import java.time.Instant
 import java.time.LocalDate
 import java.time.YearMonth
@@ -31,6 +31,7 @@ import java.util.UUID
 class RosterService(
     private val repo: RosterJdbcRepository,
     private val mapper: JsonMapper,
+    private val replays: MutationReplayRepository,
 ) {
     private val validator = RosterRuleValidator()
     private val diagnosticList = object : TypeReference<List<RuleDiagnostic>>() {}
@@ -584,18 +585,14 @@ class RosterService(
     )
 
     private fun <T> replay(key: UUID, action: String, payload: Any, type: Class<T>): T? =
-        when (val result = repo.replay(key, action, requestHash(payload), type)) {
+        when (val result = replays.replay(key, action, replays.requestHash(payload), type)) {
             ReplayLookup.Missing -> null
             ReplayLookup.Conflict -> throw BusinessException(ErrorCode.IDEMPOTENCY_KEY_REUSED)
             is ReplayLookup.Found -> result.value
         }
 
     private fun recordReplay(key: UUID, action: String, payload: Any, response: Any) =
-        repo.recordReplay(key, action, requestHash(payload), response)
-
-    private fun requestHash(payload: Any): String = MessageDigest.getInstance("SHA-256")
-        .digest(mapper.writeValueAsBytes(payload))
-        .joinToString("") { "%02x".format(it) }
+        replays.recordReplay(key, action, replays.requestHash(payload), response)
 
     private fun checkRevision(roster: DbRoster, ifMatch: String) {
         if (ifMatch != "\"${etag(roster.id, roster.revision)}\"") {

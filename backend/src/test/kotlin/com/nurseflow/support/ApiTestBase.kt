@@ -27,10 +27,9 @@ abstract class ApiTestBase {
     @BeforeEach
     fun resetDatabase() {
         http = HttpTestClient(port, mapper)
-        listOf("hospitals", "hospital_dataset_imports", "audit_events", "auth_web_login_attempts", "ward_invitations", "ward_career_policies", "auth_refresh_tokens", "mutation_replays", "generation_jobs", "approved_absences",
+        listOf("hospitals", "hospital_dataset_imports", "staff_adjustments", "audit_events", "auth_web_login_attempts", "ward_invitations", "ward_career_policies", "auth_refresh_tokens", "mutation_replays", "generation_jobs", "approved_absences",
             "roster_slots", "rosters", "shift_types", "nurses", "ward_teams", "ward_memberships", "users", "wards",
         ).forEach { table -> runCatching { jdbc.update("DELETE FROM $table") } }
-        jdbc.update("UPDATE bootstrap_state SET consumed=FALSE WHERE state_id=1")
     }
 
     /** Creates a user row and returns a valid NurseFlow access token for it. */
