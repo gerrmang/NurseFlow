@@ -137,9 +137,9 @@ class StaffService(
     @Transactional
     fun updateStaff(wardId: UUID, nurseId: UUID, command: StaffInputCommand, actor: String): StaffResult {
         wards.requireAdmin(wardId, actor)
-        // Only a change of `active` alters team membership, so a rename does not wait on the ward lock.
-        val activeChanges = requireStaff(wardId, nurseId).active != command.active
-        if (activeChanges) lockWard(wardId)
+        // Always under the ward lock and read after it: deciding whether to lock from an unlocked read let a
+        // concurrent activation + reorder slip between the read and this write (duplicate team positions).
+        lockWard(wardId)
         val current = requireStaff(wardId, nurseId)
         repo.updateStaff(nurseId, command.displayName.trim(), command.qualifications.distinct(), command.active)
         if (current.active && !command.active && current.teamOrder != null) {
@@ -229,7 +229,8 @@ class StaffService(
     @Transactional
     fun confirmProfile(wardId: UUID, nurseId: UUID, actor: String): StaffResult {
         wards.requireAdmin(wardId, actor)
-        val nurse = requireStaff(wardId, nurseId)
+        // Row lock: the previous values written to the history must be the ones this change replaces.
+        val nurse = repo.lockStaff(wardId, nurseId) ?: throw BusinessException(ErrorCode.NURSE_NOT_FOUND)
         val start = nurse.careerStartedOn ?: throw BusinessException(ErrorCode.PROFILE_NOT_SUBMITTED)
         val context = context(wardId)
         if (nurse.status() != ProfileStatus.CONFIRMED) {
@@ -247,7 +248,8 @@ class StaffService(
     @Transactional
     fun setProfileAsAdmin(wardId: UUID, nurseId: UUID, input: ProfileInput, actor: String): StaffResult {
         wards.requireAdmin(wardId, actor)
-        val nurse = requireStaff(wardId, nurseId)
+        // Row lock: concurrent edits are recorded as O -> A -> B, and a same-value save becomes a no-op.
+        val nurse = repo.lockStaff(wardId, nurseId) ?: throw BusinessException(ErrorCode.NURSE_NOT_FOUND)
         val context = context(wardId)
         validate(input, context)
         val unchanged = nurse.status() == ProfileStatus.CONFIRMED &&
