@@ -86,6 +86,16 @@ class PublishedRosterDeviceTest {
             waitText("D · 07:00–15:00")
             assertFalse(hasText("병동 전체"))
             assertFalse(hasText("이번 달 배정된 근무가 없습니다"))
+            container.session.logout()
+            waitText("카카오 로그인")
+            login(container, "admin")
+            waitText("가상 공개 병동")
+            assertApiCode("NURSE_IDENTITY_REQUIRED") { container.api.publishedMine(ward, month.toString()) }
+            click("가상 공개 병동")
+            waitText("본인 근무표에 연결된 간호사 정보가 없습니다.")
+            assertFalse(hasText("이 병동의 근무표를 볼 권한이 없어요."))
+            click("병동 전체 보기")
+            waitText("07:00–15:00 · 가상 근무자 limited")
             passed = true
         } finally {
             try {

@@ -123,6 +123,27 @@ class PublishedRosterViewModelTest {
         assertEquals(RosterContent.Forbidden, model.state.value.content)
     }
 
+    @Test fun missingNurseIdentityIsDistinctFromPermissionDenialAndAllowsWardView() {
+        val api = FakeApi()
+        val model = vm(api)
+        api.mine[0].second.completeExceptionally(ApiException(403, "NURSE_IDENTITY_REQUIRED", "본인 근무표를 조회할 수 없습니다."))
+        assertEquals(RosterContent.NurseIdentityRequired, model.state.value.content)
+        model.selectMode(RosterMode.WARD)
+        api.ward.single().second.complete(PublishedWardCalendarDto("2026-11", "Asia/Seoul", emptyList()))
+        assertEquals(RosterMode.WARD, model.state.value.mode)
+        assertTrue(model.state.value.content is RosterContent.Ward)
+    }
+
+    @Test fun missingNurseIdentityDoesNotGrantWardPermission() {
+        val api = FakeApi()
+        val model = vm(api, canViewWard = false)
+        api.mine[0].second.completeExceptionally(ApiException(403, "NURSE_IDENTITY_REQUIRED", "본인 근무표를 조회할 수 없습니다."))
+        assertEquals(RosterContent.NurseIdentityRequired, model.state.value.content)
+        model.selectMode(RosterMode.WARD)
+        assertEquals(RosterMode.MINE, model.state.value.mode)
+        assertTrue(api.ward.isEmpty())
+    }
+
     @Test fun nonMemberNotFoundIsNotShownAsUnpublished() {
         val api = FakeApi()
         val model = vm(api)

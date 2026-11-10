@@ -30,7 +30,7 @@ Android SDK의 `adb.exe`를 PATH에 설정한다. 별도 임시/읽기 전용 �
 
 ```powershell
 $env:NURSEFLOW_ROSTER_E2E = 'true'
-.\gradlew.bat test --tests com.nurseflow.support.AndroidRosterE2eServerTest --no-daemon
+.\gradlew.bat test --tests com.nurseflow.support.AndroidRosterE2eServerTest --rerun --no-daemon
 ```
 
 두 번째 터미널에서 `android/`로 이동해 실행한다. loopback 제어 포트가 준비된 뒤 시작한다. 아래 기기 번호는 검증용 에뮬레이터의 번호로 맞춘다. Gradle의 전체 기기 검사는 종료 시 APK를 제거할 수 있어 별도 설치가 필요하다.
@@ -69,6 +69,14 @@ Android 앱 업데이트만 필요하다. 서버 배포·데이터 이전은 없
 ## 남은 위험과 후속 작업
 
 외부 Kakao 인증 성공 및 운영 서버·물리 기기 검증은 이번 로컬 실서버 검사에 포함하지 않는다. GitHub CI 성공은 위 실행에서 확인했으며 브랜치 보호·독립 승인 여부는 확인하지 않았다. 전체 근무 코드 표시에는 후속 서버 계약이 필요하다.
+
+## PR 리뷰 P3 수정 검증 (2026-11-10)
+
+- `209de0d`의 COMMENT 리뷰에서 지적한 간호사 미연결 관리자 안내를 수정했다. `NURSE_IDENTITY_REQUIRED`를 일반 403과 구분하고 "본인 근무표에 연결된 간호사 정보가 없습니다."를 표시한다. 전체 조회 권한이 있는 경우에만 "병동 전체 보기" 버튼으로 이동한다. 서버 권한·API 계약은 변경하지 않는다.
+- JVM 회귀 2개를 추가해 오류 구분·전체 전환과 전체 권한 없는 경우 API 미호출을 확인했다. 단위 테스트·앱/계측 APK 빌드·Lint 성공: 41개 통과·실패/오류/건너뜀 0, Lint 오류 0·기존 경고 33개.
+- 일반 기기 검사 재실행 성공: XML 23개 중 18개 통과·5개 opt-in 건너뜀·실패/오류 0. B9a opt-in 실서버 검사도 `OK (1 test)`, 11.790초와 서버 `BUILD SUCCESSFUL` 확인. 기존 공개·재공개·월 이동·계정 격리 시나리오에 관리자 로그인 → 실제 `NURSE_IDENTITY_REQUIRED` → 올바른 안내 → 버튼으로 전체 공개본 조회 성공을 추가했다.
+- 재실행 시 환경변수는 Gradle 테스트 캐시 입력이 아니므로, 위 재현 명령에 `--rerun`을 추가해 서버 테스트의 실제 실행을 보장한다.
+- 백엔드 전체 검사는 서버 코드가 바뀌지 않아 생략했다. GitHub CI는 PR에 수정 커밋을 푸시한 뒤 확인한다. 변경된 앱 배포로 반영하며 서버 배포·DB 이전은 없다. 되돌리기는 이 P3 수정 커밋을 되돌린 앱 배포다.
 
 ## 최종 확인
 

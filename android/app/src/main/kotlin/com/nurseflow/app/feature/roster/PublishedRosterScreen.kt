@@ -43,6 +43,12 @@ fun PublishedRosterScreen(wardName: String, entry: Int, viewModel: PublishedRost
                 Text("아직 확정된 근무표가 없습니다", style = MaterialTheme.typography.titleMedium)
                 Text(monthLabel(state.month))
             }
+            RosterContent.NurseIdentityRequired -> Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("본인 근무표에 연결된 간호사 정보가 없습니다.")
+                if (viewModel.canViewWard) {
+                    Button(onClick = { viewModel.selectMode(RosterMode.WARD) }) { Text("병동 전체 보기") }
+                }
+            }
             RosterContent.Forbidden -> Text("이 병동의 근무표를 볼 권한이 없어요.")
             is RosterContent.Retryable -> Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(content.message)

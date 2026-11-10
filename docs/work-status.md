@@ -16,8 +16,7 @@
 | A1 초대·경력 월 | `feat/invitation-24h-career-month` | #27 | `dev` 병합 완료 | 병합 확인 | 없음 |
 | B1 Android Kakao 세션 | `feat/android-kakao-session` | #30 | `dev` 병합 완료 (2026-11-09, 일반 병합 커밋 `9239fa6`) | 로컬 단위·기기·실서버 검증은 [`B1 검증 기록`](../android/B1-verification.md)에 기록. GitHub CI·PR 리뷰 여부는 별도 확인 | 기록된 미해결 P1 없음. 병합 방식은 아래 참고 |
 | A2 웹 세션 API | `feat/auth-web-session-v2` | #33 | PR 열림. Codex 리뷰(P2 1건)와 hyen11 리뷰(P3·P4·P5 각 1건) 지적 모두 수정. 스쿼시 병합 대기 | 2026-11-09 로컬 `./gradlew test --offline`: 108건 통과, 건너뜀 1. 동시 state 테스트(`FOR UPDATE` 제거 변이 3/3 실패)와 client_secret 전달(전달 줄 제거 변이 실패) 검출력 확인. 실제 Kakao E2E 미검증(목업만) | 없음 |
-
-| B9a Android 공개 근무표 조회 | `feat/android-published-roster` (`dev` `fa47a5a` 통합) | [#34](https://github.com/gerrmang/NurseFlow/pull/34) | 구현·기기·실서버 검증 완료, 구현 head `f4cd1ed` CI 통과. PR 열림·스쿼시 병합 대기 | [B9a 검증 기록](../android/B9a-verification.md), 아래 최종 검증 참조 | 기존 P2 해결, 확인된 미해결 지적 없음 |
+| B9a Android 공개 근무표 조회 | `feat/android-published-roster` (`dev` `fa47a5a` 통합) | [#34](https://github.com/gerrmang/NurseFlow/pull/34) | 구현·기기·실서버 검증 완료. PR P3 수정·자체검증 완료, 재리뷰·스쿼시 병합 대기. 최신 CI는 PR checks 참조 | [B9a 검증 기록](../android/B9a-verification.md), 아래 최종 검증 참조 | 기존 P2 해결, P3 수정 후 재리뷰 대기 |
 | B2 웹 기반 세션 | `feat/web-foundation-session` | 미개설 | 미착수. A2 계약에 의존 | 해당 없음 | 없음 |
 | 에이전트 지침 정합성 | `docs/agent-guidance-alignment` | #32 | `dev` 병합 완료 (2026-11-09, 일반 병합 커밋 `ab8347d`. 스쿼시 원칙에서 벗어남) | `git diff --check` 통과. GitHub Actions `Verify` PR 실행 성공, `dev` push 실행 성공 | 없음 |
 | A3 이후 | 해당 없음 | 미개설 | 미착수 | 해당 없음 | 없음 |
@@ -77,6 +76,15 @@
 - PR 구현 head `f4cd1ed64a19097973be1cbff0dcf7066391daad`에서 GitHub Actions [Verify run 42613579824](https://github.com/gerrmang/NurseFlow/actions/runs/42613579824)의 `Backend tests`(1분)·`Android debug build`(1분 14초) 성공을 확인했다. Vercel 및 Vercel Preview Comments도 성공. 강제 보호·승인 규칙은 확인하지 않았다.
 - A2 통합 상태의 B9a 실서버 기기 E2E를 재실행해 `OK (1 test)`, 13.549초, 테스트 status 0과 대응 서버 `BUILD SUCCESSFUL`을 확인했다. 최종 문서 갱신 뒤 후속 CI도 확인한다. 병합은 하지 않는다.
 - GitHub 연결 도구는 PR 생성에서 403을 반환해, 정상 인증된 로컬 GitHub CLI로 생성했다. 로컬 DB 파일은 미추적 상태로 보존했다. 같은 worktree·브랜치에서 PR #34의 후속 검토를 이어간다.
+
+## B9a PR 리뷰 P3 수정 (2026-11-10, Codex)
+
+- 리뷰 기준: PR #34의 `209de0db506429050885968e9cd2c3d81cc14192`, gerrmang의 COMMENT 리뷰 1건. 간호사 연결 기록이 없는 관리자에게 `NURSE_IDENTITY_REQUIRED` 403을 일반 권한 거부로 안내하던 P3를 확인했다.
+- `RosterContent.NurseIdentityRequired`를 추가하고 일반 403보다 먼저 오류 코드로 분기한다. 화면에는 "본인 근무표에 연결된 간호사 정보가 없습니다."를 표시하고, 전체 조회 권한이 있을 때만 "병동 전체 보기" 버튼을 제공한다. 전체 조회 권한 검사와 서버 판정은 유지한다.
+- 신규 단위 회귀 2개: 간호사 정보 미연결과 권한 거부 구분 및 전체 전환, 정보 미연결이어도 전체 권한 없는 계정은 전체 API 미호출. 기존 실서버 기기 시나리오에 간호사 기록 없는 관리자 로그인·실제 오류 코드·정확한 안내·전체 보기 성공을 추가했다. 서버 코드·API·DB·환경 설정·의존성 변경은 없다.
+- Android `:app:testDebugUnitTest :app:assembleDebug :app:assembleDebugAndroidTest :app:lintDebug`: 성공. XML 41개 통과, 실패/오류/건너뜀 0. Lint 오류 0·기존 경고 33개. `:app:connectedAndroidTest` 성공: XML 23개 중 18개 통과·5개 opt-in 건너뜀·실패/오류 0. 이후 B9a opt-in 실서버 기기 검사 `OK (1 test)`, 11.790초, 테스트 status 0과 대응 서버 `BUILD SUCCESSFUL` 확인. 관리자 정보 미연결 안내와 전체 보기 버튼이 실제 서버 응답으로 동작한다.
+- opt-in 서버 검사가 캐시 결과를 재사용하는 것을 확인해, 실제 실행이 필요한 재현 명령에 `test --rerun`을 명시했다. 같은 worktree·브랜치에서 PR #34를 갱신하며, 로컬 DB는 보존하고 스쿼시 병합은 수행하지 않는다.
+- `git diff --check` 통과. 백엔드 전체 검사는 서버 코드 변경이 없어 재실행하지 않았고, 실서버 경로는 위 opt-in 서버 검사로 검증했다. 외부 Kakao 인증·운영 서버·물리 기기는 이번에 검증하지 않았다. 수정 후 독립 재리뷰는 아직 받지 않았다.
 
 ## 기타 브랜치
 

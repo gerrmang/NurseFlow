@@ -30,6 +30,7 @@ sealed interface RosterContent {
     data class Ward(val days: List<WardDay>) : RosterContent
     /** PUBLISHED_ROSTER_NOT_FOUND: nothing confirmed for the month yet. */
     data object NotPublished : RosterContent
+    data object NurseIdentityRequired : RosterContent
     data object Forbidden : RosterContent
     data class Retryable(val message: String) : RosterContent
     data class Failed(val message: String) : RosterContent
@@ -102,6 +103,7 @@ class PublishedRosterViewModel(
 
     private fun ApiException.toContent(): RosterContent = when {
         code == "PUBLISHED_ROSTER_NOT_FOUND" -> RosterContent.NotPublished
+        code == "NURSE_IDENTITY_REQUIRED" -> RosterContent.NurseIdentityRequired
         status == 403 || code == "WARD_CALENDAR_VIEW_REQUIRED" -> RosterContent.Forbidden
         status == 0 || status in 500..599 -> RosterContent.Retryable(message)
         else -> RosterContent.Failed(message)
