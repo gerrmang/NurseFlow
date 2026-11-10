@@ -73,8 +73,14 @@ class StaffService(
         wards.requireAdmin(wardId, actor)
         // Same lock as moving a nurse into a team, so no one can join a team while it is being deleted.
         lockWard(wardId)
-        repo.findTeam(wardId, teamId) ?: throw BusinessException(ErrorCode.TEAM_NOT_FOUND)
+        val team = repo.findTeam(wardId, teamId) ?: throw BusinessException(ErrorCode.TEAM_NOT_FOUND)
         if (repo.activeNursesInTeam(teamId) > 0) throw BusinessException(ErrorCode.TEAM_NOT_EMPTY)
+        // Inactive members leave the team too; otherwise reactivating one later would yield an active nurse
+        // in a deleted team (hidden in responses, impossible to order).
+        repo.staff(wardId).filter { it.teamId == teamId }.forEach {
+            repo.assignTeam(it.id, null)
+            adjust(wardId, it.id, "TEAM_ASSIGNED", team.name, null, actor)
+        }
         repo.deactivateTeam(teamId)
         audit.record(wardId, actor, "TEAM_DELETED", teamId.toString())
     }
@@ -142,6 +148,11 @@ class StaffService(
         lockWard(wardId)
         val current = requireStaff(wardId, nurseId)
         repo.updateStaff(nurseId, command.displayName.trim(), command.qualifications.distinct(), command.active)
+        if (!current.active && command.active && current.teamId != null && repo.findTeam(wardId, current.teamId) == null) {
+            // Data from before team deletion cleared inactive members: never reactivate into a deleted team.
+            repo.assignTeam(nurseId, null)
+            adjust(wardId, nurseId, "TEAM_ASSIGNED", context(wardId).teams[current.teamId]?.name, null, actor)
+        }
         if (current.active && !command.active && current.teamOrder != null) {
             // An inactive nurse leaves the team order; on reactivation they are placed again like a new member,
             // so they can never share a position with someone ordered meanwhile.
@@ -186,9 +197,10 @@ class StaffService(
     @Transactional
     fun reorderTeam(wardId: UUID, teamId: UUID, nurseIds: List<UUID>, actor: String): List<StaffResult> {
         wards.requireAdmin(wardId, actor)
-        repo.findTeam(wardId, teamId) ?: throw BusinessException(ErrorCode.TEAM_NOT_FOUND)
         if (nurseIds.toSet().size != nurseIds.size) throw BusinessException(ErrorCode.INVALID_REQUEST)
         lockWard(wardId)
+        // Checked after the lock: a team deleted meanwhile must not accept an (empty) order.
+        repo.findTeam(wardId, teamId) ?: throw BusinessException(ErrorCode.TEAM_NOT_FOUND)
         val members = repo.activeTeamMembers(teamId).associateBy { it.id }
         if (members.keys != nurseIds.toSet()) throw BusinessException(ErrorCode.TEAM_ORDER_STALE)
         nurseIds.forEachIndexed { index, nurseId ->

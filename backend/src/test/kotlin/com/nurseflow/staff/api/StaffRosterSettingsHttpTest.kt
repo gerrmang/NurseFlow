@@ -219,6 +219,25 @@ class StaffRosterSettingsHttpTest : ApiTestBase() {
     }
 
     @Test
+    fun `deleting a team releases its inactive members so they never come back into a deleted team`() {
+        val a = team("A팀")
+        val n = nurse("가상 휴직", a)
+        http.put("${base()}/staff/$n", mapOf("displayName" to "가상 휴직", "active" to false), admin)
+
+        assertEquals(204, http.delete("${base()}/teams/$a", admin).status)
+        http.put("${base()}/staff/$n", mapOf("displayName" to "가상 휴직", "active" to true), admin)
+
+        val back = staff().single()
+        assertTrue(back.get("team").isNull)
+        assertEquals(null, jdbc.queryForObject("SELECT team_id FROM nurses WHERE nurse_id=?", UUID::class.java, UUID.fromString(n)))
+        assertEquals("TEAM_NOT_FOUND", order(a).code)
+        val moved = http.get("${base()}/staff/$n/adjustments", admin).json!!.get("items").toList()
+            .first { it.get("kind").asString() == "TEAM_ASSIGNED" }
+        assertEquals("A팀", moved.get("before").asString())
+        assertTrue(moved.get("after").isNull)
+    }
+
+    @Test
     fun `changes written in one request are listed in reverse write order`() {
         val n = nurse("가상 간호사", team("A팀"))
 

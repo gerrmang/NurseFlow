@@ -2655,7 +2655,10 @@ components:
           enum: [TEAM_ORDER, SENIOR_ELIGIBLE, STAGE_OVERRIDE, TEAM_ASSIGNED, PROFILE_SET_BY_ADMIN, PROFILE_CONFIRMED]
         before:
           type: [string, 'null']
-          description: 바뀌기 전 값(예 팀 순서 "3", 단계 "2", 경력 "2020-03 / 과장")
+          description: |
+            바뀌기 전 값을 화면에 보여 줄 문자열로 담는다(예 팀 순서 "3", 단계 "2", 경력 "2020-03 / 과장").
+            TEAM_ASSIGNED는 팀 ID가 아니라 변경 당시의 팀 이름이다. 팀 이름이 나중에 바뀌거나 팀이 삭제돼도 그때의 팀을 보여 준다.
+            팀 삭제 때 남아 있던 비활성 간호사의 팀 해제도 TEAM_ASSIGNED(팀 이름 → null)로 남는다.
         after:
           type: [string, 'null']
         actorUserId:
