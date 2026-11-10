@@ -19,10 +19,10 @@
 | B2 웹 기반 세션 | `feat/web-foundation-session` | 미개설 | 미착수. A2 PR #33이 `dev`에 병합되어 선행 조건 충족 | 해당 없음 | 없음 |
 | B9a Android 공개 근무표 조회 | `feat/android-published-roster` (`dev` `fa47a5a` 통합) | [#34](https://github.com/gerrmang/NurseFlow/pull/34) | `dev` 병합 완료 (2026-11-10, 스쿼시 병합 커밋 `d1b8729`). 구현·기기·실서버 검증과 PR P3 수정 완료, 병합 전 Backend tests·Android debug build 통과 | [B9a 검증 기록](../android/B9a-verification.md), 아래 최종 검증 참조 | 기존 P2 해결, P3 수정 후 재리뷰 대기 |
 | 에이전트 지침 정합성 | `docs/agent-guidance-alignment` | #32 | `dev` 병합 완료 (2026-11-09, 일반 병합 커밋 `ab8347d`. 스쿼시 원칙에서 벗어남) | `git diff --check` 통과. GitHub Actions `Verify` PR 실행 성공, `dev` push 실행 성공 | 없음 |
-| A3 병원 검색 API | `feat/hospital-search` | #35 | PR 열림. Codex 리뷰 P2 1건·재리뷰 P3 1건, hyen11 계약 리뷰 P3 2건 모두 수정(P1/P2 없음). hyen11 수정분 확인·CI 재실행(2026-11-10 새벽 GitHub Actions 장애로 실패)·스쿼시 병합 대기 | 2026-11-10 야간 QA: `./gradlew test --offline` 133건 통과(건너뜀 3). 실제 2026.9. 파일 79,899곳 누락 없이 적재 0.7초, 검색 15~40ms. 임시 H2 파일 DB로 서버 2회 기동: 첫 기동 적재·재기동 건너뜀, 토큰 없는 검색 401. 실시간 API 실키 호출은 200 정상이나 10~17초 | 없음 |
-| A4 병동 생성 | `feat/ward-self-create` | #36 | 다른 브랜치에서 진행 중(이 브랜치 기준 미병합) | 해당 브랜치 work-status 참조 | 해당 브랜치 참조 |
-| A5 경력·팀 내 순서 | `feat/staff-admin-career-adjust` (`/private/tmp/NurseFlow-a5`) | 미개설(#36 병합 뒤 개설) | 구현 완료. 결정 10·11 반영. 팀 안 드래그 순서·선임 자격·편성 단계 조정·조정 이력 | 2026-11-10 `./gradlew test --offline` 144건 통과(건너뜀 4). Codex 리뷰 P2 2건·P3·P4 수정 | 없음 |
-| A6·A7 이후 | 해당 없음 | 미개설 | 미착수. A6은 A4 병합, A7은 A6 병합 대기. 결정 4(보류)·9 반영 예정 | 해당 없음 | 없음 |
+| A3 병원 검색 API | `feat/hospital-search` | #35 | `dev` 병합 완료 (2026-11-10, 스쿼시 병합 커밋 `23af850`) | 병합 전 `./gradlew test --offline` 134건 통과, CI 통과. 실제 2026.9. 파일 79,899곳 적재 0.7초, 검색 15~40ms | 없음 |
+| A4 병동 생성 | `feat/ward-self-create` | #36 | `dev` 병합 완료 (2026-11-10, 스쿼시 병합 커밋 `6a2cf29`) | 2026-11-10 `./gradlew test --offline` 138건 통과(건너뜀 4). 같은 키 동시 요청 테스트는 중복 키 처리 제거 변이 3/3 실패로 검출력 확인. 이전 스키마 H2에 schema.sql 두 번 적용 테스트 통과 | 없음 |
+| A5 경력·팀 내 순서 | `feat/staff-admin-career-adjust` (`/private/tmp/NurseFlow-a5`) | #37 | PR 열림. 결정 10·11 반영. 팀 안 드래그 순서·선임 자격·편성 단계 조정·조정 이력. Codex 리뷰 P2 2건·P3·P4 수정. 최신 `dev`(A4) 반영. hyen11 계약 검토(`5feb4f7`)·스쿼시 병합 대기 | 2026-11-10 최신 `dev`(A4) 병합 결과에서 `./gradlew test --offline` 154건 통과(건너뜀 4) | 없음 |
+| A6·A7 이후 | 해당 없음 | 미개설 | 미착수. A6은 A4 병합으로 착수 가능, A7은 A6 병합 대기. 결정 4(보류)·9 반영 예정 | 해당 없음 | 없음 |
 
 ## 리뷰 상태
 
@@ -114,6 +114,14 @@ Claude와 Codex가 같은 진행 기록을 사용한다. PR 또는 정기 리뷰
 | `/Users/sihwan/Documents/ChatGPT/NurseFlow` | `feat/hospital-search` | `a68b578984da0ea3d8c4f93b7044b1ea8eacf671` | 미커밋 변경 없음 | 2026-11-10 | Claude | 위 P3 수정(모든 필드 2,000자 제한)과 테스트 보강. 야간 QA 결과는 A3 행 참조 |
 | GitHub PR #35 리뷰 | `feat/hospital-search` | `68b59814641f6341e0bfe611946db8b713ef3834` | 해당 없음(PR diff 기준) | 2026-11-10 | hyen11 | B4a/B4b 소비자 관점 계약 검토. P1/P2 없음. 응답 필드·200 빈 결과/503 구분은 화면에 충분. P3 2건: 정규화 후 최소 길이의 계약 명시·공통 검증, 기호 무시·정렬의 보장 범위 명시 |
 | `/Users/sihwan/Documents/ChatGPT/NurseFlow` | `feat/hospital-search` | `a3755fd3438ac30d3f168cc82e631c4a627ba12b` | 미커밋 변경 없음 | 2026-11-10 | Claude | 위 P3 2건 수정: 두 경로 공통 최소 길이 검증, 대체 경로는 외부 API 일치·정렬을 따른다고 계약에 명시. hyen11 재확인 전 |
+| `/Users/sihwan/Documents/ChatGPT/NurseFlow` | `feat/ward-self-create` | `aa91e6915da63f22efa82c89196dc69f10a1d56e` | 미커밋 변경 없음 | 2026-11-10 | Codex | A4 전체 읽기 전용 리뷰. P1/P2 없음. 권한 분리·목록 기반 병원 검증·멱등 트랜잭션 경계 확인. P3(테스트) 업그레이드 검사가 메모리 DB만 사용, P4(문서) breakdown 요청 예시 불일치 |
+| `/Users/sihwan/Documents/ChatGPT/NurseFlow` | `feat/ward-self-create` | `918e34682b125370fe4f472ddfbfc247c2013eb8` | 미커밋 변경 없음 | 2026-11-10 | Claude | 위 P3·P4 수정: H2 파일 DB를 닫고 다시 열어 업그레이드 검증, 요청 예시 정정 |
+| `/Users/sihwan/Documents/ChatGPT/NurseFlow` | `feat/ward-self-create` | `6a284e0fc5078bfdb07d2dc179acbe391e4da1a1` | 미커밋 변경 없음 | 2026-11-10 | Claude(/code-review) | 10건 중 7건 수정: 초대 미리보기 hospitalName, 공백만 다른 재시도 replay, 멱등 저장소 공용화, 병원 확인 조회 순서·존재 확인 비용, 행 매퍼 중복, source 상수, 대체 경로 계약 명시. 미수정 3건(생성 횟수 제한, 잠금 시간 초과 시 500, replay JSON 형식 변경 호환)은 PR 코멘트에 사유와 함께 기록 |
+| `/Users/sihwan/Documents/ChatGPT/NurseFlow` | `feat/ward-self-create` | `4d3f73d7d4a5a4e7ac49851b430e928561491222` | 미커밋 변경 없음 | 2026-11-10 | Codex | 상한·공용 replay 이후 재리뷰. REQUEST CHANGES: P2 잠금을 기다린 같은 키 요청이 중복 오류로 실패, P3 새 오류 코드 계약 누락. roster 멱등 동작·잠금 순서·USER_NOT_FOUND는 문제없음 |
+| `/Users/sihwan/Documents/ChatGPT/NurseFlow` | `feat/ward-self-create` | `2ab2b92c9e9e8a436b0dbe04c8e12e1f45d612e7` | 미커밋 변경 없음 | 2026-11-10 | Claude | 위 P2·P3 수정: 계정 잠금 직후 replay 재확인, 같은 키 동시 테스트 강화(변이 3/3 검출), 계약·README 보강 |
+| `/Users/sihwan/Documents/ChatGPT/NurseFlow` | `feat/ward-self-create` | `fbbfe031f0f285da4d54357db497aa13a21cbc82` | 미커밋 변경 없음 | 2026-11-10 | Codex | P2 수정 확인: 잠금 뒤 replay 재확인은 READ_COMMITTED에서 타당, 부분 쓰기 없음, 계약·README 일치. 남은 P3(테스트): 동시 테스트가 경합 구간을 매번 강제하지 못함. 서비스에 테스트용 동기화 지점이 필요해 수정하지 않음 |
+| GitHub PR #36 리뷰 | `feat/ward-self-create` | `d82fa2da5778601b3ade50367005b143250e649b` | 해당 없음(PR diff 기준) | 2026-11-10 | hyen11 | P1~P3·P5 없음. P4(테스트) 2건: 잠금 뒤 replay 재확인 경로를 강제하지 못함, 다른 계정 같은 키 경합·롤백 미검증 |
+| `/Users/sihwan/Documents/ChatGPT/NurseFlow` | `feat/ward-self-create` | `bbd7b550202490ccdbed8f14823f2b03ca5b3da3` | 미커밋 변경 없음 | 2026-11-10 | Claude | 위 P4 2건 수정: 테스트 전용 하위 클래스로 순서 강제. 두 경로 변이 각 3/3 검출 |
 | `/private/tmp/NurseFlow-a5` | `feat/staff-admin-career-adjust` | `2a4967badad87b4781a4b30825ea04d6d3c48e2b` | 미커밋 변경 없음 | 2026-11-10 | Codex | A5 리뷰. P2 생성·활성 변경이 병동 잠금 밖, P2 비활성 간호사 순번 잔존, P3 동일 경력 재저장 이력, P4 계약 required·테스트·B5 범위. 권한·단계 범위·roster 코드 무영향 확인 |
 | `/private/tmp/NurseFlow-a5` | `feat/staff-admin-career-adjust` | `68c6b412ba1b16f71a347adfae4990b1dbd17e97` | 미커밋 변경 없음 | 2026-11-10 | Claude | 위 지적 모두 수정. Codex 재리뷰 전 |
 

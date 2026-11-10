@@ -9,8 +9,6 @@ enum class ErrorCode(val status: HttpStatus, val safeMessage: String) {
     ALREADY_WARD_MEMBER(HttpStatus.CONFLICT, "이미 이 병동에 소속되어 있습니다."),
     ADMIN_NURSE_RECORD_CONFLICT(HttpStatus.CONFLICT, "활성 간호사 기록이 연결된 계정은 관리자 초대를 수락할 수 없습니다."),
     ASSIGNMENTS_EXIST(HttpStatus.CONFLICT, "배정을 해제한 뒤 인력 수요를 변경해 주세요."),
-    BOOTSTRAP_CODE_INVALID(HttpStatus.FORBIDDEN, "병동 생성 코드가 올바르지 않습니다."),
-    BOOTSTRAP_DISABLED(HttpStatus.NOT_FOUND, "시연용 병동 생성이 비활성화되어 있습니다."),
     DATE_OUTSIDE_ROSTER(HttpStatus.BAD_REQUEST, "근무 날짜가 해당 월에 속하지 않습니다."),
     DRAFT_EXISTS(HttpStatus.CONFLICT, "해당 월의 초안이 이미 있습니다."),
     DUPLICATE_REQUIREMENT(HttpStatus.BAD_REQUEST, "날짜와 근무 유형 조합이 중복되었습니다."),
@@ -19,6 +17,7 @@ enum class ErrorCode(val status: HttpStatus, val safeMessage: String) {
     GENERATION_NOT_CANCELLABLE(HttpStatus.CONFLICT, "이미 종료된 자동배치 작업입니다."),
     GENERATION_TOO_LARGE(HttpStatus.UNPROCESSABLE_CONTENT, "자동배치 한도는 2000칸입니다."),
     HOSPITAL_JOIN_MONTH_REQUIRED(HttpStatus.BAD_REQUEST, "가입하려면 병원 입사 년월을 입력해 주세요."),
+    HOSPITAL_NOT_FOUND(HttpStatus.UNPROCESSABLE_CONTENT, "선택한 병원을 찾을 수 없습니다. 병원을 다시 검색해 주세요."),
     HOSPITAL_SEARCH_NOT_CONFIGURED(HttpStatus.SERVICE_UNAVAILABLE, "병원 검색 설정이 완료되지 않았습니다."),
     HOSPITAL_SEARCH_UNAVAILABLE(HttpStatus.SERVICE_UNAVAILABLE, "병원 정보 서비스에 일시적으로 연결할 수 없습니다. 잠시 후 다시 검색해 주세요."),
     IDEMPOTENCY_KEY_REUSED(HttpStatus.CONFLICT, "다른 요청에 이미 사용한 키입니다."),
@@ -69,6 +68,8 @@ enum class ErrorCode(val status: HttpStatus, val safeMessage: String) {
     USER_NOT_FOUND(HttpStatus.UNAUTHORIZED, "사용자 정보를 찾을 수 없습니다. 다시 로그인해 주세요."),
     WEB_CLIENT_REQUIRED(HttpStatus.FORBIDDEN, "허용되지 않은 웹 요청입니다."),
     WARD_ADMIN_REQUIRED(HttpStatus.FORBIDDEN, "관리자 권한이 필요합니다."),
+    WARD_ALREADY_CREATED(HttpStatus.CONFLICT, "같은 병원에 같은 이름의 병동을 이미 만들었습니다. 병동 목록을 확인해 주세요."),
     WARD_CALENDAR_VIEW_REQUIRED(HttpStatus.FORBIDDEN, "병동 전체 근무표 조회 권한이 없습니다."),
+    WARD_CREATION_LIMIT_REACHED(HttpStatus.CONFLICT, "한 계정이 만들 수 있는 병동 수를 모두 사용했습니다."),
     WARD_NOT_FOUND(HttpStatus.NOT_FOUND, "병동을 찾을 수 없습니다.");
 }

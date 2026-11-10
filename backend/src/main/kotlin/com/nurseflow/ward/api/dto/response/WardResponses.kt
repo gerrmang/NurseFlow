@@ -7,6 +7,7 @@ data class WardMembershipResponse(
     val wardName: String,
     val roles: List<String>,
     val canViewWardCalendar: Boolean,
+    val hospitalName: String?,
 )
 
 data class WardMembershipItems(val items: List<WardMembershipResponse>)

@@ -36,10 +36,11 @@ class InvitationRedemptionService(
         val invitation = repo.findByTokenHash(OpaqueToken.sha256Hex(token))
             ?: throw BusinessException(ErrorCode.INVITATION_NOT_FOUND)
         requireRedeemable(invitation, Instant.now())
-        val wardName = wardRepo.findWardName(invitation.wardId)
+        val ward = wardRepo.findWardLabel(invitation.wardId)
             ?: throw BusinessException(ErrorCode.INVITATION_NOT_FOUND)
         return InvitationPreview(
-            invitation.wardId, wardName, WardRole.valueOf(invitation.role), invitation.expiresAt, invitation.nurseId != null,
+            invitation.wardId, ward.name, WardRole.valueOf(invitation.role), invitation.expiresAt,
+            invitation.nurseId != null, ward.hospitalName,
         )
     }
 
@@ -76,8 +77,8 @@ class InvitationRedemptionService(
             throw BusinessException(ErrorCode.INVITATION_ALREADY_REDEEMED)
         }
         audit.record(invitation.wardId, subject, "INVITATION_REDEEMED", invitation.id.toString())
-        val wardName = wardRepo.findWardName(invitation.wardId)!!
-        return WardMembershipResult(invitation.wardId, wardName, listOf(role), canViewWardCalendar = true)
+        val ward = wardRepo.findWardLabel(invitation.wardId)!!
+        return WardMembershipResult(invitation.wardId, ward.name, listOf(role), canViewWardCalendar = true, ward.hospitalName)
     }
 
     private fun linkNurse(invitation: DbInvitation, subject: String) {
