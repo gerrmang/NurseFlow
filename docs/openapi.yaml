@@ -1165,30 +1165,53 @@ paths:
       tags: [Wards]
       operationId: listShiftTypes
       summary: 병동 근무 유형 조회
+      description: |
+        병동 구성원(관리자·간호사)이 조회한다. 기본은 활성 근무 유형만 반환하며
+        `includeInactive=true`이면 비활성 유형도 포함한다. 정렬은 `startTime`, `code` 순이다.
+        `policyRevision`은 이 병동의 근무 유형이 바뀔 때마다 1씩 늘어나는 병동 정책 revision이다
+        (근무 유형이 한 번도 바뀌지 않았으면 0).
+      parameters:
+        - name: includeInactive
+          in: query
+          required: false
+          schema:
+            type: boolean
+            default: false
       responses:
         '200':
-          description: 근무 유형 목록
+          description: 근무 유형 목록과 병동 정책 revision
           content:
             application/json:
               schema:
                 type: object
-                required: [items]
+                required: [items, policyRevision]
                 properties:
                   items:
                     type: array
                     items:
                       $ref: '#/components/schemas/ShiftType'
+                  policyRevision:
+                    type: integer
+                    minimum: 0
+                    description: 병동 정책 revision. 근무 유형 생성·수정·비활성화·재활성화마다 1 증가한다.
         '401':
           $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
+        '404':
+          description: WARD_NOT_FOUND (병동이 없거나 소속이 아님)
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ApiProblem'
     post:
       tags: [Wards]
       operationId: createShiftType
       summary: 근무 유형 생성
+      description: |
+        관리자만 호출할 수 있다. 같은 병동에서 `code`는 비활성 유형을 포함해 유일하다
+        (`SHIFT_TYPE_CODE_DUPLICATE`). 서로 다른 유형의 시간대가 겹치는 것은 허용한다.
+        `Idempotency-Key`는 받지 않는다. 같은 요청을 재시도하면 `code` 중복으로 409가 된다.
+        병동 단위로 직렬화되므로 같은 `code`를 동시에 만들면 하나만 201이다.
       x-required-role: WARD_ADMIN
-      parameters:
-        - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         required: true
         content:
@@ -1208,8 +1231,26 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '403':
           $ref: '#/components/responses/Forbidden'
+        '404':
+          description: WARD_NOT_FOUND
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ApiProblem'
         '409':
-          $ref: '#/components/responses/Conflict'
+          description: SHIFT_TYPE_CODE_DUPLICATE
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ApiProblem'
+        '422':
+          description: |
+            INVALID_SHIFT_INTERVAL(시작과 종료가 같음), SHIFT_SPANS_MIDNIGHT_MISMATCH(`spansMidnight`가 시각과 맞지 않음),
+            INVALID_SHIFT_MINUTES(인정시간이 근무시간에서 휴게를 뺀 값을 넘음)
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ApiProblem'
 
   /wards/{wardId}/shift-types/{shiftTypeId}:
     parameters:
@@ -1219,6 +1260,12 @@ paths:
       tags: [Wards]
       operationId: updateShiftType
       summary: 근무 유형/시간 갱신
+      description: |
+        관리자만 호출할 수 있는 전체 교체(full update)다. 생략한 선택 필드는 생성과 같은 기본값으로 다시 계산된다.
+        `active`를 생략하면 현재 값을 유지하고, `true`로 보내면 비활성 유형을 다시 켠다.
+        시간·휴게·인정시간·월 환산시간·종류·`spansMidnight`·활성 여부가 바뀌면 이 유형을 쓰는 DRAFT 근무표는
+        `needsRevalidation=true`가 된다. 표시 이름·코드만 바꾸면 표시하지 않는다.
+        이미 만들어진 근무 칸의 시각은 바뀌지 않는다. PUBLISHED 근무표는 영향받지 않는다.
       x-required-role: WARD_ADMIN
       requestBody:
         required: true
@@ -1233,14 +1280,57 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ShiftType'
+        '400':
+          $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
           $ref: '#/components/responses/Forbidden'
         '404':
-          $ref: '#/components/responses/NotFound'
+          description: WARD_NOT_FOUND 또는 SHIFT_TYPE_NOT_FOUND_IN_WARD
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ApiProblem'
         '409':
-          $ref: '#/components/responses/Conflict'
+          description: SHIFT_TYPE_CODE_DUPLICATE
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ApiProblem'
+        '422':
+          description: INVALID_SHIFT_INTERVAL, SHIFT_SPANS_MIDNIGHT_MISMATCH, INVALID_SHIFT_MINUTES
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ApiProblem'
+    delete:
+      tags: [Wards]
+      operationId: deactivateShiftType
+      summary: 근무 유형 비활성화
+      description: |
+        관리자만 호출할 수 있다. 행을 지우지 않고 `active=false`로 바꾼다(근무 칸이 참조하므로 삭제하지 않는다).
+        이미 비활성이어도 200이며 변경 없이 현재 값을 반환한다(정책 revision도 늘지 않는다).
+        비활성 유형은 새 필요 인원 입력에 쓸 수 없지만(`SHIFT_TYPE_NOT_FOUND`), 기존 근무 칸과 근무표 조회는 그대로다.
+        이 유형을 쓰는 DRAFT 근무표는 `needsRevalidation=true`가 된다.
+      x-required-role: WARD_ADMIN
+      responses:
+        '200':
+          description: 비활성화된 근무 유형
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ShiftType'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          description: WARD_NOT_FOUND 또는 SHIFT_TYPE_NOT_FOUND_IN_WARD
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ApiProblem'
 
   /wards/{wardId}/rosters:
     parameters:
@@ -2436,7 +2526,7 @@ components:
     ShiftType:
       type: object
       additionalProperties: false
-      required: [shiftTypeId, code, displayName, kind, startTime, endTime, spansMidnight, active]
+      required: [shiftTypeId, code, displayName, kind, startTime, endTime, spansMidnight, breakMinutes, recognizedMinutes, targetCreditMinutes, durationMinutes, active]
       properties:
         shiftTypeId:
           type: string
@@ -2452,14 +2542,34 @@ components:
           enum: [DAY, EVENING, NIGHT, OTHER]
         startTime:
           type: string
-          format: time
-          example: '19:00:00'
+          pattern: '^([01]\d|2[0-3]):[0-5]\d$'
+          description: 병동 현지 시각 HH:mm
+          example: '22:00'
         endTime:
           type: string
-          format: time
-          example: '07:00:00'
+          pattern: '^([01]\d|2[0-3]):[0-5]\d$'
+          description: 병동 현지 시각 HH:mm. `spansMidnight=true`이면 다음 날 시각이다.
+          example: '07:00'
         spansMidnight:
           type: boolean
+          description: 종료가 다음 날이면 true. `endTime < startTime`과 일치해야 한다.
+        durationMinutes:
+          type: integer
+          minimum: 1
+          description: 서버가 계산한 근무 구간 길이(분). 자정을 넘으면 `endTime - startTime + 1440`. 22:00~07:00은 540.
+        breakMinutes:
+          type: integer
+          minimum: 0
+          maximum: 240
+          description: 휴게 시간(분).
+        recognizedMinutes:
+          type: integer
+          minimum: 1
+          description: 실제 인정 근무시간(분). `durationMinutes - breakMinutes` 이하.
+        targetCreditMinutes:
+          type: integer
+          minimum: 0
+          description: 월 목표 환산 인정 시간(분). 이 근무 하나가 월 목표 시간에 채워 주는 분. 기본값은 `recognizedMinutes`. 월 목표 계산 자체는 A13에서 다룬다.
         active:
           type: boolean
     ShiftTypeInput:
@@ -2478,17 +2588,30 @@ components:
           enum: [DAY, EVENING, NIGHT, OTHER]
         startTime:
           type: string
-          format: time
-          example: '19:00:00'
+          pattern: '^([01]\d|2[0-3]):[0-5]\d$'
+          example: '22:00'
         endTime:
           type: string
-          format: time
-          example: '07:00:00'
+          pattern: '^([01]\d|2[0-3]):[0-5]\d$'
+          example: '07:00'
         spansMidnight:
           type: boolean
+        breakMinutes:
+          type: integer
+          minimum: 0
+          maximum: 240
+          default: 0
+        recognizedMinutes:
+          type: integer
+          minimum: 1
+          description: 생략하면 `durationMinutes - breakMinutes`.
+        targetCreditMinutes:
+          type: integer
+          minimum: 0
+          description: 생략하면 `recognizedMinutes`.
         active:
           type: boolean
-          default: true
+          description: 생성 시 생략하면 true. 수정 시 생략하면 현재 값 유지.
     CreateRosterRequest:
       type: object
       additionalProperties: false
@@ -2529,6 +2652,11 @@ components:
         confirmedBy:
           type: string
           format: uuid
+        needsRevalidation:
+          type: boolean
+          description: |
+            이 초안이 쓰는 근무 유형이 바뀌거나 비활성화되어 다시 검증해야 하면 true. PUBLISHED 근무표는 항상 false.
+            이 플래그를 지우는 동작은 후속 단위에서 다룬다.
     Roster:
       allOf:
         - $ref: '#/components/schemas/RosterSummary'
