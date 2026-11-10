@@ -19,10 +19,11 @@ class HospitalSearchService(
     private val hira: HiraHospitalClient,
 ) {
     fun search(query: String, page: Int, size: Int): HospitalSearchResult {
+        // Same rule on both paths: at least two letters or digits once spaces and symbols are removed.
+        val key = HospitalSearchName.of(query)
+        if (key.length < 2) throw BusinessException(ErrorCode.INVALID_REQUEST)
         val dataset = hospitals.latestImport(HospitalDatasetImporter.SOURCE)
         if (dataset != null && hospitals.hasActive(HospitalDatasetImporter.SOURCE)) {
-            val key = HospitalSearchName.of(query)
-            if (key.length < 2) throw BusinessException(ErrorCode.INVALID_REQUEST)
             return HospitalSearchResult(
                 items = hospitals.search(key, (page - 1) * size, size),
                 page = page,

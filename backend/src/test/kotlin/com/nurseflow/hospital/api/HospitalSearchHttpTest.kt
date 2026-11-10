@@ -104,6 +104,8 @@ class HospitalSearchHttpTest : ApiTestBase() {
             search(FakeHiraServer.TWO_HITS, "&page=101"),
             search(FakeHiraServer.TWO_HITS, "&size=21"),
             search(FakeHiraServer.TWO_HITS, "&size=abc"),
+            search("(가)"),
+            search("가 · !"),
         )
         invalid.forEach { response ->
             assertEquals(400, response.status, response.body)
