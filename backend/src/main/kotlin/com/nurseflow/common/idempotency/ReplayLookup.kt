@@ -1,4 +1,4 @@
-package com.nurseflow.roster.persistence.repository
+package com.nurseflow.common.idempotency
 
 sealed interface ReplayLookup<out T> {
     data object Missing : ReplayLookup<Nothing>

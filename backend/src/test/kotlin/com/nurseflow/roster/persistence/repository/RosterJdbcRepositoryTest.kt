@@ -1,5 +1,7 @@
 package com.nurseflow.roster.persistence.repository
 
+import com.nurseflow.common.idempotency.MutationReplayRepository
+import com.nurseflow.common.idempotency.ReplayLookup
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNull
@@ -28,6 +30,7 @@ data class ReplayProbe(val label: String, val revision: Int)
 class RosterJdbcRepositoryTest @Autowired constructor(
     private val jdbc: JdbcTemplate,
     private val repo: RosterJdbcRepository,
+    private val replays: MutationReplayRepository,
     transactionManager: PlatformTransactionManager,
 ) {
     private val tx = TransactionTemplate(transactionManager)
@@ -109,15 +112,15 @@ class RosterJdbcRepositoryTest @Autowired constructor(
     @Test
     fun `idempotency replay returns stored response only for the same operation and request`() {
         val key = UUID.randomUUID()
-        assertEquals(ReplayLookup.Missing, repo.replay(key, "assign:roster", "hash-a", ReplayProbe::class.java))
+        assertEquals(ReplayLookup.Missing, replays.replay(key, "assign:roster", "hash-a", ReplayProbe::class.java))
 
-        repo.recordReplay(key, "assign:roster", "hash-a", ReplayProbe("first", 2))
+        replays.recordReplay(key, "assign:roster", "hash-a", ReplayProbe("first", 2))
         assertEquals(ReplayLookup.Found(ReplayProbe("first", 2)),
-            repo.replay(key, "assign:roster", "hash-a", ReplayProbe::class.java))
+            replays.replay(key, "assign:roster", "hash-a", ReplayProbe::class.java))
         assertEquals(ReplayLookup.Conflict,
-            repo.replay(key, "assign:roster", "hash-b", ReplayProbe::class.java))
+            replays.replay(key, "assign:roster", "hash-b", ReplayProbe::class.java))
         assertEquals(ReplayLookup.Conflict,
-            repo.replay(key, "confirm:roster", "hash-a", ReplayProbe::class.java))
+            replays.replay(key, "confirm:roster", "hash-a", ReplayProbe::class.java))
         val stored: Int = jdbc.queryForObject("SELECT COUNT(*) FROM mutation_replays", Int::class.java)!!
         assertEquals(1, stored)
     }

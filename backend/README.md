@@ -15,7 +15,6 @@ Java 21 is required. Set these environment variables in the run configuration (n
 | `NURSEFLOW_KAKAO_REDIRECT_URIS` | Web login. Comma-separated **exact** callback URIs (for example `http://localhost:5173/auth/kakao/callback`), also registered in Kakao Developers. |
 | `NURSEFLOW_WEB_ALLOWED_ORIGINS` | Optional. Comma-separated `Origin` values allowed on `/api/v1/auth/web/*`. Empty → the origins of the redirect URIs. |
 | `NURSEFLOW_WEB_COOKIE_SECURE` | Optional, default `true`. Keep `true`; browsers treat `http://localhost` as secure. |
-| `NURSEFLOW_BOOTSTRAP_CODE` | Optional, demo only. Enables `POST /api/v1/wards` so the first signed-in user can create a ward and become `WARD_ADMIN`. Leave empty otherwise. |
 | `NURSEFLOW_HOSPITAL_DATASET_PATH` | Recommended. Path to the downloaded 「전국 병의원 및 약국 현황」 zip (data.go.kr dataset 15051059, updated quarterly) or its `병원정보서비스` CSV. Imported at startup when the file changed (about 80,000 rows in under a second); searches then run on this local copy in milliseconds. A file with fewer than 10,000 rows is rejected and the previous list is kept. |
 | `NURSEFLOW_HOSPITAL_API_KEY` | Optional fallback. data.go.kr key for the live 병원정보서비스 API (Decoding or Encoding form), used only until a dataset is imported; each live search often takes 10+ seconds. Without a dataset and a key, search returns 503 `HOSPITAL_SEARCH_NOT_CONFIGURED`. Never commit it. |
 | `NURSEFLOW_INVITE_LINK_BASE` | Optional. Invitation page URL; responses then include `inviteUrl`. |
@@ -40,6 +39,10 @@ The Android routes above are unchanged and never set cookies.
 
 Tests use an in-process fake OIDC provider (`src/test/kotlin/com/nurseflow/support/FakeOidcProvider.kt`) instead of Kakao. Real Kakao end-to-end login has not been verified until the Kakao Developers app, keys and redirect URIs are registered.
 
+### Ward creation
+
+A signed-in user creates a ward with `POST /api/v1/wards {hospital{source:"HIRA", externalId}, wardName, timeZone?}` and an `Idempotency-Key`, using a result of `GET /api/v1/hospitals/search`, and becomes its only `WARD_ADMIN` (no nurse record). The server looks the hospital up in the imported official list and stores that name and address with the ward, so a hospital that is not listed or was deactivated returns 422 `HOSPITAL_NOT_FOUND`; without an imported list it returns 503 `HOSPITAL_SEARCH_NOT_CONFIGURED`. Picking a hospital is not proof of employment: other admins may create wards with the same hospital and name, and none gains access to another's ward. `GET /api/v1/wards` and `/me` include `hospitalName`. Retrying with the same key returns the first ward. One account may create at most `NURSEFLOW_WARD_MAX_CREATED_PER_USER` wards (default 5; 409 `WARD_CREATION_LIMIT_REACHED`), and creating the same hospital and ward name twice from one account with a new key is rejected as a double submit (409 `WARD_ALREADY_CREATED`). The former demo bootstrap code (`NURSEFLOW_BOOTSTRAP_CODE`) is removed.
+
 ### Invitations
 
 A `WARD_ADMIN` issues invitations with `POST /api/v1/wards/{wardId}/invitations {role, nurseId?, expiresInHours}` (1–168 h, default 72). The response contains the 43-character token **once**; only its SHA-256 hash is stored. `GET` lists invitations with status (`PENDING`/`REDEEMED`/`REVOKED`/`EXPIRED`) and no tokens, and `DELETE .../{invitationId}` revokes an unused invitation. Set `NURSEFLOW_INVITE_LINK_BASE` (for example `https://<web-host>/invite`) to also receive `inviteUrl`, with the token in the URL fragment. `WARD_ADMIN` invitations cannot link a nurse record because administrators are excluded from rostering. Creation and revocation are written to `audit_events`.
@@ -57,6 +60,8 @@ WARD_ADMIN invitation redemption returns 409 `ADMIN_NURSE_RECORD_CONFLICT` if th
 ### Teams and career profiles
 
 - Teams: `GET/POST /api/v1/wards/{wardId}/teams`, `PUT/DELETE .../teams/{teamId}`. Members read; admins change. A team with active nurses cannot be deleted.
+- Team order (A5): `PUT /api/v1/wards/{wardId}/teams/{teamId}/order {nurseIds}` saves the admin's drag order of the team's active nurses, most senior first; it is the relative seniority inside the team and wins over hire or career dates. A list that does not match the current active members returns 409 `TEAM_ORDER_STALE`. Members not yet placed (new or moved) are listed after the ordered ones by career date.
+- Roster settings (A5): `PUT /api/v1/wards/{wardId}/staff/{nurseId}/roster-settings {seniorEligible, stageOverride?}` sets senior eligibility (admin only, no automatic suggestion) and an optional stage override; `rosterStage` = override, else the confirmed computed stage. `GET .../staff/{nurseId}/adjustments` lists who changed order, team, eligibility, stage or career profile, newest first.
 - Career policy: `GET/PUT /api/v1/wards/{wardId}/career-policy`. `stageThresholdMonths` are the lower bounds of stages 2–5 in months; the default `[12, 36, 72, 120]` gives <1y = 1, 1–3y = 2, 3–6y = 3, 6–10y = 4, 10y+ = 5. `ranks` default to 팀장·과장·신규 and are names only (they do not change the stage yet). Changes apply immediately.
 - A `WARD_MEMBER` must provide the month they joined the hospital with `POST /api/v1/invitations/redeem {token, hospitalJoinedOn}`. `PUT /api/v1/wards/{wardId}/my-profile {hospitalJoinedOn}` updates only that date.
 - Admins set the actual career start month and rank with `PUT .../staff/{nurseId}/profile`. These values are stored separately from the hospital joining month; `scoringStage` uses the admin-confirmed career profile.
