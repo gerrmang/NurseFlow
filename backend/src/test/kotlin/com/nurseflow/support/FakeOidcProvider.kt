@@ -65,10 +65,17 @@ object FakeOidcProvider {
                 val (k, v) = it.split("=", limit = 2)
                 URLDecoder.decode(k, Charsets.UTF_8) to URLDecoder.decode(v, Charsets.UTF_8)
             }
+            // Real Kakao answers a missing or wrong client secret with 401 invalid_client / KOE010.
+            if (form["client_secret"] != CLIENT_SECRET) {
+                val denied = """{"error":"invalid_client","error_description":"Bad client credentials","error_code":"KOE010"}""".toByteArray()
+                exchange.responseHeaders.add("Content-Type", "application/json;charset=utf-8")
+                exchange.sendResponseHeaders(401, denied.size.toLong())
+                exchange.responseBody.use { it.write(denied) }
+                return@createContext
+            }
             val pending = form["code"]?.let { codes.remove(it) }
             val ok = pending != null && form["grant_type"] == "authorization_code" &&
-                form["client_id"] == REST_API_KEY && form["client_secret"] == CLIENT_SECRET &&
-                form["redirect_uri"] == pending.redirectUri
+                form["client_id"] == REST_API_KEY && form["redirect_uri"] == pending.redirectUri
             val body = if (ok) {
                 val token = idToken(pending!!.subject, audience = pending.audience, nonce = pending.nonce, nickname = pending.nickname)
                 """{"token_type":"bearer","access_token":"fake-kakao-access","id_token":"$token","expires_in":21599}"""
