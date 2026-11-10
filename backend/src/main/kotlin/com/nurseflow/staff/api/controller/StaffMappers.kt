@@ -8,6 +8,7 @@ import com.nurseflow.staff.api.dto.request.RosterSettingsRequest
 import com.nurseflow.staff.api.dto.request.StaffRequest
 import com.nurseflow.staff.api.dto.response.CareerPolicyResponse
 import com.nurseflow.staff.api.dto.response.CareerProfileResponse
+import com.nurseflow.staff.api.dto.response.MyStaffProfileResponse
 import com.nurseflow.staff.api.dto.response.StaffAdjustmentResponse
 import com.nurseflow.staff.api.dto.response.StaffMemberResponse
 import com.nurseflow.staff.api.dto.response.TeamResponse
@@ -36,6 +37,10 @@ internal fun StaffResult.toResponse() = StaffMemberResponse(
     },
     teamOrder, seniorEligible, stageOverride, rosterStage,
 )
+
+internal fun StaffResult.toMyProfileResponse() = toResponse().let {
+    MyStaffProfileResponse(it.nurseId, it.displayName, it.qualifications, it.active, it.linkedAccount, it.team, it.profile)
+}
 
 internal fun StaffAdjustmentResult.toResponse() =
     StaffAdjustmentResponse(adjustmentId, kind, before, after, actorUserId, actorName, at)

@@ -122,6 +122,10 @@ class StaffRosterSettingsHttpTest : ApiTestBase() {
 
         assertEquals(400, http.put("${base()}/staff/$n/roster-settings", mapOf("seniorEligible" to true, "stageOverride" to 6), admin).status)
         assertEquals(400, http.put("${base()}/staff/$n/roster-settings", mapOf("stageOverride" to 2), admin).status)
+        // Leaving stageOverride out must not silently clear an existing override.
+        http.put("${base()}/staff/$n/roster-settings", mapOf("seniorEligible" to false, "stageOverride" to 3), admin)
+        assertEquals(400, http.put("${base()}/staff/$n/roster-settings", mapOf("seniorEligible" to true), admin).status)
+        assertEquals(3, staff().single().get("stageOverride").asInt())
     }
 
     @Test
@@ -179,6 +183,45 @@ class StaffRosterSettingsHttpTest : ApiTestBase() {
     }
 
     @Test
+    fun `positions stay contiguous after a nurse leaves the order`() {
+        val a = team("A팀")
+        val ids = (1..3).map { nurse("가상 $it", a) }
+        order(a, *ids.toTypedArray())
+
+        http.put("${base()}/staff/${ids[1]}", mapOf("displayName" to "가상 2", "active" to false), admin)
+
+        assertEquals(listOf(1, 2), staff().map { it.get("teamOrder").asInt() })
+        assertEquals(listOf("가상 1", "가상 3"), staff().map { it.get("displayName").asString() })
+    }
+
+    @Test
+    fun `changes written in one request are listed in reverse write order`() {
+        val n = nurse("가상 간호사", team("A팀"))
+
+        http.put("${base()}/staff/$n/roster-settings", mapOf("seniorEligible" to true, "stageOverride" to 2), admin)
+
+        val kinds = http.get("${base()}/staff/$n/adjustments", admin).json!!.get("items").toList().map { it.get("kind").asString() }
+        assertEquals(listOf("STAGE_OVERRIDE", "SENIOR_ELIGIBLE"), kinds)
+    }
+
+    @Test
+    fun `a nurse's own profile does not show the admin's roster judgements`() {
+        val a = team("A팀")
+        val n = nurse("가상 간호사", a)
+        val (userId, token) = userToken("가상 간호사")
+        grant(wardId, userId, "WARD_MEMBER")
+        jdbc.update("UPDATE nurses SET subject=? WHERE nurse_id=?", userId.toString(), UUID.fromString(n))
+        http.put("${base()}/staff/$n/roster-settings", mapOf("seniorEligible" to true, "stageOverride" to 4), admin)
+
+        val mine = http.get("${base()}/my-profile", token)
+
+        assertEquals(200, mine.status, mine.body)
+        listOf("teamOrder", "seniorEligible", "stageOverride", "rosterStage").forEach {
+            assertFalse(mine.json!!.has(it), "$it must not reach the nurse")
+        }
+    }
+
+    @Test
     fun `saving the same career profile again records nothing`() {
         val a = team("A팀")
         val n = nurse("가상 간호사", a)
@@ -197,12 +240,12 @@ class StaffRosterSettingsHttpTest : ApiTestBase() {
         grant(wardId, memberId, "WARD_MEMBER")
 
         assertEquals("WARD_ADMIN_REQUIRED", http.put("${base()}/teams/$a/order", mapOf("nurseIds" to listOf(n)), member).code)
-        assertEquals("WARD_ADMIN_REQUIRED", http.put("${base()}/staff/$n/roster-settings", mapOf("seniorEligible" to true), member).code)
+        assertEquals("WARD_ADMIN_REQUIRED", http.put("${base()}/staff/$n/roster-settings", mapOf("seniorEligible" to true, "stageOverride" to null), member).code)
         assertEquals("WARD_ADMIN_REQUIRED", http.get("${base()}/staff/$n/adjustments", member).code)
         val (_, outsider) = userToken("가상 외부인")
         assertEquals(404, http.get("${base()}/staff/$n/adjustments", outsider).status)
         assertEquals(404, http.put("${base()}/teams/$a/order", mapOf("nurseIds" to listOf(n)), outsider).status)
-        assertEquals(404, http.put("${base()}/staff/$n/roster-settings", mapOf("seniorEligible" to true), outsider).status)
+        assertEquals(404, http.put("${base()}/staff/$n/roster-settings", mapOf("seniorEligible" to true, "stageOverride" to null), outsider).status)
     }
 
     @Test

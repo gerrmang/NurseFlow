@@ -18,6 +18,7 @@ import com.nurseflow.staff.persistence.entity.DbStaff
 import com.nurseflow.staff.persistence.entity.DbTeam
 import com.nurseflow.staff.persistence.repository.StaffJdbcRepository
 import com.nurseflow.ward.application.service.WardService
+import com.nurseflow.ward.persistence.repository.WardJdbcRepository
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.time.Instant
@@ -33,6 +34,7 @@ import java.util.UUID
 class StaffService(
     private val repo: StaffJdbcRepository,
     private val wards: WardService,
+    private val wardRepo: WardJdbcRepository,
     private val audit: AuditLog,
 ) {
     // ── Teams ──
@@ -69,6 +71,8 @@ class StaffService(
     @Transactional
     fun deleteTeam(wardId: UUID, teamId: UUID, actor: String) {
         wards.requireAdmin(wardId, actor)
+        // Same lock as moving a nurse into a team, so no one can join a team while it is being deleted.
+        lockWard(wardId)
         repo.findTeam(wardId, teamId) ?: throw BusinessException(ErrorCode.TEAM_NOT_FOUND)
         if (repo.activeNursesInTeam(teamId) > 0) throw BusinessException(ErrorCode.TEAM_NOT_EMPTY)
         repo.deactivateTeam(teamId)
@@ -122,7 +126,7 @@ class StaffService(
         wards.requireAdmin(wardId, actor)
         // Team membership changes take the ward lock that team ordering holds, so a reorder never
         // validates against a member set that changes before it is saved.
-        repo.lockWard(wardId)
+        lockWard(wardId)
         command.teamId?.let { repo.findTeam(wardId, it) ?: throw BusinessException(ErrorCode.TEAM_NOT_FOUND) }
         val id = UUID.randomUUID()
         repo.insertStaff(id, wardId, command.displayName.trim(), command.qualifications.distinct(), command.active, command.teamId)
@@ -133,7 +137,9 @@ class StaffService(
     @Transactional
     fun updateStaff(wardId: UUID, nurseId: UUID, command: StaffInputCommand, actor: String): StaffResult {
         wards.requireAdmin(wardId, actor)
-        repo.lockWard(wardId)
+        // Only a change of `active` alters team membership, so a rename does not wait on the ward lock.
+        val activeChanges = requireStaff(wardId, nurseId).active != command.active
+        if (activeChanges) lockWard(wardId)
         val current = requireStaff(wardId, nurseId)
         repo.updateStaff(nurseId, command.displayName.trim(), command.qualifications.distinct(), command.active)
         if (current.active && !command.active && current.teamOrder != null) {
@@ -141,6 +147,7 @@ class StaffService(
             // so they can never share a position with someone ordered meanwhile.
             repo.clearTeamOrder(nurseId)
             adjust(wardId, nurseId, "TEAM_ORDER", current.teamOrder.toString(), null, actor)
+            current.teamId?.let { closeOrderGaps(wardId, it, actor) }
         }
         if (current.active != command.active) {
             audit.record(wardId, actor, if (command.active) "STAFF_ACTIVATED" else "STAFF_DEACTIVATED", nurseId.toString())
@@ -152,8 +159,8 @@ class StaffService(
     @Transactional
     fun assignTeam(wardId: UUID, nurseId: UUID, teamId: UUID?, actor: String): StaffResult {
         wards.requireAdmin(wardId, actor)
+        lockWard(wardId)
         val newTeam = teamId?.let { repo.findTeam(wardId, it) ?: throw BusinessException(ErrorCode.TEAM_NOT_FOUND) }
-        repo.lockWard(wardId)
         val nurse = requireStaff(wardId, nurseId)
         val context = context(wardId)
         if (nurse.teamId != teamId) {
@@ -176,7 +183,7 @@ class StaffService(
         wards.requireAdmin(wardId, actor)
         repo.findTeam(wardId, teamId) ?: throw BusinessException(ErrorCode.TEAM_NOT_FOUND)
         if (nurseIds.toSet().size != nurseIds.size) throw BusinessException(ErrorCode.INVALID_REQUEST)
-        repo.lockWard(wardId)
+        lockWard(wardId)
         val members = repo.activeTeamMembers(teamId).associateBy { it.id }
         if (members.keys != nurseIds.toSet()) throw BusinessException(ErrorCode.TEAM_ORDER_STALE)
         nurseIds.forEachIndexed { index, nurseId ->
@@ -196,11 +203,9 @@ class StaffService(
     @Transactional
     fun updateRosterSettings(wardId: UUID, nurseId: UUID, input: RosterSettingsInput, actor: String): StaffResult {
         wards.requireAdmin(wardId, actor)
-        val nurse = requireStaff(wardId, nurseId)
+        // Row lock: concurrent saves for one nurse must not both log the same before -> after change.
+        val nurse = repo.lockStaff(wardId, nurseId) ?: throw BusinessException(ErrorCode.NURSE_NOT_FOUND)
         val context = context(wardId)
-        input.stageOverride?.let {
-            if (it !in 1..context.policy.stageCount) throw BusinessException(ErrorCode.INVALID_REQUEST)
-        }
         if (nurse.seniorEligible != input.seniorEligible) {
             adjust(wardId, nurseId, "SENIOR_ELIGIBLE", nurse.seniorEligible.toString(), input.seniorEligible.toString(), actor)
         }
@@ -323,6 +328,22 @@ class StaffService(
         if (hospitalJoinedOn.isAfter(context.today) || hospitalJoinedOn.year < 1950) {
             throw BusinessException(ErrorCode.INVALID_HOSPITAL_JOIN_MONTH)
         }
+    }
+
+    private fun lockWard(wardId: UUID) {
+        if (!wardRepo.lockWard(wardId)) throw BusinessException(ErrorCode.WARD_NOT_FOUND)
+    }
+
+    /** Renumbers the ordered active members of a team to 1..n after one left, keeping their relative order. */
+    private fun closeOrderGaps(wardId: UUID, teamId: UUID, actor: String) {
+        repo.activeTeamMembers(teamId).filter { it.teamOrder != null }.sortedBy { it.teamOrder }
+            .forEachIndexed { index, member ->
+                val position = index + 1
+                if (member.teamOrder != position) {
+                    repo.setTeamOrder(member.id, position)
+                    adjust(wardId, member.id, "TEAM_ORDER", member.teamOrder.toString(), position.toString(), actor)
+                }
+            }
     }
 
     private fun adjust(wardId: UUID, nurseId: UUID, kind: String, before: String?, after: String?, actor: String) =

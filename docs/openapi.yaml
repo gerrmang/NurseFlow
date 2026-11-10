@@ -1248,7 +1248,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/StaffMember'
+                $ref: '#/components/schemas/MyStaffProfile'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
@@ -1279,7 +1279,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/StaffMember'
+                $ref: '#/components/schemas/MyStaffProfile'
         '400':
           description: INVALID_REQUEST 또는 INVALID_HOSPITAL_JOIN_MONTH
           content:
@@ -2579,7 +2579,7 @@ components:
         teamOrder:
           type: [integer, 'null']
           minimum: 1
-          description: 관리자가 정한 팀 안 순서(1이 가장 선임). 팀이 없거나 아직 정하지 않았으면 null. 이 순서가 팀 안 상대 경력순이다
+          description: 관리자가 정한 팀 안 순서(1이 가장 선임, 빈 번호 없이 1부터 연속). 팀이 없거나 아직 정하지 않았으면 null. 이 순서가 팀 안 상대 경력순이다
         seniorEligible:
           type: boolean
           description: 관리자가 지정한 선임 자격
@@ -2593,6 +2593,30 @@ components:
           minimum: 1
           maximum: 5
           description: 편성에 쓰는 단계 = stageOverride, 없으면 profile.scoringStage. 둘 다 없으면 null
+    MyStaffProfile:
+      type: object
+      description: 간호사 본인 기록. 팀 안 순서·선임 자격·편성 단계 같은 관리자 판단 값은 담지 않는다
+      required: [nurseId, displayName, qualifications, active, linkedAccount, profile]
+      properties:
+        nurseId:
+          type: string
+          format: uuid
+        displayName:
+          type: string
+        qualifications:
+          type: array
+          items:
+            type: string
+        active:
+          type: boolean
+        linkedAccount:
+          type: boolean
+        team:
+          oneOf:
+            - $ref: '#/components/schemas/Team'
+            - type: 'null'
+        profile:
+          $ref: '#/components/schemas/CareerProfile'
     TeamOrderRequest:
       type: object
       additionalProperties: false
@@ -2609,7 +2633,8 @@ components:
     RosterSettingsRequest:
       type: object
       additionalProperties: false
-      required: [seniorEligible]
+      description: 전체 교체. 두 필드 모두 보내야 하며 stageOverride를 빼면 400이다(선임만 바꾸다 단계 조정이 지워지지 않도록)
+      required: [seniorEligible, stageOverride]
       properties:
         seniorEligible:
           type: boolean

@@ -7,6 +7,7 @@ import com.nurseflow.staff.api.dto.request.RosterSettingsRequest
 import com.nurseflow.staff.api.dto.request.StaffRequest
 import com.nurseflow.staff.api.dto.request.TeamAssignmentRequest
 import com.nurseflow.staff.api.dto.request.TeamOrderRequest
+import com.nurseflow.staff.api.dto.response.MyStaffProfileResponse
 import com.nurseflow.staff.api.dto.response.StaffAdjustmentItems
 import com.nurseflow.staff.api.dto.response.StaffMemberItems
 import com.nurseflow.staff.api.dto.response.StaffMemberResponse
@@ -109,13 +110,13 @@ class StaffController(private val staff: StaffService) {
 
     /** The signed-in nurse's own record. Editing resets confirmation until an admin re-confirms. */
     @GetMapping("/my-profile")
-    fun myProfile(@PathVariable wardId: UUID, @CurrentSubject subject: String): StaffMemberResponse =
-        staff.myProfile(wardId, subject).toResponse()
+    fun myProfile(@PathVariable wardId: UUID, @CurrentSubject subject: String): MyStaffProfileResponse =
+        staff.myProfile(wardId, subject).toMyProfileResponse()
 
     @PutMapping("/my-profile")
     fun submitMyProfile(
         @PathVariable wardId: UUID,
         @Valid @RequestBody request: HospitalJoinMonthRequest,
         @CurrentSubject subject: String,
-    ): StaffMemberResponse = staff.submitMyProfile(wardId, request.toHospitalJoinMonth(), subject).toResponse()
+    ): MyStaffProfileResponse = staff.submitMyProfile(wardId, request.toHospitalJoinMonth(), subject).toMyProfileResponse()
 }

@@ -37,6 +37,17 @@ data class StaffMemberResponse(
     val rosterStage: Int?,
 )
 
+/** The nurse's own record: no team position, senior eligibility or stage override (admin judgements). */
+data class MyStaffProfileResponse(
+    val nurseId: UUID,
+    val displayName: String,
+    val qualifications: List<String>,
+    val active: Boolean,
+    val linkedAccount: Boolean,
+    val team: TeamResponse?,
+    val profile: CareerProfileResponse,
+)
+
 data class StaffMemberItems(val items: List<StaffMemberResponse>)
 
 data class StaffAdjustmentResponse(

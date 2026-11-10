@@ -1,5 +1,6 @@
 package com.nurseflow.staff.api.dto.request
 
+import com.fasterxml.jackson.annotation.JsonProperty
 import com.nurseflow.common.error.ErrorCode
 import com.nurseflow.common.error.InvalidRequestCode
 import jakarta.validation.constraints.Max
@@ -58,8 +59,13 @@ data class TeamOrderRequest(
     val nurseIds: List<UUID>,
 )
 
+/**
+ * Full replacement: both fields are required so a client that only toggles seniority cannot clear the
+ * stage override by leaving it out. Send `stageOverride: null` to use the computed stage.
+ */
 data class RosterSettingsRequest(
+    @param:JsonProperty(required = true)
     val seniorEligible: Boolean,
-    @field:Min(1) @field:Max(5)
-    val stageOverride: Int? = null,
+    @param:JsonProperty(required = true) @field:Min(1) @field:Max(5)
+    val stageOverride: Int?,
 )

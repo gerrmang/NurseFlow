@@ -83,6 +83,10 @@ class StaffJdbcRepository(private val jdbc: JdbcTemplate, private val mapper: Js
         "SELECT * FROM nurses WHERE ward_id=? AND nurse_id=?", { rs, _ -> mapStaff(rs) }, wardId, nurseId,
     ).firstOrNull()
 
+    fun lockStaff(wardId: UUID, nurseId: UUID): DbStaff? = jdbc.query(
+        "SELECT * FROM nurses WHERE ward_id=? AND nurse_id=? FOR UPDATE", { rs, _ -> mapStaff(rs) }, wardId, nurseId,
+    ).firstOrNull()
+
     fun findStaffBySubject(wardId: UUID, subject: String): DbStaff? = jdbc.query(
         "SELECT * FROM nurses WHERE ward_id=? AND subject=?", { rs, _ -> mapStaff(rs) }, wardId, subject,
     ).firstOrNull()
@@ -102,11 +106,6 @@ class StaffJdbcRepository(private val jdbc: JdbcTemplate, private val mapper: Js
     /** A team change clears the position; the admin places the nurse in the new team's order. */
     fun assignTeam(nurseId: UUID, teamId: UUID?) {
         jdbc.update("UPDATE nurses SET team_id=?, team_order=NULL WHERE nurse_id=?", teamId, nurseId)
-    }
-
-    /** Serializes team ordering and team moves in one ward (same row lock as roster and membership changes). */
-    fun lockWard(wardId: UUID) {
-        jdbc.query("SELECT ward_id FROM wards WHERE ward_id=? FOR UPDATE", { rs, _ -> rs.getString(1) }, wardId)
     }
 
     fun activeTeamMembers(teamId: UUID): List<DbStaff> = jdbc.query(
@@ -135,8 +134,8 @@ class StaffJdbcRepository(private val jdbc: JdbcTemplate, private val mapper: Js
 
     fun adjustments(wardId: UUID, nurseId: UUID): List<DbStaffAdjustment> = jdbc.query(
         """SELECT a.*, u.display_name AS actor_name FROM staff_adjustments a
-           LEFT JOIN users u ON CAST(u.user_id AS VARCHAR(36)) = a.actor
-           WHERE a.ward_id=? AND a.nurse_id=? ORDER BY a.at DESC, a.adjustment_id""",
+           LEFT JOIN users u ON u.user_id = CAST(a.actor AS UUID)
+           WHERE a.ward_id=? AND a.nurse_id=? ORDER BY a.seq DESC""",
         { rs, _ ->
             DbStaffAdjustment(
                 id = rs.getObject("adjustment_id", UUID::class.java),
