@@ -18,6 +18,7 @@
 | A2 웹 세션 API | `feat/auth-web-session-v2` | #33 | `dev` 병합 완료 (2026-11-09, 스쿼시 병합 커밋 `fa47a5a`) | 2026-11-09 로컬 `./gradlew test --offline`: 108건 통과, 건너뜀 1. 동시 state 테스트(`FOR UPDATE` 제거 변이 3/3 실패)와 client_secret 전달(전달 줄 제거 변이 실패) 검출력 확인. 실제 Kakao E2E 미검증(목업만) | 없음 |
 | B2 웹 기반 세션 | `feat/web-foundation-session` | 미개설 | 미착수. A2 PR #33이 `dev`에 병합되어 선행 조건 충족 | 해당 없음 | 없음 |
 | B9a Android 공개 근무표 조회 | `feat/android-published-roster` (`dev` `fa47a5a` 통합) | [#34](https://github.com/gerrmang/NurseFlow/pull/34) | `dev` 병합 완료 (2026-11-10, 스쿼시 병합 커밋 `d1b8729`). 구현·기기·실서버 검증과 PR P3 수정 완료, 병합 전 Backend tests·Android debug build 통과 | [B9a 검증 기록](../android/B9a-verification.md), 아래 최종 검증 참조 | 기존 P2 해결, P3 수정 후 재리뷰 대기 |
+| B3a Android 초대 관리·가입 | `feat/android-invite-join` (`dev` `23af850`에서 분기) | 미개설 | 구현·로컬 검증 완료. 첫 커밋·푸시 완료(2026-11-10). 실제 Kakao 검증은 B2 검증 후 이어서 진행. PR 생성은 미승인 | [B3a 검증 기록](../android/B3a-verification.md): JVM 68건 통과, Lint 오류 0, 기기 28건 중 22건 통과·6건 opt-in 건너뜀, 가짜 OIDC 실서버 가입 E2E `OK (1 test)`·서버 `BUILD SUCCESSFUL`, 백엔드 135건 중 실패 0. 실제 Kakao·GitHub CI 미검증 | 리뷰 전 |
 | 에이전트 지침 정합성 | `docs/agent-guidance-alignment` | #32 | `dev` 병합 완료 (2026-11-09, 일반 병합 커밋 `ab8347d`. 스쿼시 원칙에서 벗어남) | `git diff --check` 통과. GitHub Actions `Verify` PR 실행 성공, `dev` push 실행 성공 | 없음 |
 | A3 병원 검색 API | `feat/hospital-search` | #35 | PR 열림. Codex 리뷰 P2 1건·재리뷰 P3 1건, hyen11 계약 리뷰 P3 2건 모두 수정(P1/P2 없음). hyen11 수정분 확인·CI 재실행(2026-11-10 새벽 GitHub Actions 장애로 실패)·스쿼시 병합 대기 | 2026-11-10 야간 QA: `./gradlew test --offline` 133건 통과(건너뜀 3). 실제 2026.9. 파일 79,899곳 누락 없이 적재 0.7초, 검색 15~40ms. 임시 H2 파일 DB로 서버 2회 기동: 첫 기동 적재·재기동 건너뜀, 토큰 없는 검색 401. 실시간 API 실키 호출은 200 정상이나 10~17초 | 없음 |
 | A4 이후 | 해당 없음 | 미개설 | 미착수. A3 검색 계약·서버 기능에 의존 | 해당 없음 | 없음 |
@@ -88,6 +89,29 @@
 - opt-in 서버 검사가 캐시 결과를 재사용하는 것을 확인해, 실제 실행이 필요한 재현 명령에 `test --rerun`을 명시했다. 같은 worktree·브랜치에서 PR #34를 갱신하며, 로컬 DB는 보존하고 스쿼시 병합은 수행하지 않는다.
 - `git diff --check` 통과. 백엔드 전체 검사는 서버 코드 변경이 없어 재실행하지 않았고, 실서버 경로는 위 opt-in 서버 검사로 검증했다. 외부 Kakao 인증·운영 서버·물리 기기는 이번에 검증하지 않았다. 수정 후 독립 재리뷰는 아직 받지 않았다.
 
+## B3a 인계 (2026-11-10, Claude)
+
+- **작업 공간:** 공유 worktree `C:\Users\jjang\IdeaProjects\NurseFlow`, 브랜치 `feat/android-invite-join`, 분기점 `23af850`(= `origin/dev`). 검증된 B3a 변경을 첫 커밋으로 `origin/feat/android-invite-join`에 푸시했다. 진행 순서(사용자 확정)는 B3a 첫 커밋·푸시 → B2 실제 Kakao·브라우저 검증과 커밋 → 이 브랜치로 돌아와 B3a 실제 검증이다.
+- **보존한 미추적 항목:** `nurseflow.mv.db`와 `web/node_modules`(B2 브랜치에서 무시되던 잔여물)는 B3a 범위가 아니다. 커밋에 넣지 않는다.
+- **B2 기록:** B2 브랜치(`feat/web-foundation-session` `767abd6`)의 이 파일 인계 기록은 dev에 없으므로 이 브랜치에 가져오지 않았다.
+- **결정 (사용자 확정):**
+  - §7 #6: 개발용 `nurseflow://invite#token=`과 명시적 붙여넣기를 쓴다. 운영 HTTPS App Links는 후속이다.
+  - §7 #7: 역할 기반 고정 대상 문구를 쓰고 메모는 없다.
+  - §7 #21: A 소유 테스트 전용 `backend/src/test/.../AndroidInvitationE2eServerTest.kt` 1개를 B3a 범위로 승인받았다.
+  - 공통 정책 문서 반영은 별도 결정 반영 문서 PR에서 한다.
+- **계획과 달라진 점:** `MainActivity`를 `singleTask` 대신 `singleTop`으로 했다. Kakao 로그인 중인 Activity가 지워질 위험과 기존 `ActivityScenario` 테스트와의 비호환 때문이다. 이유와 검증은 검증 기록에 있다.
+- **문서와 코드 차이 (후속 A 또는 문서 PR):**
+  - OpenAPI의 WARD_ADMIN `hospitalJoinedOn` 서술
+  - redeem 오류 목록의 `INVALID_HOSPITAL_JOIN_MONTH`·`USER_NOT_FOUND` 누락
+  - `backend/README.md`의 `expiresInHours` 서술
+  - §7 #8 미결 표기 (구현은 재발급 시 원본을 철회함)
+- **다음 단계:**
+  1. 실제 Kakao 로그인으로 초대 흐름을 검증하고 결과를 이 브랜치에 기록 (B2 작업 이후)
+  2. PR 생성은 별도 승인 후. GitHub CI 확인
+  3. Codex 리뷰 (P1/P2 수정)
+  4. 오류 상태 화면 캡처 (가상 데이터)
+- **미검증:** 실제 Kakao 로그인, 실제 메신저의 사용자 스킴 링크 표시, 물리 기기, 프로세스 재시작 시 초대 유실.
+
 ## 기타 브랜치
 
 - `feat/android-auth-invite` (`95cf33d`): **병합 대상에서 제외(2026-11-09 사용자 결정).** 현재 A/B 기능 분해 이전(11/2~11/3)의 백엔드+Android 통합 시제품 브랜치다. 같은 기능이 #17~#20, A1(#27), B1(#30)로 따로 병합됐고, `dev`와 합치면 174개 파일이 충돌하며, 병동 직접 생성(`74c9036`)은 #24 이후 A3·A4로 다시 기획됐다. 원격에 참고용으로만 남기고, B3a(첫 화면 선택·초대 가입 화면)·B4a(병동 생성 화면) 작업 때 최신 `dev`에서 새로 구현하며 참고한다. 이 브랜치에서 PR을 열거나 이어서 작업하지 않는다.
@@ -99,6 +123,7 @@ Claude와 Codex가 같은 진행 기록을 사용한다. PR 또는 정기 리뷰
 | 작업 경로 | 브랜치 | 리뷰한 HEAD SHA | 미커밋 diff 해시 | 리뷰 시각 | 검토 주체 | 범위/결과 |
 | --- | --- | --- | --- | --- | --- | --- |
 | `C:\Users\jjang\IdeaProjects\NurseFlow` | `feat/android-published-roster` | `ab8347dde6464379c8670cde6f937f408d349eb8` | `66410e40794e40222067c249c692fc76ca704e07ecc39f8383e5f4768eb9e2cf` (tracked diff, 신규 파일 해시는 위 기록) | 2026-11-09 | Codex | 기존 P2 해결 확인 후 기기 회귀·실서버 공개/재공개·권한 검증 완료. 같은 미커밋 브랜치에서 PR 준비 가능. 운영 코드 추가 수정 없음 |
+| `C:\Users\jjang\IdeaProjects\NurseFlow` | `feat/android-invite-join` | `23af850d2ee7e85a7bf6fa690f9714dc73b3bceb` | `1b59e8e03cbbe34eff816efaedf75177dca7fc381e828dd9a52dba5a49aa1762` (추적 파일 diff. 신규 파일은 미포함) | 2026-11-10 | Claude | B3a 구현 자체 검토. 관리자 권한 거부 후 재진입 시 바로 다시 닫히는 문제를 수정했고, 무재시도 테스트가 실제 결함을 잡지 못하던 것을 변형 검사로 발견해 보강. 독립 리뷰 전 |
 | GitHub PR #32 diff (`/private/tmp/NurseFlow-guidance`) | `docs/agent-guidance-alignment` | `5d4f45bcf7e5247d85f9f1a38fd0a59a081c499e` | `bffafc453496740f281aca22552cd1dcaf80516a2150a8bb741aa42efbdca3ab` (`git diff origin/dev...origin/pr-32 | shasum -a 256`) | 2026-11-09 | Codex | PR 메타데이터·diff·리뷰·체크 및 B1 격리 테스트 경로를 재검토. PR은 열림; GitHub 리뷰 없음, 결합 상태에서 Vercel만 성공 확인. 재검토 사항은 위에 기록 |
 | GitHub PR #34 diff | `feat/android-published-roster` | `209de0db506429050885968e9cd2c3d81cc14192` | `635976c6eab08175715a8813697306c26a4f43895ca820571c9c4f98cbe244d7` (`git diff fa47a5afc1bf3b92ed2cb7436e711ba2d57a8295..origin/feat/android-published-roster | shasum -a 256`) | 2026-11-10 | Codex | 12개 파일 읽기 전용 검토. P3 1건을 COMMENT 리뷰로 게시; Verify run 42613978040 성공 |
 | `/private/tmp/NurseFlow-guidance` | `docs/agent-guidance-alignment` | `f10d598b330de17a47a954558196e8df0be4a4ec` | `e638b1aa27f5c0cccc9f855d1cb5b9c19834bd1b1410a80b260b69a29cbb5fb5` (`git diff HEAD^ HEAD -- . ':!docs/work-status.md' | shasum -a 256`) | 2026-11-09 | Codex | Claude·Codex가 같은 worktree·브랜치·상태 기록·검증 기준을 이어 쓰도록 정리. `git diff --check` 통과. PR #32에 푸시 완료 |

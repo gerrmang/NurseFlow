@@ -52,6 +52,21 @@ object ApiFactory {
             .build()
         return retrofit(baseUrl, client).create(NurseFlowApi::class.java)
     }
+
+    /**
+     * Invitation writes (issue, reissue, revoke, redeem) are not idempotent or not safely
+     * replayable, so this client never retries on a connection failure and never reuses an idle
+     * socket that might already be closed. A lost response surfaces as a NETWORK error and the
+     * screen resolves it explicitly. 401 still refreshes once: the server did not process it.
+     */
+    fun invitationApi(baseUrl: String, session: SessionManager): InvitationApi {
+        val client = baseClient()
+            .connectionPool(ConnectionPool(0, 1, TimeUnit.NANOSECONDS))
+            .addInterceptor(BearerInterceptor(session))
+            .authenticator(RefreshAuthenticator(session))
+            .build()
+        return retrofit(baseUrl, client).create(InvitationApi::class.java)
+    }
 }
 
 private class BearerInterceptor(private val session: SessionManager) : Interceptor {

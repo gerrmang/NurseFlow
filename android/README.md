@@ -1,6 +1,6 @@
 # NurseFlow Android
 
-Kotlin + Jetpack Compose 앱입니다. B1에서는 Kakao 로그인, NurseFlow 세션 복원·갱신·로그아웃, 서버의 내 병동 목록과 역할 표시를 연결합니다. 소속이 없으면 병동 만들기·초대 수락을 안내합니다. 두 기능의 실행 화면은 각각 B4a·B3a 후속 작업입니다.
+Kotlin + Jetpack Compose 앱입니다. B1에서는 Kakao 로그인, NurseFlow 세션 복원·갱신·로그아웃, 서버의 내 병동 목록과 역할 표시를 연결합니다. B9a는 공개 근무표 조회, B3a는 관리자 초대 관리와 초대 링크 가입을 연결합니다. 병동 만들기 화면은 B4a 후속 작업입니다.
 
 기존 Figma 기반 `DemoRoster`는 **가상 근무표 시연 보기 (서버 미연동)**에서만 엽니다. 가상 병동과 근무표의 수정·공개는 서버 또는 다른 사용자에게 공유되지 않습니다. 서버에서 조회한 병동을 가상 근무표와 연결하지 않습니다.
 
@@ -39,6 +39,16 @@ Kakao Developers에서 Android 패키지 `com.nurseflow.app`, 사용 중인 서�
 - 초대 토큰 입력·초대/프로필/병동 생성 API와 서버 근무표 조회는 B1 범위에 포함하지 않습니다.
 
 검증 결과와 실로그인 후속 확인은 [B1 검증 기록](B1-verification.md)에 정리합니다.
+
+## 초대 관리와 가입 (B3a)
+
+- 개발용 초대 링크는 `nurseflow://invite#token=<43자>`입니다. **운영 링크가 아니며**, HTTPS App Links는 운영 도메인이 정해진 뒤의 후속 작업입니다. Kakao OAuth 복귀 스킴(`kakao{키}://oauth`)과는 별개입니다.
+- 메신저가 사용자 스킴을 링크로 표시하지 않으면 병동 목록의 `초대 링크 붙여넣기`를 씁니다. 앱이 클립보드를 직접 읽지 않으며, 같은 스킴·호스트·fragment 토큰 형식만 받습니다.
+- 토큰은 fragment로만 받아 `preview`·`redeem` 요청 본문으로 보냅니다. 대기 중인 초대는 프로세스 메모리에만 둡니다. 로그아웃·계정 변경·가입 완료·취소 때 지워지고, 프로세스가 재시작되면 링크를 다시 열어야 합니다.
+- 초대 쓰기 요청(발급·재발급·철회·가입)은 자동 재시도하지 않는 별도 HTTP 클라이언트로 보냅니다. 응답이 유실되면 가입은 `결과 확인`으로 소속을 조회하고, 관리자 작업은 목록을 다시 불러옵니다.
+- 서버가 `inviteUrl`을 주지 않으면 debug 빌드는 `INVITE_LINK_BASE`(`nurseflow://invite`)로 링크를 만들고, release 빌드는 링크를 만들지 않습니다.
+
+검증 결과와 실서버 가입 E2E 절차는 [B3a 검증 기록](B3a-verification.md)에 정리합니다. 실서버 E2E는 `backend/`의 `AndroidInvitationE2eServerTest`(`NURSEFLOW_INVITE_E2E=true`, loopback 18085·18086)와 기기의 `InvitationJoinDeviceTest`(`-e inviteE2e true`)를 함께 실행합니다.
 
 ## 로컬 서버 연동 기기 회귀 검사
 
