@@ -61,7 +61,7 @@ class RosterJdbcRepository(
 
     fun publishRoster(rosterId: UUID, publishedAt: Instant, confirmedBy: String) {
         jdbc.update(
-            "UPDATE rosters SET status='PUBLISHED',active=TRUE,revision=revision+1,published_at=?,confirmed_by=? WHERE roster_id=?",
+            "UPDATE rosters SET status='PUBLISHED',active=TRUE,needs_revalidation=FALSE,revision=revision+1,published_at=?,confirmed_by=? WHERE roster_id=?",
             publishedAt.toString(), confirmedBy, rosterId,
         )
     }
@@ -332,6 +332,7 @@ class RosterJdbcRepository(
         rs.getString("roster_month"), rs.getString("status"), rs.getInt("revision"),
         ZoneId.of(rs.getString("time_zone")),
         rs.getString("published_at")?.let(Instant::parse), rs.getString("confirmed_by"),
+        rs.getBoolean("needs_revalidation"),
     )
 
     private fun mapAbsence(rs: ResultSet) = DbAbsence(

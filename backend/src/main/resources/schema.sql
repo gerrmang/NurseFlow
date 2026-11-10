@@ -227,3 +227,19 @@ CREATE TABLE IF NOT EXISTS hospital_dataset_imports (
     deactivated_count INT NOT NULL,
     imported_at VARCHAR(40) NOT NULL
 );
+
+-- A8: shift type hours. NULL recognized/target = derived default (duration - break, then recognized); the API always returns resolved values.
+ALTER TABLE shift_types ADD COLUMN IF NOT EXISTS break_minutes INT DEFAULT 0 NOT NULL;
+ALTER TABLE shift_types ADD COLUMN IF NOT EXISTS recognized_minutes INT;
+ALTER TABLE shift_types ADD COLUMN IF NOT EXISTS target_credit_minutes INT;
+
+-- Ward-level counter bumped by every shift type change. Absent row = revision 0.
+CREATE TABLE IF NOT EXISTS ward_policy_revisions (
+    ward_id UUID PRIMARY KEY REFERENCES wards(ward_id),
+    revision INT NOT NULL CHECK (revision >= 0),
+    updated_at VARCHAR(40) NOT NULL,
+    updated_by VARCHAR(255) NOT NULL
+);
+
+-- A8: set on DRAFT rosters whose shift types changed after their slots were created.
+ALTER TABLE rosters ADD COLUMN IF NOT EXISTS needs_revalidation BOOLEAN DEFAULT FALSE NOT NULL;

@@ -57,6 +57,12 @@ WARD_ADMIN invitation redemption returns 409 `ADMIN_NURSE_RECORD_CONFLICT` if th
 | `WARD_MEMBER` | Published ward calendar and own published calendar. Drafts, absences, generation, confirmation and invitations return `403 WARD_ADMIN_REQUIRED`. |
 | `WARD_ADMIN` | Everything above plus drafts, absences, assignments, generation, confirmation and invitations. Not part of the rostered nurse pool. |
 
+### Shift type settings
+
+- `GET/POST /api/v1/wards/{wardId}/shift-types`, `PUT/DELETE .../shift-types/{shiftTypeId}` (package `policy`). Members read (`includeInactive`, response `{items, policyRevision}`); admins write. `DELETE` only deactivates (slots reference shift types); `PUT` with `active: true` reactivates.
+- Times are `HH:mm`; `spansMidnight` must equal `endTime < startTime` (`SHIFT_SPANS_MIDNIGHT_MISMATCH`), equal times are `INVALID_SHIFT_INTERVAL`. `durationMinutes` adds 1440 when crossing midnight (22:00-07:00 = 540). `breakMinutes` 0..240; `recognizedMinutes` (default duration - break) must be 1..duration - break; `targetCreditMinutes` (default recognized) is what one shift credits toward the monthly target (the monthly target itself is A13). `code` is unique per ward including inactive types (409 `SHIFT_TYPE_CODE_DUPLICATE`); overlapping times are allowed.
+- Every write takes the ward lock, bumps `ward_policy_revisions` and audits `SHIFT_TYPE_CREATED/UPDATED/DEACTIVATED`. Changing time, break, recognized/credit minutes, kind or active state of a type used by DRAFT rosters sets their `rosters.needs_revalidation` (exposed as `needsRevalidation`; cleared when the roster is published). Slot times already created are not rewritten; PUBLISHED rosters are untouched.
+
 ### Teams and career profiles
 
 - Teams: `GET/POST /api/v1/wards/{wardId}/teams`, `PUT/DELETE .../teams/{teamId}`. Members read; admins change. A team with active nurses cannot be deleted.

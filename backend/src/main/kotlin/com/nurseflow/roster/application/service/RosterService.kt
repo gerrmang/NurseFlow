@@ -517,6 +517,7 @@ class RosterService(
                 )
             },
             roster.publishedAt,
+            roster.needsRevalidation && roster.status == "DRAFT",
         )
     }
 
@@ -526,6 +527,7 @@ class RosterService(
             roster.id, roster.wardId, roster.month, roster.status, roster.revision, roster.zone.id,
             StaffingSummary(all.size, all.count { it.nurseId != null }, all.count { it.nurseId == null }),
             roster.publishedAt,
+            roster.needsRevalidation && roster.status == "DRAFT",
         )
     }
 

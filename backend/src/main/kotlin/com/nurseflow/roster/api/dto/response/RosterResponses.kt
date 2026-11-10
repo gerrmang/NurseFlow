@@ -28,6 +28,7 @@ data class RosterSummary(
     val timeZone: String,
     val staffing: StaffingSummary,
     val publishedAt: Instant? = null,
+    val needsRevalidation: Boolean = false,
 )
 
 data class RosterView(
@@ -40,6 +41,7 @@ data class RosterView(
     val staffing: StaffingSummary,
     val slots: List<SlotView>,
     val publishedAt: Instant? = null,
+    val needsRevalidation: Boolean = false,
 )
 
 data class ApprovedAbsenceView(
