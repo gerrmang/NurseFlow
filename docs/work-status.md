@@ -21,7 +21,7 @@
 | 에이전트 지침 정합성 | `docs/agent-guidance-alignment` | #32 | `dev` 병합 완료 (2026-11-09, 일반 병합 커밋 `ab8347d`. 스쿼시 원칙에서 벗어남) | `git diff --check` 통과. GitHub Actions `Verify` PR 실행 성공, `dev` push 실행 성공 | 없음 |
 | A3 병원 검색 API | `feat/hospital-search` | #35 | PR 열림. Codex 리뷰 P2 1건·재리뷰 P3 1건, hyen11 계약 리뷰 P3 2건 모두 수정(P1/P2 없음). hyen11 수정분 확인·CI 재실행(2026-11-10 새벽 GitHub Actions 장애로 실패)·스쿼시 병합 대기 | 2026-11-10 야간 QA: `./gradlew test --offline` 133건 통과(건너뜀 3). 실제 2026.9. 파일 79,899곳 누락 없이 적재 0.7초, 검색 15~40ms. 임시 H2 파일 DB로 서버 2회 기동: 첫 기동 적재·재기동 건너뜀, 토큰 없는 검색 401. 실시간 API 실키 호출은 200 정상이나 10~17초 | 없음 |
 | A4 병동 생성 | `feat/ward-self-create` | #36 | 다른 브랜치에서 진행 중(이 브랜치 기준 미병합) | 해당 브랜치 work-status 참조 | 해당 브랜치 참조 |
-| A5 경력·팀 내 순서 | `feat/staff-admin-career-adjust` (`/private/tmp/NurseFlow-a5`) | 미개설(#36 병합 뒤 개설) | 구현 완료. 결정 10·11 반영. 팀 안 드래그 순서·선임 자격·편성 단계 조정·조정 이력 | 2026-11-10 `./gradlew test --offline` 141건 통과(건너뜀 4), StaffRosterSettingsHttpTest 7건 | Codex 리뷰 전 |
+| A5 경력·팀 내 순서 | `feat/staff-admin-career-adjust` (`/private/tmp/NurseFlow-a5`) | 미개설(#36 병합 뒤 개설) | 구현 완료. 결정 10·11 반영. 팀 안 드래그 순서·선임 자격·편성 단계 조정·조정 이력 | 2026-11-10 `./gradlew test --offline` 144건 통과(건너뜀 4). Codex 리뷰 P2 2건·P3·P4 수정 | 없음 |
 | A6·A7 이후 | 해당 없음 | 미개설 | 미착수. A6은 A4 병합, A7은 A6 병합 대기. 결정 4(보류)·9 반영 예정 | 해당 없음 | 없음 |
 
 ## 리뷰 상태
@@ -114,5 +114,7 @@ Claude와 Codex가 같은 진행 기록을 사용한다. PR 또는 정기 리뷰
 | `/Users/sihwan/Documents/ChatGPT/NurseFlow` | `feat/hospital-search` | `a68b578984da0ea3d8c4f93b7044b1ea8eacf671` | 미커밋 변경 없음 | 2026-11-10 | Claude | 위 P3 수정(모든 필드 2,000자 제한)과 테스트 보강. 야간 QA 결과는 A3 행 참조 |
 | GitHub PR #35 리뷰 | `feat/hospital-search` | `68b59814641f6341e0bfe611946db8b713ef3834` | 해당 없음(PR diff 기준) | 2026-11-10 | hyen11 | B4a/B4b 소비자 관점 계약 검토. P1/P2 없음. 응답 필드·200 빈 결과/503 구분은 화면에 충분. P3 2건: 정규화 후 최소 길이의 계약 명시·공통 검증, 기호 무시·정렬의 보장 범위 명시 |
 | `/Users/sihwan/Documents/ChatGPT/NurseFlow` | `feat/hospital-search` | `a3755fd3438ac30d3f168cc82e631c4a627ba12b` | 미커밋 변경 없음 | 2026-11-10 | Claude | 위 P3 2건 수정: 두 경로 공통 최소 길이 검증, 대체 경로는 외부 API 일치·정렬을 따른다고 계약에 명시. hyen11 재확인 전 |
+| `/private/tmp/NurseFlow-a5` | `feat/staff-admin-career-adjust` | `2a4967badad87b4781a4b30825ea04d6d3c48e2b` | 미커밋 변경 없음 | 2026-11-10 | Codex | A5 리뷰. P2 생성·활성 변경이 병동 잠금 밖, P2 비활성 간호사 순번 잔존, P3 동일 경력 재저장 이력, P4 계약 required·테스트·B5 범위. 권한·단계 범위·roster 코드 무영향 확인 |
+| `/private/tmp/NurseFlow-a5` | `feat/staff-admin-career-adjust` | `68c6b412ba1b16f71a347adfae4990b1dbd17e97` | 미커밋 변경 없음 | 2026-11-10 | Claude | 위 지적 모두 수정. Codex 재리뷰 전 |
 
 이 문서는 Claude와 Codex가 각 기능 단위 작업 후 진행 결과를 함께 기록하는 단일 공유 현황이다.
