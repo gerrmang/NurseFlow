@@ -38,6 +38,6 @@ class FakeWardApi : NurseFlowApi {
 
 fun membership(wardId: String, role: String = InvitationRoles.MEMBER) = MembershipDto(wardId, "가상 병동", listOf(role), true)
 fun preview(wardId: String = "ward-1", role: String = InvitationRoles.MEMBER, links: Boolean = false) =
-    InvitationPreviewDto(wardId, "가상 병동", role, "2026-11-11T00:00:00Z", links)
+    InvitationPreviewDto(wardId, "가상 병동", role, "2026-11-11T00:00:00Z", links, hospitalName = "가상 병원")
 fun apiError(status: Int, code: String?) = ApiException(status, code, "고정 메시지")
 fun network() = ApiException(0, "NETWORK", "고정 메시지")

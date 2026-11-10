@@ -83,6 +83,8 @@ data class InvitationPreviewDto(
     val role: String,
     val expiresAt: String,
     val linksExistingNurse: Boolean,
+    /** A4: tells which hospital's ward this is (ward names repeat across hospitals). Null for older wards. */
+    val hospitalName: String? = null,
 )
 
 @Serializable

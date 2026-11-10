@@ -61,11 +61,13 @@ class InvitationApiTest {
 
     @Test fun previewAndRedeemSendTokenOnlyInBody() = runBlocking {
         MockWebServer().use { server ->
-            server.enqueue(json("""{"wardId":"ward-1","wardName":"가상 병동","role":"WARD_MEMBER","expiresAt":"2026-11-11T00:00:00Z","linksExistingNurse":true}"""))
+            server.enqueue(json("""{"wardId":"ward-1","wardName":"가상 병동","role":"WARD_MEMBER","expiresAt":"2026-11-11T00:00:00Z","linksExistingNurse":true,"hospitalName":"가상 병원"}"""))
             server.enqueue(json("""{"wardId":"ward-1","wardName":"가상 병동","roles":["WARD_MEMBER"],"canViewWardCalendar":true}""", 201))
             server.enqueue(json("""{"wardId":"ward-2","wardName":"가상 병동2","roles":["WARD_ADMIN"],"canViewWardCalendar":true}""", 201))
             val api = api(server)
-            assertTrue(api.preview(InvitationTokenBody(token)).linksExistingNurse)
+            val previewDto = api.preview(InvitationTokenBody(token))
+            assertTrue(previewDto.linksExistingNurse)
+            assertEquals("가상 병원", previewDto.hospitalName)
             assertEquals("ward-1", api.redeem(RedeemInvitationBody(token, "2020-03")).wardId)
             assertEquals("ward-2", api.redeem(RedeemInvitationBody(token)).wardId)
             val (previewLine, preview) = body(server)

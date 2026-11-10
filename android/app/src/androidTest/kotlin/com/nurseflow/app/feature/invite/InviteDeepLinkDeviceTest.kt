@@ -62,7 +62,7 @@ class InviteDeepLinkDeviceTest {
                         when (token) {
                             expiredToken -> json("""{"code":"INVITATION_EXPIRED"}""", 410)
                             adminToken -> json("""{"wardId":"fake-invite-ward","wardName":"가상 초대 병동","role":"WARD_ADMIN","expiresAt":"2099-01-01T00:00:00Z","linksExistingNurse":false}""")
-                            else -> json("""{"wardId":"fake-invite-ward","wardName":"가상 초대 병동","role":"WARD_MEMBER","expiresAt":"2099-01-01T00:00:00Z","linksExistingNurse":true}""")
+                            else -> json("""{"wardId":"fake-invite-ward","wardName":"가상 초대 병동","role":"WARD_MEMBER","expiresAt":"2099-01-01T00:00:00Z","linksExistingNurse":true,"hospitalName":"가상 시범 병원"}""")
                         }
                     }
                     "/api/v1/invitations/redeem" -> {
@@ -117,6 +117,7 @@ class InviteDeepLinkDeviceTest {
         login()
         awaitText("가상 초대 병동")
         awaitText("관리자가 등록한 간호사 기록과 연결됩니다.")
+        awaitText("병원: 가상 시범 병원")
         // Rotation-like recreation keeps the preview without re-reading the link.
         instrumentation.runOnMainSync { first.recreate() }
         await { first.isDestroyed && mainActivities().size == 1 }

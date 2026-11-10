@@ -260,6 +260,36 @@
 - `INVALID_HOSPITAL_JOIN_MONTH`: 앱의 사전 확인이 미래 연월과 1950년 이전을 막기 때문에 실제 서버에서는 화면으로 재현할 수 없다. 목업 주입으로만 확인했다.
 - `USER_NOT_FOUND`: 실제 서버에서 재현하려면 사용자 행을 지워야 하므로 하지 않았다. 목업으로만 확인했다.
 
+## 최신 dev 반영과 재검증 (2026-11-10 밤)
+
+**반영 내용**
+- A4(#36, `6a2cf29`)와 A5(#37, `bdc96a6`)가 병합된 `origin/dev`를 병합 커밋 `00373b9`로 반영했다.
+- 충돌은 없었다. 강제 push를 피하려고 rebase 대신 merge를 썼다.
+- dev 변경은 백엔드와 공유 문서뿐이고, `android/`·`web/`·CI 파일은 바뀌지 않았다.
+
+**B3a 계약 영향 점검**
+- 초대 미리보기와 가입 응답에 `hospitalName`(null 가능)이 추가됐다. 다른 병원에 같은 이름의 병동이 있을 수 있어서다.
+  - 기존 앱은 알 수 없는 필드를 무시하므로 호환된다.
+  - 미리보기에 "병원: …"을 표시하도록 반영했다. 값이 없으면 표시하지 않는다.
+  - 테스트 픽스처의 가상 병동에는 `hospital_name='가상 시범 병원'`을 넣었다.
+- staff 목록 응답에 추가된 필드(`teamOrder`, `seniorEligible`, `stageOverride`, `rosterStage`)와 `wards`의 새 nullable 열은 B3a가 쓰는 필드(`nurseId`, `displayName`, `active`, `linkedAccount`)에 영향이 없다.
+
+**A 후속 수정 상태 (PR 대기 항목)**
+- `origin/fix/kakao-diagnostics-invite-contract`(`be6d78c`)는 dev에 반영되지 않았다(PR 없음). OpenAPI 초대 수락 계약 정정이 여기에 있다.
+- B3a에는 섞지 않았다. 앱은 현재 서버 동작에 맞춰 동작한다.
+
+**재검증 (반영 뒤 코드 기준)**
+
+| 검사 | 결과 |
+| --- | --- |
+| 백엔드 `./gradlew.bat test` (E2E 플래그 없음) | `BUILD SUCCESSFUL`, XML 167건, 실패 0, 건너뜀 5(opt-in 픽스처 포함) |
+| `:app:testDebugUnitTest :app:assembleDebug :app:assembleDebugAndroidTest :app:lintDebug` | `BUILD SUCCESSFUL`, JVM 74건 통과, Lint 오류 0·기존 경고 33 |
+| `:app:connectedDebugAndroidTest` (임시 데이터 `Pixel_10`) | XML 31건 중 25건 통과·6건 opt-in 건너뜀·실패 0. 콜드 링크 테스트에서 병원명 표시 확인 |
+| 가짜 OIDC 실서버 E2E (`InvitationJoinDeviceTest` + 픽스처, dev 반영 서버) | 기기 `OK (1 test)` 22.221초, 서버 `BUILD SUCCESSFUL`. 실제 서버의 `hospitalName`이 미리보기에 표시됨 |
+
+- 첫 JVM 컴파일은 테스트의 지역 변수 이름이 겹쳐 실패했다. 이름만 바꾸고 다시 실행해 통과했다.
+- 실제 Kakao 수동 검증은 반영 전 코드로 했다. 반영 뒤에는 다시 하지 않았다. 그 사이 바뀐 앱 코드는 병원명 표시뿐이다.
+
 ## 재현 명령
 
 첫 번째 터미널에서 `backend/`로 이동해 실행한다. 기기 검사가 `/finish`를 호출할 때까지 최대 10분 기다린다.

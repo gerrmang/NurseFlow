@@ -101,6 +101,7 @@ fun JoinInvitationScreen(viewModel: JoinInvitationViewModel, onEnterWard: (Strin
 private fun PreviewCard(preview: InvitationPreviewDto) {
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            preview.hospitalName?.takeIf { it.isNotBlank() }?.let { Text("병원: $it") }
             Text(preview.wardName, style = MaterialTheme.typography.titleMedium)
             Text("초대 역할: ${roleLabel(preview.role)}")
             Text("만료: ${formatInstant(preview.expiresAt)}")

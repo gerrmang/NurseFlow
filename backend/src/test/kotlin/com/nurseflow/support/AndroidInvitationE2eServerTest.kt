@@ -37,7 +37,7 @@ class AndroidInvitationE2eServerTest {
         val ward = UUID.randomUUID()
         val admin = UUID.randomUUID()
         val now = Instant.now().toString()
-        jdbc.update("INSERT INTO wards(ward_id,name,time_zone) VALUES(?,?,'Asia/Seoul')", ward, "가상 초대 병동")
+        jdbc.update("INSERT INTO wards(ward_id,name,time_zone,hospital_name) VALUES(?,?,'Asia/Seoul',?)", ward, "가상 초대 병동", "가상 시범 병원")
         jdbc.update("INSERT INTO users(user_id,provider,provider_subject,display_name,created_at,last_login_at) VALUES(?,'KAKAO',?,?,?,?)",
             admin, "invite-admin", "가상 admin", now, now)
         jdbc.update("INSERT INTO ward_memberships(ward_id,subject,role,can_view_ward_calendar) VALUES(?,?,'WARD_ADMIN',TRUE)",

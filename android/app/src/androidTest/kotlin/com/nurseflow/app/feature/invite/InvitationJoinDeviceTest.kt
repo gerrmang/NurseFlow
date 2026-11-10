@@ -81,6 +81,7 @@ class InvitationJoinDeviceTest {
             click("닫기")
             open(memberLink)
             waitText("관리자가 등록한 간호사 기록과 연결됩니다.")
+            waitText("병원: 가상 시범 병원") // A4 hospitalName from the real server
             waitText("초대 역할: 간호사")
             typeMonth("2020-03")
             click("가입하기")
