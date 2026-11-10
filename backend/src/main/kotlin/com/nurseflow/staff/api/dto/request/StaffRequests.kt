@@ -51,3 +51,15 @@ data class StaffRequest(
 )
 
 data class TeamAssignmentRequest(val teamId: UUID?)
+
+/** The team's active nurses, most senior first, as dragged by the admin. */
+data class TeamOrderRequest(
+    @field:Size(max = 200)
+    val nurseIds: List<UUID>,
+)
+
+data class RosterSettingsRequest(
+    val seniorEligible: Boolean,
+    @field:Min(1) @field:Max(5)
+    val stageOverride: Int? = null,
+)

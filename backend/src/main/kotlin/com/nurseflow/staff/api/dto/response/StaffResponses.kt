@@ -31,6 +31,24 @@ data class StaffMemberResponse(
     val linkedAccount: Boolean,
     val team: TeamResponse?,
     val profile: CareerProfileResponse,
+    val teamOrder: Int?,
+    val seniorEligible: Boolean,
+    val stageOverride: Int?,
+    val rosterStage: Int?,
 )
+
+data class StaffMemberItems(val items: List<StaffMemberResponse>)
+
+data class StaffAdjustmentResponse(
+    val adjustmentId: UUID,
+    val kind: String,
+    val before: String?,
+    val after: String?,
+    val actorUserId: String,
+    val actorName: String?,
+    val at: Instant,
+)
+
+data class StaffAdjustmentItems(val items: List<StaffAdjustmentResponse>)
 
 data class StaffPage(val items: List<StaffMemberResponse>, val page: Int, val pageSize: Int, val totalItems: Int)

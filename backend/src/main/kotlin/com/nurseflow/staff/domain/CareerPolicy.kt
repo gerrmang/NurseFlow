@@ -15,6 +15,9 @@ data class CareerPolicy(val stageThresholdMonths: List<Int>, val ranks: List<Str
 
     fun stageFor(experienceMonths: Int): Int = 1 + stageThresholdMonths.count { experienceMonths >= it }
 
+    /** Number of stages (thresholds + 1); an admin stage override must lie in 1..stageCount. */
+    val stageCount: Int get() = stageThresholdMonths.size + 1
+
     companion object {
         val DEFAULT = CareerPolicy(listOf(12, 36, 72, 120), listOf("팀장", "과장", "신규"))
         const val MAX_RANKS = 20

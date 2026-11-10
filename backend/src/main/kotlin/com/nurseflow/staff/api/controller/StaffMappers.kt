@@ -4,13 +4,17 @@ import com.nurseflow.common.error.BusinessException
 import com.nurseflow.common.error.ErrorCode
 import com.nurseflow.staff.api.dto.request.CareerProfileRequest
 import com.nurseflow.staff.api.dto.request.HospitalJoinMonthRequest
+import com.nurseflow.staff.api.dto.request.RosterSettingsRequest
 import com.nurseflow.staff.api.dto.request.StaffRequest
 import com.nurseflow.staff.api.dto.response.CareerPolicyResponse
 import com.nurseflow.staff.api.dto.response.CareerProfileResponse
+import com.nurseflow.staff.api.dto.response.StaffAdjustmentResponse
 import com.nurseflow.staff.api.dto.response.StaffMemberResponse
 import com.nurseflow.staff.api.dto.response.TeamResponse
 import com.nurseflow.staff.application.model.CareerPolicyResult
 import com.nurseflow.staff.application.model.ProfileInput
+import com.nurseflow.staff.application.model.RosterSettingsInput
+import com.nurseflow.staff.application.model.StaffAdjustmentResult
 import com.nurseflow.staff.application.model.StaffInputCommand
 import com.nurseflow.staff.application.model.StaffResult
 import com.nurseflow.staff.application.model.TeamResult
@@ -30,7 +34,13 @@ internal fun StaffResult.toResponse() = StaffMemberResponse(
             experienceMonths, submittedStage, scoringStage,
         )
     },
+    teamOrder, seniorEligible, stageOverride, rosterStage,
 )
+
+internal fun StaffAdjustmentResult.toResponse() =
+    StaffAdjustmentResponse(adjustmentId, kind, before, after, actorUserId, actorName, at)
+
+internal fun RosterSettingsRequest.toInput() = RosterSettingsInput(seniorEligible, stageOverride)
 
 internal fun CareerProfileRequest.toInput() = ProfileInput(
     try {

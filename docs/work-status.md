@@ -20,7 +20,9 @@
 | B9a Android 공개 근무표 조회 | `feat/android-published-roster` (`dev` `fa47a5a` 통합) | [#34](https://github.com/gerrmang/NurseFlow/pull/34) | `dev` 병합 완료 (2026-11-10, 스쿼시 병합 커밋 `d1b8729`). 구현·기기·실서버 검증과 PR P3 수정 완료, 병합 전 Backend tests·Android debug build 통과 | [B9a 검증 기록](../android/B9a-verification.md), 아래 최종 검증 참조 | 기존 P2 해결, P3 수정 후 재리뷰 대기 |
 | 에이전트 지침 정합성 | `docs/agent-guidance-alignment` | #32 | `dev` 병합 완료 (2026-11-09, 일반 병합 커밋 `ab8347d`. 스쿼시 원칙에서 벗어남) | `git diff --check` 통과. GitHub Actions `Verify` PR 실행 성공, `dev` push 실행 성공 | 없음 |
 | A3 병원 검색 API | `feat/hospital-search` | #35 | PR 열림. Codex 리뷰 P2 1건·재리뷰 P3 1건, hyen11 계약 리뷰 P3 2건 모두 수정(P1/P2 없음). hyen11 수정분 확인·CI 재실행(2026-11-10 새벽 GitHub Actions 장애로 실패)·스쿼시 병합 대기 | 2026-11-10 야간 QA: `./gradlew test --offline` 133건 통과(건너뜀 3). 실제 2026.9. 파일 79,899곳 누락 없이 적재 0.7초, 검색 15~40ms. 임시 H2 파일 DB로 서버 2회 기동: 첫 기동 적재·재기동 건너뜀, 토큰 없는 검색 401. 실시간 API 실키 호출은 200 정상이나 10~17초 | 없음 |
-| A4 이후 | 해당 없음 | 미개설 | 미착수. A3 검색 계약·서버 기능에 의존 | 해당 없음 | 없음 |
+| A4 병동 생성 | `feat/ward-self-create` | #36 | 다른 브랜치에서 진행 중(이 브랜치 기준 미병합) | 해당 브랜치 work-status 참조 | 해당 브랜치 참조 |
+| A5 경력·팀 내 순서 | `feat/staff-admin-career-adjust` (`/private/tmp/NurseFlow-a5`) | 미개설(#36 병합 뒤 개설) | 구현 완료. 결정 10·11 반영. 팀 안 드래그 순서·선임 자격·편성 단계 조정·조정 이력 | 2026-11-10 `./gradlew test --offline` 141건 통과(건너뜀 4), StaffRosterSettingsHttpTest 7건 | Codex 리뷰 전 |
+| A6·A7 이후 | 해당 없음 | 미개설 | 미착수. A6은 A4 병합, A7은 A6 병합 대기. 결정 4(보류)·9 반영 예정 | 해당 없음 | 없음 |
 
 ## 리뷰 상태
 

@@ -1,6 +1,7 @@
 package com.nurseflow.staff.persistence.repository
 
 import com.nurseflow.staff.persistence.entity.DbStaff
+import com.nurseflow.staff.persistence.entity.DbStaffAdjustment
 import com.nurseflow.staff.persistence.entity.DbTeam
 import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.stereotype.Repository
@@ -98,9 +99,53 @@ class StaffJdbcRepository(private val jdbc: JdbcTemplate, private val mapper: Js
             displayName, mapper.writeValueAsString(qualifications), active, nurseId)
     }
 
+    /** A team change clears the position; the admin places the nurse in the new team's order. */
     fun assignTeam(nurseId: UUID, teamId: UUID?) {
-        jdbc.update("UPDATE nurses SET team_id=? WHERE nurse_id=?", teamId, nurseId)
+        jdbc.update("UPDATE nurses SET team_id=?, team_order=NULL WHERE nurse_id=?", teamId, nurseId)
     }
+
+    /** Serializes team ordering and team moves in one ward (same row lock as roster and membership changes). */
+    fun lockWard(wardId: UUID) {
+        jdbc.query("SELECT ward_id FROM wards WHERE ward_id=? FOR UPDATE", { rs, _ -> rs.getString(1) }, wardId)
+    }
+
+    fun activeTeamMembers(teamId: UUID): List<DbStaff> = jdbc.query(
+        "SELECT * FROM nurses WHERE team_id=? AND active=TRUE", { rs, _ -> mapStaff(rs) }, teamId,
+    )
+
+    fun setTeamOrder(nurseId: UUID, teamOrder: Int) {
+        jdbc.update("UPDATE nurses SET team_order=? WHERE nurse_id=?", teamOrder, nurseId)
+    }
+
+    fun updateRosterSettings(nurseId: UUID, seniorEligible: Boolean, stageOverride: Int?) {
+        jdbc.update("UPDATE nurses SET senior_eligible=?, stage_override=? WHERE nurse_id=?", seniorEligible, stageOverride, nurseId)
+    }
+
+    fun insertAdjustment(wardId: UUID, nurseId: UUID, kind: String, before: String?, after: String?, actor: String, at: Instant) {
+        jdbc.update(
+            """INSERT INTO staff_adjustments(adjustment_id,ward_id,nurse_id,kind,before_value,after_value,actor,at)
+               VALUES(?,?,?,?,?,?,?,?)""",
+            UUID.randomUUID(), wardId, nurseId, kind, before?.take(200), after?.take(200), actor, at.toString(),
+        )
+    }
+
+    fun adjustments(wardId: UUID, nurseId: UUID): List<DbStaffAdjustment> = jdbc.query(
+        """SELECT a.*, u.display_name AS actor_name FROM staff_adjustments a
+           LEFT JOIN users u ON CAST(u.user_id AS VARCHAR(36)) = a.actor
+           WHERE a.ward_id=? AND a.nurse_id=? ORDER BY a.at DESC, a.adjustment_id""",
+        { rs, _ ->
+            DbStaffAdjustment(
+                id = rs.getObject("adjustment_id", UUID::class.java),
+                kind = rs.getString("kind"),
+                before = rs.getString("before_value"),
+                after = rs.getString("after_value"),
+                actor = rs.getString("actor"),
+                actorName = rs.getString("actor_name"),
+                at = Instant.parse(rs.getString("at")),
+            )
+        },
+        wardId, nurseId,
+    )
 
     /** Nurse input records the hospital joining month without changing admin-managed career history. */
     fun submitHospitalJoinMonth(nurseId: UUID, hospitalJoinedOn: String) {
@@ -155,5 +200,8 @@ class StaffJdbcRepository(private val jdbc: JdbcTemplate, private val mapper: Js
         confirmedCareerStartedOn = rs.getString("confirmed_career_started_on"),
         confirmedRank = rs.getString("confirmed_rank_name"),
         confirmedAt = rs.getString("profile_confirmed_at")?.let(Instant::parse),
+        teamOrder = rs.getObject("team_order") as Int?,
+        seniorEligible = rs.getBoolean("senior_eligible"),
+        stageOverride = rs.getObject("stage_override") as Int?,
     )
 }

@@ -20,4 +20,17 @@ data class DbStaff(
     val confirmedCareerStartedOn: String?,
     val confirmedRank: String?,
     val confirmedAt: Instant?,
+    val teamOrder: Int?,
+    val seniorEligible: Boolean,
+    val stageOverride: Int?,
+)
+
+data class DbStaffAdjustment(
+    val id: UUID,
+    val kind: String,
+    val before: String?,
+    val after: String?,
+    val actor: String,
+    val actorName: String?,
+    val at: Instant,
 )

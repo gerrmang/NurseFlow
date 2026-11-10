@@ -3,8 +3,12 @@ package com.nurseflow.staff.api.controller
 import com.nurseflow.common.security.CurrentSubject
 import com.nurseflow.staff.api.dto.request.CareerProfileRequest
 import com.nurseflow.staff.api.dto.request.HospitalJoinMonthRequest
+import com.nurseflow.staff.api.dto.request.RosterSettingsRequest
 import com.nurseflow.staff.api.dto.request.StaffRequest
 import com.nurseflow.staff.api.dto.request.TeamAssignmentRequest
+import com.nurseflow.staff.api.dto.request.TeamOrderRequest
+import com.nurseflow.staff.api.dto.response.StaffAdjustmentItems
+import com.nurseflow.staff.api.dto.response.StaffMemberItems
 import com.nurseflow.staff.api.dto.response.StaffMemberResponse
 import com.nurseflow.staff.api.dto.response.StaffPage
 import com.nurseflow.staff.application.service.StaffService
@@ -77,6 +81,31 @@ class StaffController(private val staff: StaffService) {
         @PathVariable nurseId: UUID,
         @CurrentSubject subject: String,
     ): StaffMemberResponse = staff.confirmProfile(wardId, nurseId, subject).toResponse()
+
+    /** Admin drag order inside a team; the full list of the team's active nurses, most senior first. */
+    @PutMapping("/teams/{teamId}/order")
+    fun reorderTeam(
+        @PathVariable wardId: UUID,
+        @PathVariable teamId: UUID,
+        @Valid @RequestBody request: TeamOrderRequest,
+        @CurrentSubject subject: String,
+    ): StaffMemberItems = StaffMemberItems(staff.reorderTeam(wardId, teamId, request.nurseIds, subject).map { it.toResponse() })
+
+    @PutMapping("/staff/{nurseId}/roster-settings")
+    fun updateRosterSettings(
+        @PathVariable wardId: UUID,
+        @PathVariable nurseId: UUID,
+        @Valid @RequestBody request: RosterSettingsRequest,
+        @CurrentSubject subject: String,
+    ): StaffMemberResponse = staff.updateRosterSettings(wardId, nurseId, request.toInput(), subject).toResponse()
+
+    @GetMapping("/staff/{nurseId}/adjustments")
+    fun adjustments(
+        @PathVariable wardId: UUID,
+        @PathVariable nurseId: UUID,
+        @CurrentSubject subject: String,
+    ): ResponseEntity<StaffAdjustmentItems> = ResponseEntity.ok().header("Cache-Control", "private, no-store")
+        .body(StaffAdjustmentItems(staff.adjustments(wardId, nurseId, subject).map { it.toResponse() }))
 
     /** The signed-in nurse's own record. Editing resets confirmation until an admin re-confirms. */
     @GetMapping("/my-profile")

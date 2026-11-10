@@ -6,6 +6,8 @@ import com.nurseflow.common.error.ErrorCode
 import com.nurseflow.staff.application.model.CareerPolicyResult
 import com.nurseflow.staff.application.model.CareerProfileResult
 import com.nurseflow.staff.application.model.ProfileInput
+import com.nurseflow.staff.application.model.RosterSettingsInput
+import com.nurseflow.staff.application.model.StaffAdjustmentResult
 import com.nurseflow.staff.application.model.StaffInputCommand
 import com.nurseflow.staff.application.model.StaffResult
 import com.nurseflow.staff.application.model.TeamResult
@@ -94,7 +96,10 @@ class StaffService(
 
     // ── Staff (admin) ──
 
-    /** Team order first, then most experienced first (earliest career start), then name. */
+    /**
+     * Team order first, then the admin's order inside the team (relative seniority, decision 12), then for
+     * members not yet ordered the most experienced first (earliest career start), then name.
+     */
     @Transactional(readOnly = true)
     fun staff(wardId: UUID, actor: String, teamId: UUID?, includeInactive: Boolean): List<StaffResult> {
         wards.requireAdmin(wardId, actor)
@@ -105,6 +110,7 @@ class StaffService(
             .filter { teamId == null || it.teamId == teamId }
             .sortedWith(
                 compareBy<DbStaff>({ it.teamId?.let(order::get) ?: Int.MAX_VALUE })
+                    .thenBy(nullsLast()) { it.teamOrder }
                     .thenBy(nullsLast()) { it.confirmedCareerStartedOn ?: it.careerStartedOn }
                     .thenBy { it.displayName },
             )
@@ -136,11 +142,72 @@ class StaffService(
     @Transactional
     fun assignTeam(wardId: UUID, nurseId: UUID, teamId: UUID?, actor: String): StaffResult {
         wards.requireAdmin(wardId, actor)
-        requireStaff(wardId, nurseId)
-        teamId?.let { repo.findTeam(wardId, it) ?: throw BusinessException(ErrorCode.TEAM_NOT_FOUND) }
-        repo.assignTeam(nurseId, teamId)
-        audit.record(wardId, actor, "STAFF_TEAM_ASSIGNED", nurseId.toString())
+        val newTeam = teamId?.let { repo.findTeam(wardId, it) ?: throw BusinessException(ErrorCode.TEAM_NOT_FOUND) }
+        repo.lockWard(wardId)
+        val nurse = requireStaff(wardId, nurseId)
+        val context = context(wardId)
+        if (nurse.teamId != teamId) {
+            // A moved nurse has no position in the new team: listed after the admin-ordered members
+            // (by career date among the unordered) until the admin drags them into place.
+            repo.assignTeam(nurseId, teamId)
+            val before = nurse.teamId?.let(context.teams::get)?.name
+            adjust(wardId, nurseId, "TEAM_ASSIGNED", before, newTeam?.name, actor)
+            audit.record(wardId, actor, "STAFF_TEAM_ASSIGNED", nurseId.toString())
+        }
         return requireStaff(wardId, nurseId).toResult(context(wardId))
+    }
+
+    /**
+     * Saves the admin's drag order for a team: [nurseIds] must be exactly the team's active nurses, most
+     * senior first. Anything else means the team changed on another screen, so the client must reload.
+     */
+    @Transactional
+    fun reorderTeam(wardId: UUID, teamId: UUID, nurseIds: List<UUID>, actor: String): List<StaffResult> {
+        wards.requireAdmin(wardId, actor)
+        repo.findTeam(wardId, teamId) ?: throw BusinessException(ErrorCode.TEAM_NOT_FOUND)
+        if (nurseIds.toSet().size != nurseIds.size) throw BusinessException(ErrorCode.INVALID_REQUEST)
+        repo.lockWard(wardId)
+        val members = repo.activeTeamMembers(teamId).associateBy { it.id }
+        if (members.keys != nurseIds.toSet()) throw BusinessException(ErrorCode.TEAM_ORDER_STALE)
+        nurseIds.forEachIndexed { index, nurseId ->
+            val position = index + 1
+            val before = members.getValue(nurseId).teamOrder
+            if (before != position) {
+                repo.setTeamOrder(nurseId, position)
+                adjust(wardId, nurseId, "TEAM_ORDER", before?.toString(), position.toString(), actor)
+            }
+        }
+        audit.record(wardId, actor, "TEAM_REORDERED", teamId.toString())
+        val context = context(wardId)
+        return nurseIds.map { requireStaff(wardId, it).toResult(context) }
+    }
+
+    /** Senior eligibility is set by the admin only (decision 11); the stage override replaces the computed stage. */
+    @Transactional
+    fun updateRosterSettings(wardId: UUID, nurseId: UUID, input: RosterSettingsInput, actor: String): StaffResult {
+        wards.requireAdmin(wardId, actor)
+        val nurse = requireStaff(wardId, nurseId)
+        val context = context(wardId)
+        input.stageOverride?.let {
+            if (it !in 1..context.policy.stageCount) throw BusinessException(ErrorCode.INVALID_REQUEST)
+        }
+        if (nurse.seniorEligible != input.seniorEligible) {
+            adjust(wardId, nurseId, "SENIOR_ELIGIBLE", nurse.seniorEligible.toString(), input.seniorEligible.toString(), actor)
+        }
+        if (nurse.stageOverride != input.stageOverride) {
+            adjust(wardId, nurseId, "STAGE_OVERRIDE", nurse.stageOverride?.toString(), input.stageOverride?.toString(), actor)
+        }
+        repo.updateRosterSettings(nurseId, input.seniorEligible, input.stageOverride)
+        return requireStaff(wardId, nurseId).toResult(context)
+    }
+
+    @Transactional(readOnly = true)
+    fun adjustments(wardId: UUID, nurseId: UUID, actor: String): List<StaffAdjustmentResult> {
+        wards.requireAdmin(wardId, actor)
+        requireStaff(wardId, nurseId)
+        return repo.adjustments(wardId, nurseId).map {
+            StaffAdjustmentResult(it.id, it.kind, it.before, it.after, it.actor, it.actorName, it.at)
+        }
     }
 
     /** Confirms what the nurse submitted. Already-confirmed values are a no-op. */
@@ -154,6 +221,8 @@ class StaffService(
             validateCareerStart(YearMonth.parse(start), context)
             nurse.rank?.let { validateRank(it, context) }
             repo.confirmCareerStart(nurseId, start, actor, Instant.now())
+            adjust(wardId, nurseId, "PROFILE_CONFIRMED", profileLabel(nurse.confirmedCareerStartedOn, nurse.confirmedRank),
+                profileLabel(start, nurse.rank), actor)
             audit.record(wardId, actor, "PROFILE_CONFIRMED", nurseId.toString())
         }
         return requireStaff(wardId, nurseId).toResult(context)
@@ -163,10 +232,12 @@ class StaffService(
     @Transactional
     fun setProfileAsAdmin(wardId: UUID, nurseId: UUID, input: ProfileInput, actor: String): StaffResult {
         wards.requireAdmin(wardId, actor)
-        requireStaff(wardId, nurseId)
+        val nurse = requireStaff(wardId, nurseId)
         val context = context(wardId)
         validate(input, context)
         repo.confirmProfile(nurseId, input.careerStartedOn.toString(), input.rank, actor, Instant.now())
+        adjust(wardId, nurseId, "PROFILE_SET_BY_ADMIN", profileLabel(nurse.confirmedCareerStartedOn, nurse.confirmedRank),
+            profileLabel(input.careerStartedOn.toString(), input.rank), actor)
         audit.record(wardId, actor, "PROFILE_SET_BY_ADMIN", nurseId.toString())
         return requireStaff(wardId, nurseId).toResult(context)
     }
@@ -241,6 +312,12 @@ class StaffService(
         }
     }
 
+    private fun adjust(wardId: UUID, nurseId: UUID, kind: String, before: String?, after: String?, actor: String) =
+        repo.insertAdjustment(wardId, nurseId, kind, before, after, actor, Instant.now())
+
+    private fun profileLabel(careerStartedOn: String?, rank: String?): String? =
+        if (careerStartedOn == null && rank == null) null else "${careerStartedOn ?: "-"} / ${rank ?: "-"}"
+
     private fun requireStaff(wardId: UUID, nurseId: UUID): DbStaff =
         repo.findStaff(wardId, nurseId) ?: throw BusinessException(ErrorCode.NURSE_NOT_FOUND)
 
@@ -260,6 +337,7 @@ class StaffService(
         val submittedMonths = submittedStart?.let { experienceMonths(it, context.today) }
         val confirmedMonths = confirmedStart?.let { experienceMonths(it, context.today) }
         val team = teamId?.let(context.teams::get)?.takeIf { it.active }
+        val scoringStage = confirmedMonths?.takeIf { status() == ProfileStatus.CONFIRMED }?.let(context.policy::stageFor)
         return StaffResult(
             nurseId = id,
             displayName = displayName,
@@ -278,8 +356,12 @@ class StaffService(
                 confirmedAt = confirmedAt,
                 experienceMonths = submittedMonths,
                 submittedStage = submittedMonths?.let(context.policy::stageFor),
-                scoringStage = confirmedMonths?.takeIf { status() == ProfileStatus.CONFIRMED }?.let(context.policy::stageFor),
+                scoringStage = scoringStage,
             ),
+            teamOrder = teamOrder?.takeIf { team != null },
+            seniorEligible = seniorEligible,
+            stageOverride = stageOverride,
+            rosterStage = stageOverride ?: scoringStage,
         )
     }
 
