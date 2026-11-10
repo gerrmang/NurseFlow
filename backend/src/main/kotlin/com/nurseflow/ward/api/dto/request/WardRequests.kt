@@ -1,5 +1,6 @@
 package com.nurseflow.ward.api.dto.request
 
+import com.nurseflow.hospital.application.service.HospitalDatasetImporter
 import jakarta.validation.Valid
 import jakarta.validation.constraints.NotBlank
 import jakarta.validation.constraints.NotNull
@@ -17,7 +18,7 @@ data class CreateWardRequest(
 
 /** The `source` and `externalId` of a hospital search result, as returned. */
 data class HospitalSelection(
-    @field:NotBlank @field:Pattern(regexp = "HIRA")
+    @field:NotBlank @field:Pattern(regexp = HospitalDatasetImporter.SOURCE)
     val source: String,
     @field:NotBlank @field:Size(max = 255)
     val externalId: String,

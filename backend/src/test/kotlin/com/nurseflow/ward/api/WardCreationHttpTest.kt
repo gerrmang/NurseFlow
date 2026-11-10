@@ -102,7 +102,8 @@ class WardCreationHttpTest : ApiTestBase() {
         val key = UUID.randomUUID().toString()
 
         val first = create(token, key = key)
-        val retry = create(token, key = key)
+        // Only surrounding spaces differ; the stored ward would be the same, so this is a replay.
+        val retry = create(token, body(externalId = " FAKE-H1", wardName = "  가상 내과 병동 "), key = key)
         val changed = create(token, body(wardName = "다른 병동"), key = key)
         val stolen = create(other, key = key)
 
@@ -130,6 +131,19 @@ class WardCreationHttpTest : ApiTestBase() {
         } finally {
             executor.shutdownNow()
         }
+    }
+
+    @Test
+    fun `an invitation preview names the hospital so same-named wards can be told apart`() {
+        val (_, admin) = userToken("가상 관리자")
+        val (_, nurse) = userToken("가상 간호사")
+        val wardId = create(admin).json!!.get("wardId").asString()
+        val token = http.post("/api/v1/wards/$wardId/invitations", mapOf("role" to "WARD_MEMBER"), admin).json!!.get("token").asString()
+
+        val preview = http.post("/api/v1/invitations/preview", mapOf("token" to token), nurse)
+
+        assertEquals(200, preview.status, preview.body)
+        assertEquals("가상대학교병원", preview.json!!.get("hospitalName").asString())
     }
 
     @Test

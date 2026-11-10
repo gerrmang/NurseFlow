@@ -48,8 +48,6 @@ class WardJdbcRepository(private val jdbc: JdbcTemplate) {
         { rs, _ -> rs.getString("role") }, wardId, subject,
     ).toSet()
 
-    fun findWardName(wardId: UUID): String? = findWardLabel(wardId)?.name
-
     fun findWardLabel(wardId: UUID): DbWardLabel? = jdbc.query(
         "SELECT name, hospital_name FROM wards WHERE ward_id=?",
         { rs, _ -> DbWardLabel(rs.getString("name"), rs.getString("hospital_name")) }, wardId,
@@ -74,20 +72,6 @@ class WardJdbcRepository(private val jdbc: JdbcTemplate) {
         jdbc.update(
             "INSERT INTO ward_memberships(ward_id,subject,role,can_view_ward_calendar) VALUES(?,?,?,?)",
             wardId, subject, role, canViewWardCalendar,
-        )
-    }
-
-    /** Saved response for an Idempotency-Key, with the operation and request hash it was stored for. */
-    fun findReplay(key: UUID): Triple<String, String, String>? = jdbc.query(
-        "SELECT operation,request_hash,response_json FROM mutation_replays WHERE idempotency_key=?",
-        { rs, _ -> Triple(rs.getString("operation"), rs.getString("request_hash"), rs.getString("response_json")) },
-        key,
-    ).firstOrNull()
-
-    fun insertReplay(key: UUID, operation: String, requestHash: String, responseJson: String) {
-        jdbc.update(
-            "INSERT INTO mutation_replays(idempotency_key,operation,request_hash,response_json) VALUES(?,?,?,?)",
-            key, operation, requestHash, responseJson,
         )
     }
 }

@@ -2,6 +2,7 @@ package com.nurseflow.hospital.persistence.repository
 
 import com.nurseflow.hospital.application.model.HospitalCandidate
 import org.springframework.jdbc.core.JdbcTemplate
+import org.springframework.jdbc.core.RowMapper
 import org.springframework.stereotype.Repository
 import java.time.Instant
 import java.util.UUID
@@ -20,7 +21,20 @@ data class HospitalDatasetInfo(val version: String, val fileSha256: String)
 
 @Repository
 class HospitalJdbcRepository(private val jdbc: JdbcTemplate) {
-    fun hasActive(source: String): Boolean = countActive(source) > 0
+    private val candidate = RowMapper { rs, _ ->
+        HospitalCandidate(
+            source = rs.getString("source"),
+            externalId = rs.getString("external_id"),
+            name = rs.getString("name"),
+            address = rs.getString("address"),
+            category = rs.getString("category_name"),
+        )
+    }
+
+    /** Whether a list is loaded; stops at the first row instead of counting ~80,000. */
+    fun hasActive(source: String): Boolean = jdbc.query(
+        "SELECT 1 FROM hospitals WHERE source=? AND active=TRUE FETCH FIRST 1 ROWS ONLY", { _, _ -> true }, source,
+    ).isNotEmpty()
 
     /**
      * Contains-match on the normalized name. Order: exact name, then hospital-level institutions before clinics
@@ -33,30 +47,14 @@ class HospitalJdbcRepository(private val jdbc: JdbcTemplate) {
            ORDER BY CASE WHEN search_name=? THEN 0 ELSE 1 END, search_rank,
                     CASE WHEN search_name LIKE ? THEN 0 ELSE 1 END, name, external_id
            OFFSET ? ROWS FETCH NEXT ? ROWS ONLY""",
-        { rs, _ ->
-            HospitalCandidate(
-                source = rs.getString("source"),
-                externalId = rs.getString("external_id"),
-                name = rs.getString("name"),
-                address = rs.getString("address"),
-                category = rs.getString("category_name"),
-            )
-        },
+        candidate,
         "%$searchName%", searchName, "$searchName%", offset, limit,
     )
 
     fun findActive(source: String, externalId: String): HospitalCandidate? = jdbc.query(
         """SELECT source, external_id, name, address, category_name FROM hospitals
            WHERE source=? AND external_id=? AND active=TRUE""",
-        { rs, _ ->
-            HospitalCandidate(
-                source = rs.getString("source"),
-                externalId = rs.getString("external_id"),
-                name = rs.getString("name"),
-                address = rs.getString("address"),
-                category = rs.getString("category_name"),
-            )
-        },
+        candidate,
         source, externalId,
     ).firstOrNull()
 

@@ -3,6 +3,8 @@ package com.nurseflow.ward.application.service
 import com.nurseflow.common.audit.AuditLog
 import com.nurseflow.common.error.BusinessException
 import com.nurseflow.common.error.ErrorCode
+import com.nurseflow.common.idempotency.MutationReplayRepository
+import com.nurseflow.common.idempotency.ReplayLookup
 import com.nurseflow.hospital.application.service.HospitalSearchService
 import com.nurseflow.ward.application.model.CreateWardCommand
 import com.nurseflow.ward.application.model.WardMembershipResult
@@ -13,8 +15,6 @@ import org.springframework.dao.DuplicateKeyException
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import org.springframework.transaction.support.TransactionTemplate
-import tools.jackson.databind.json.JsonMapper
-import java.security.MessageDigest
 import java.time.DateTimeException
 import java.time.Instant
 import java.time.ZoneId
@@ -26,7 +26,7 @@ class WardService(
     private val hospitals: HospitalSearchService,
     private val audit: AuditLog,
     private val transactions: TransactionTemplate,
-    private val mapper: JsonMapper,
+    private val replays: MutationReplayRepository,
 ) {
     /** Only memberships stored on the server count; token claims never grant ward access. */
     @Transactional(readOnly = true)
@@ -61,8 +61,14 @@ class WardService(
      * Retrying with the same Idempotency-Key returns the first result; a concurrent duplicate loses on
      * the replay row's primary key and is answered from it.
      */
-    fun createWard(command: CreateWardCommand, idempotencyKey: UUID, subject: String): WardMembershipResult {
-        val requestHash = requestHash(subject, command)
+    fun createWard(request: CreateWardCommand, idempotencyKey: UUID, subject: String): WardMembershipResult {
+        // Hash what is stored, so a retry that differs only in surrounding spaces replays instead of conflicting.
+        val command = request.copy(
+            hospitalExternalId = request.hospitalExternalId.trim(),
+            wardName = request.wardName.trim(),
+            timeZone = request.timeZone.trim(),
+        )
+        val requestHash = replays.requestHash(listOf(subject, command))
         replayed(idempotencyKey, requestHash)?.let { return it }
         return try {
             transactions.execute { create(command, idempotencyKey, requestHash, subject) }!!
@@ -80,7 +86,7 @@ class WardService(
         val hospital = hospitals.requireForWard(command.hospitalSource, command.hospitalExternalId)
         val ward = NewWard(
             wardId = UUID.randomUUID(),
-            name = command.wardName.trim(),
+            name = command.wardName,
             timeZone = zone.id,
             hospitalSource = hospital.source,
             hospitalExternalId = hospital.externalId,
@@ -93,21 +99,17 @@ class WardService(
         repo.insertMembership(ward.wardId, subject, WardRole.WARD_ADMIN.name, canViewWardCalendar = true)
         audit.record(ward.wardId, subject, "WARD_CREATED", hospital.externalId)
         val result = WardMembershipResult(ward.wardId, ward.name, listOf(WardRole.WARD_ADMIN), true, hospital.name)
-        repo.insertReplay(key, OPERATION, requestHash, mapper.writeValueAsString(result))
+        replays.recordReplay(key, OPERATION, requestHash, result)
         return result
     }
 
     /** The key is global, so another user's key or a different body is a conflict rather than a replay. */
-    private fun replayed(key: UUID, requestHash: String): WardMembershipResult? {
-        val (operation, hash, json) = repo.findReplay(key) ?: return null
-        if (operation != OPERATION || hash != requestHash) throw BusinessException(ErrorCode.IDEMPOTENCY_KEY_REUSED)
-        return mapper.readValue(json, WardMembershipResult::class.java)
-    }
-
-    private fun requestHash(subject: String, command: CreateWardCommand): String =
-        MessageDigest.getInstance("SHA-256")
-            .digest(mapper.writeValueAsBytes(listOf(subject, command)))
-            .joinToString("") { "%02x".format(it) }
+    private fun replayed(key: UUID, requestHash: String): WardMembershipResult? =
+        when (val found = replays.replay(key, OPERATION, requestHash, WardMembershipResult::class.java)) {
+            ReplayLookup.Missing -> null
+            ReplayLookup.Conflict -> throw BusinessException(ErrorCode.IDEMPOTENCY_KEY_REUSED)
+            is ReplayLookup.Found -> found.value
+        }
 
     private companion object {
         const val OPERATION = "CREATE_WARD"

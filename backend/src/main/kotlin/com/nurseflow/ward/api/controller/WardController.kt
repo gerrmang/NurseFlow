@@ -33,7 +33,7 @@ class WardController(private val wards: WardService) {
         @CurrentSubject subject: String,
     ): ResponseEntity<WardMembershipResponse> {
         val hospital = request.hospital!!
-        val command = CreateWardCommand(hospital.source, hospital.externalId.trim(), request.wardName, request.timeZone)
+        val command = CreateWardCommand(hospital.source, hospital.externalId, request.wardName, request.timeZone)
         return ResponseEntity.status(HttpStatus.CREATED).body(wards.createWard(command, idempotencyKey, subject).toResponse())
     }
 }

@@ -42,10 +42,12 @@ class HospitalSearchService(
      * cannot choose the stored name. Hospitals outside the list cannot be used (no manual entry).
      */
     fun requireForWard(source: String, externalId: String): HospitalCandidate {
+        hospitals.findActive(source, externalId)?.let { return it }
+        // Without an imported list the live API fallback cannot vouch for a hospital, so creation waits for the list.
         if (!hospitals.hasActive(HospitalDatasetImporter.SOURCE)) {
             throw BusinessException(ErrorCode.HOSPITAL_SEARCH_NOT_CONFIGURED)
         }
-        return hospitals.findActive(source, externalId) ?: throw BusinessException(ErrorCode.HOSPITAL_NOT_FOUND)
+        throw BusinessException(ErrorCode.HOSPITAL_NOT_FOUND)
     }
 
     companion object {

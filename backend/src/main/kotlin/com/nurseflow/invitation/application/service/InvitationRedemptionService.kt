@@ -36,10 +36,11 @@ class InvitationRedemptionService(
         val invitation = repo.findByTokenHash(OpaqueToken.sha256Hex(token))
             ?: throw BusinessException(ErrorCode.INVITATION_NOT_FOUND)
         requireRedeemable(invitation, Instant.now())
-        val wardName = wardRepo.findWardName(invitation.wardId)
+        val ward = wardRepo.findWardLabel(invitation.wardId)
             ?: throw BusinessException(ErrorCode.INVITATION_NOT_FOUND)
         return InvitationPreview(
-            invitation.wardId, wardName, WardRole.valueOf(invitation.role), invitation.expiresAt, invitation.nurseId != null,
+            invitation.wardId, ward.name, WardRole.valueOf(invitation.role), invitation.expiresAt,
+            invitation.nurseId != null, ward.hospitalName,
         )
     }
 

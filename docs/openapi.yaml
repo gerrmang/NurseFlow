@@ -373,6 +373,7 @@ paths:
         병원·요양병원·정신병원·치과병원·한방병원) → 의원급, 같은 급에서는 앞부분 일치 → 포함 → 이름순이다.
         목록을 아직 적재하지 않은 서버는 같은 기관의 실시간 병원정보서비스 API로 대신 검색한다. 이 대체 경로는 응답에 10초 이상 걸릴 수 있고,
         검색어 일치 방식과 정렬은 외부 API를 따르므로 위의 기호 무시·정렬 규칙을 보장하지 않는다. 운영 서버는 복제 목록을 적재한다.
+        병동 생성(`POST /wards`)은 복제 목록으로 병원을 확인하므로, 대체 경로로 찾은 병원으로는 목록이 적재될 때까지 병동을 만들 수 없다(503).
         결과가 없으면 200과 빈 `items`를 돌려준다. 실시간 API 장애·시간 초과·호출 한도 초과는 503 `HOSPITAL_SEARCH_UNAVAILABLE`이다.
         화면에는 응답의 `attribution`(데이터 기준 시점 포함)을 출처로 표시하고, 검색은 입력할 때마다가 아니라 검색 실행 시 호출한다.
       parameters:
@@ -1982,6 +1983,10 @@ components:
           format: date-time
         linksExistingNurse:
           type: boolean
+        hospitalName:
+          type: [string, 'null']
+          description: 병동을 만들 때 고른 병원 이름. 같은 이름의 병동이 여러 병원에 있을 수 있으므로 가입 전 확인용으로 보여준다. 병원 없이 만들어진 이전 병동은 null
+          example: 가상대학교병원
     CreateInvitationRequest:
       type: object
       additionalProperties: false

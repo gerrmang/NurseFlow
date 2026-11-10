@@ -325,27 +325,6 @@ class RosterJdbcRepository(
     fun preserveLocked(jobId: UUID): Boolean =
         jdbc.queryForObject("SELECT preserve_locked FROM generation_jobs WHERE job_id=?", Boolean::class.java, jobId) == true
 
-    // ── Idempotency Replay ──
-
-    fun <T> replay(key: UUID, action: String, requestHash: String, type: Class<T>): ReplayLookup<T> {
-        val saved = jdbc.query(
-            "SELECT operation,request_hash,response_json FROM mutation_replays WHERE idempotency_key=?",
-            { rs, _ -> Triple(rs.getString("operation"), rs.getString("request_hash"), rs.getString("response_json")) },
-            key,
-        ).firstOrNull() ?: return ReplayLookup.Missing
-        if (saved.first != action || saved.second != requestHash) {
-            return ReplayLookup.Conflict
-        }
-        return ReplayLookup.Found(mapper.readValue(saved.third, type))
-    }
-
-    fun recordReplay(key: UUID, action: String, requestHash: String, response: Any) {
-        jdbc.update(
-            "INSERT INTO mutation_replays(idempotency_key,operation,request_hash,response_json) VALUES(?,?,?,?)",
-            key, action, requestHash, mapper.writeValueAsString(response),
-        )
-    }
-
     // ── Shared ──
 
     private fun mapRoster(rs: ResultSet) = DbRoster(
