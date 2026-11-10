@@ -16,7 +16,7 @@
 | A1 초대·경력 월 | `feat/invitation-24h-career-month` | #27 | `dev` 병합 완료 | 병합 확인 | 없음 |
 | B1 Android Kakao 세션 | `feat/android-kakao-session` | #30 | `dev` 병합 완료 (2026-11-09, 일반 병합 커밋 `9239fa6`) | 로컬 단위·기기·실서버 검증은 [`B1 검증 기록`](../android/B1-verification.md)에 기록. GitHub CI·PR 리뷰 여부는 별도 확인 | 기록된 미해결 P1 없음. 병합 방식은 아래 참고 |
 | A2 웹 세션 API | `feat/auth-web-session-v2` | #33 | `dev` 병합 완료 (2026-11-09, 스쿼시 병합 커밋 `fa47a5a`) | 2026-11-09 로컬 `./gradlew test --offline`: 108건 통과, 건너뜀 1. 동시 state 테스트(`FOR UPDATE` 제거 변이 3/3 실패)와 client_secret 전달(전달 줄 제거 변이 실패) 검출력 확인. 실제 Kakao E2E 미검증(목업만) | 없음 |
-| B2 웹 기반 세션 | `feat/web-foundation-session` (`dev` `23af850` 기준, 원격에 푸시) | 미개설 | **구현 완료·검증 대기**. 로컬 자동 검사와 curl 연동은 통과. 실제 브라우저 화면 확인과 실제 Kakao 왕복은 미검증(Kakao 개발자 계정이 팀원 소유라 대기) | 2026-11-10 WSL Ubuntu: CI와 같은 6단계(`npm ci`→`api:check`→`lint`→`typecheck`→`test` 49/49→`build`) 통과. 세션 변이 9개 중 등가 1개를 뺀 8개 검출. 로컬 백엔드 프록시 연동(curl) dev 20/20, preview 23/23. Windows에서는 스마트 앱 컨트롤 때문에 test·build 불가. [B2 검증 기록](../web/B2-verification.md) | 리뷰 전 |
+| B2 웹 기반 세션 | `feat/web-foundation-session` (`dev` `23af850` 기준, 원격에 푸시) | 미개설 | **구현 완료·실제 Kakao 1계정 검증 완료**(2026-11-10, 웨일). 로그인·복원·1분 만료 후 갱신·두 탭 갱신·로그아웃 전파·재시작 복원·취소 확인. 두 계정 전환·다른 브라우저·쿠키/Storage/Console/콜백 재사용의 브라우저 측 확인·GitHub CI는 미검증. PR 생성은 미승인 | 2026-11-10 WSL Ubuntu: CI와 같은 6단계(`npm ci`→`api:check`→`lint`→`typecheck`→`test` 49/49→`build`) 통과. 세션 변이 9개 중 등가 1개를 뺀 8개 검출. 로컬 백엔드 프록시 연동(curl) dev 20/20, preview 23/23. Windows에서는 스마트 앱 컨트롤 때문에 test·build 불가. [B2 검증 기록](../web/B2-verification.md) | 리뷰 전 |
 | B9a Android 공개 근무표 조회 | `feat/android-published-roster` (`dev` `fa47a5a` 통합) | [#34](https://github.com/gerrmang/NurseFlow/pull/34) | `dev` 병합 완료 (2026-11-10, 스쿼시 병합 커밋 `d1b8729`). 구현·기기·실서버 검증과 PR P3 수정 완료, 병합 전 Backend tests·Android debug build 통과 | [B9a 검증 기록](../android/B9a-verification.md), 아래 최종 검증 참조 | 기존 P2 해결, P3 수정 후 재리뷰 대기 |
 | 에이전트 지침 정합성 | `docs/agent-guidance-alignment` | #32 | `dev` 병합 완료 (2026-11-09, 일반 병합 커밋 `ab8347d`. 스쿼시 원칙에서 벗어남) | `git diff --check` 통과. GitHub Actions `Verify` PR 실행 성공, `dev` push 실행 성공 | 없음 |
 | A3 병원 검색 API | `feat/hospital-search` | #35 | PR 열림. Codex 리뷰 P2 1건·재리뷰 P3 1건, hyen11 계약 리뷰 P3 2건 모두 수정(P1/P2 없음). hyen11 수정분 확인·CI 재실행(2026-11-10 새벽 GitHub Actions 장애로 실패)·스쿼시 병합 대기 | 2026-11-10 야간 QA: `./gradlew test --offline` 133건 통과(건너뜀 3). 실제 2026.9. 파일 79,899곳 누락 없이 적재 0.7초, 검색 15~40ms. 임시 H2 파일 DB로 서버 2회 기동: 첫 기동 적재·재기동 건너뜀, 토큰 없는 검색 401. 실시간 API 실키 호출은 200 정상이나 10~17초 | 없음 |
@@ -138,11 +138,17 @@
     - 변이 검사로 가짜 서버가 응답 시점의 쿠키를 읽던 결함을 찾아, 요청 시점의 쿠키를 쓰도록 고쳤다. 이제 9개 중 등가 1개를 뺀 8개를 검출한다.
   - **로컬 백엔드 연동(curl, 프록시 경유)**: dev(Kakao 키 없음) 20/20, preview(가짜 키, Kakao 미호출) 23/23.
   - **보안 점검**: 번들에 Web Storage·`console.log`·테스트 문자열 0회. 서버 로그에 WARN/ERROR와 쿠키·토큰 값 0건.
-- **남은 검증**
-  - 브라우저 수동 확인(로그인 화면, 503 안내, Storage 비어 있음).
-  - 실제 Kakao 왕복: 키 설정을 준비한 뒤 별도로 진행한다.
-  - GitHub CI.
-- 상세 결과는 [B2 검증 기록](../web/B2-verification.md)에 있다.
+- **실제 Kakao 검증 (2026-11-10 저녁, Claude 진행·사용자 직접 조작)**
+  - **구성**: WSL 사본에서 백엔드·웹을 띄웠다. 매 실행 새 임시 H2 DB를 쓰고 access token 수명은 1분으로 줄였다.
+  - **비밀값**: Kakao 키와 Client Secret은 사용자가 만든 `~/.nurseflow-kakao.env`(권한 600)를 `source`로만 불러왔고 값은 출력하지 않았다.
+  - **첫 시도 실패**: 원인은 Kakao 앱의 Client Secret 활성화와 서버 설정 누락이었다(토큰 교환 401 `KOE010`). state·쿠키 단계는 정상이었다. 사용자가 secret을 추가한 뒤 해결됐다.
+  - **사용자 확인(웨일, 실제 계정 1개)**: 로그인, 소속 없음 화면, F5·새 탭 복원, 1분 뒤 갱신, 두 탭 동시 갱신, 로그아웃 전파, 브라우저 재시작 복원, 취소 후 로그인 화면 복귀가 모두 정상이었다.
+  - **서버 확인**
+    - DB 개수·시각: 로그인 시도 소비 각 1회, 두 탭 갱신 구간의 순차 회전(계열 폐기 없음), 로그아웃 시 계열 일괄 폐기.
+    - 로그: WARN·ERROR 0건이고, 토큰·쿠키·코드·키 값은 0회다.
+  - **미검증**: 두 실제 계정 전환, 웨일 외 브라우저, 쿠키 속성·Web Storage·Console·주소창·콜백 재사용의 브라우저 측 확인, 쿠키 차단 안내, GitHub CI.
+  - **A 후속**: Kakao 토큰 401일 때 서버 로그의 `kakaoErrorCode`가 비는 진단 공백.
+- 상세 결과는 [B2 검증 기록](../web/B2-verification.md) 5절에 있다.
 
 ### 다른 단위 상태 관찰
 
