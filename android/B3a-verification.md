@@ -356,5 +356,13 @@ Android 앱 업데이트만 필요하며 서버 배포나 데이터 이전은 �
 - [x] 검증 결과·생략한 검사·재현 절차 기록
 - [x] 첫 커밋·푸시 (`feat/android-invite-join`)
 - [x] 실제 Kakao 로그인 기반 초대 흐름 검증 (1계정. 두 계정 전환·클립보드·실제 메신저는 미검증)
-- [ ] PR 생성 (별도 승인 필요)
-- [ ] GitHub CI 확인과 Codex 리뷰
+- [x] [Draft PR #38](https://github.com/gerrmang/NurseFlow/pull/38), 대상 `dev`
+- [x] 구현 head `878cc71`의 GitHub CI 성공(아래 기록). 후속 문서 커밋의 CI는 최종 head 기준으로 별도 확인
+- [ ] 전체 코드에 대한 Codex PR 리뷰
+
+## PR·CI 현황 확인 (2026-11-10, Codex)
+
+- [PR #38](https://github.com/gerrmang/NurseFlow/pull/38): open·Draft, 대상 `dev`. 확인한 구현 head `878cc713ac98e6c6eab96d01386f1d08498951aa`.
+- GitHub API로 [Verify 42826307031](https://github.com/gerrmang/NurseFlow/actions/runs/42826307031)의 completed/success와 Backend tests·Android debug build 각각의 성공을 확인했다. 이 브랜치에는 B2 웹 작업이 없으므로 Web checks는 실행되지 않았다.
+- A5 PR #37의 `dev` 병합(`bdc96a6`)은 반영됐고 A 진단·초대 계약 후속 `be6d78c`는 미반영이다. Draft·계약 재대조 대기를 유지하며 다른 기능 변경을 섞지 않는다.
+- 이번 작업은 PR·CI 메타데이터와 문서 확인이다. 로컬 앱·서버·기기·실제 Kakao 검사는 재실행하지 않았고 전체 코드 리뷰나 독립 승인으로 주장하지 않는다. 문서 커밋·푸시 뒤 최종 head의 CI를 별도로 확인한다.
