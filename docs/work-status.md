@@ -27,7 +27,7 @@
 | 에이전트 지침 정합성 | `docs/agent-guidance-alignment` | #32 | `dev` 병합 완료 (2026-11-09, 일반 병합 커밋 `ab8347d`. 스쿼시 원칙에서 벗어남) | `git diff --check` 통과. GitHub Actions `Verify` PR 실행 성공, `dev` push 실행 성공 | 없음 |
 | A3 병원 검색 API | `feat/hospital-search` | #35 | `dev` 병합 완료 (2026-11-10, 스쿼시 병합 커밋 `23af850`) | 병합 전 `./gradlew test --offline` 134건 통과, CI 통과. 실제 2026.9. 파일 79,899곳 적재 0.7초, 검색 15~40ms | 없음 |
 | A4 병동 생성 | `feat/ward-self-create` | #36 | `dev` 병합 완료 (2026-11-10, 스쿼시 병합 커밋 `6a2cf29`) | 2026-11-10 `./gradlew test --offline` 138건 통과(건너뜀 4). 같은 키 동시 요청 테스트는 중복 키 처리 제거 변이 3/3 실패로 검출력 확인. 이전 스키마 H2에 schema.sql 두 번 적용 테스트 통과 | 없음 |
-| A5 경력·팀 내 순서 | `feat/staff-admin-career-adjust` (`/private/tmp/NurseFlow-a5`) | #37 | PR 열림. 결정 10·11 반영. 팀 안 드래그 순서·선임 자격·편성 단계 조정·조정 이력. Codex 리뷰 P2 2건·P3·P4 수정. 최신 `dev`(A4) 반영. hyen11 계약 검토(`5feb4f7`)·스쿼시 병합 대기 | 2026-11-10 최신 `dev`(A4) 병합 결과에서 `./gradlew test --offline` 154건 통과(건너뜀 4) | 없음 |
+| A5 경력·팀 내 순서 | `feat/staff-admin-career-adjust` (`/private/tmp/NurseFlow-a5`) | #37 | PR 열림. 결정 10·11 반영. 팀 안 드래그 순서·선임 자격·편성 단계 조정·조정 이력. Codex 리뷰 P2 2건·P3·P4, /code-review 10건 수정. 최신 `dev`(A4) 반영. hyen11 계약 검토(`5feb4f7`)·스쿼시 병합 대기 | 2026-11-10 최신 `dev`(A4) 반영 후 `./gradlew test --offline` 157건 통과(건너뜀 4) | 없음 |
 | A6·A7 이후 | 해당 없음 | 미개설 | 미착수. A6은 A4 병합으로 착수 가능, A7은 A6 병합 대기. 결정 4(보류)·9 반영 예정 | 해당 없음 | 없음 |
 
 ## 리뷰 상태
@@ -130,5 +130,6 @@ Claude와 Codex가 같은 진행 기록을 사용한다. PR 또는 정기 리뷰
 | `/Users/sihwan/Documents/ChatGPT/NurseFlow` | `feat/ward-self-create` | `bbd7b550202490ccdbed8f14823f2b03ca5b3da3` | 미커밋 변경 없음 | 2026-11-10 | Claude | 위 P4 2건 수정: 테스트 전용 하위 클래스로 순서 강제. 두 경로 변이 각 3/3 검출 |
 | `/private/tmp/NurseFlow-a5` | `feat/staff-admin-career-adjust` | `2a4967badad87b4781a4b30825ea04d6d3c48e2b` | 미커밋 변경 없음 | 2026-11-10 | Codex | A5 리뷰. P2 생성·활성 변경이 병동 잠금 밖, P2 비활성 간호사 순번 잔존, P3 동일 경력 재저장 이력, P4 계약 required·테스트·B5 범위. 권한·단계 범위·roster 코드 무영향 확인 |
 | `/private/tmp/NurseFlow-a5` | `feat/staff-admin-career-adjust` | `68c6b412ba1b16f71a347adfae4990b1dbd17e97` | 미커밋 변경 없음 | 2026-11-10 | Claude | 위 지적 모두 수정. Codex 재리뷰 전 |
+| `/private/tmp/NurseFlow-a5` | `feat/staff-admin-career-adjust` | `8295380c5f148acd9154e4bd77e55a46fc0f65fe` | 미커밋 변경 없음 | 2026-11-10 | Claude(/code-review) | A5 10건 모두 수정: 이력 seq 정렬, 팀 삭제·이동 잠금, 편성 설정 행 잠금, 활성 변경 시에만 병동 잠금(lockWard 재사용), 본인 화면 MyStaffProfile, stageOverride 필수, 순번 연속, 죽은 검사 제거, 조인 개선 |
 
 이 문서는 Claude와 Codex가 각 기능 단위 작업 후 진행 결과를 함께 기록하는 단일 공유 현황이다.
