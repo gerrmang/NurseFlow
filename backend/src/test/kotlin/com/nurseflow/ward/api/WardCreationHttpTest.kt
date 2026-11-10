@@ -117,20 +117,29 @@ class WardCreationHttpTest : ApiTestBase() {
     @Test
     fun `concurrent requests with the same key create one ward`() {
         val (_, token) = userToken()
-        val key = UUID.randomUUID().toString()
-        val start = CountDownLatch(1)
-        val executor = Executors.newFixedThreadPool(4)
-        try {
-            val results = (1..4).map { executor.submit<String> { start.await(); create(token, key = key).let { "${it.status}:${it.json?.get("wardId")?.asString()}" } } }
-            start.countDown()
-            val responses = results.map { it.get(10, TimeUnit.SECONDS) }
+        // Three rounds of eight same-key requests: later ones wait on the account lock and must replay the first.
+        repeat(3) { round ->
+            val key = UUID.randomUUID().toString()
+            val body = body(wardName = "가상 동시 병동 $round")
+            val start = CountDownLatch(1)
+            val executor = Executors.newFixedThreadPool(8)
+            try {
+                val results = (1..8).map {
+                    executor.submit<String> {
+                        start.await()
+                        create(token, body, key).let { "${it.status}:${it.json?.get("wardId")?.asString() ?: it.code}" }
+                    }
+                }
+                start.countDown()
+                val responses = results.map { it.get(10, TimeUnit.SECONDS) }
 
-            assertEquals(1, responses.toSet().size, responses.toString())
-            assertTrue(responses.first().startsWith("201:"), responses.toString())
-            assertEquals(1, jdbc.queryForObject("SELECT COUNT(*) FROM wards", Int::class.java))
-        } finally {
-            executor.shutdownNow()
+                assertEquals(1, responses.toSet().size, responses.toString())
+                assertTrue(responses.first().startsWith("201:"), responses.toString())
+            } finally {
+                executor.shutdownNow()
+            }
         }
+        assertEquals(3, jdbc.queryForObject("SELECT COUNT(*) FROM wards", Int::class.java))
     }
 
     @Test

@@ -341,9 +341,16 @@ paths:
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
-          $ref: '#/components/responses/Unauthorized'
+          description: 유효한 access token이 없거나(UNAUTHORIZED 계열) 토큰의 사용자가 없음(USER_NOT_FOUND, 다시 로그인)
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ApiProblem'
         '409':
-          description: IDEMPOTENCY_KEY_REUSED — 같은 키를 다른 요청 본문에 사용함
+          description: |
+            IDEMPOTENCY_KEY_REUSED — 같은 키를 다른 요청 본문이나 다른 사용자가 사용함.
+            WARD_ALREADY_CREATED — 같은 계정이 같은 병원·같은 병동명의 병동을 이미 만듦(새 키로 다시 보낸 이중 제출). 다른 관리자는 해당 없음.
+            WARD_CREATION_LIMIT_REACHED — 한 계정이 만들 수 있는 병동 수(기본 5개)를 모두 사용함. 같은 키 재시도는 상한과 관계없이 처음 병동을 돌려준다.
           content:
             application/problem+json:
               schema:

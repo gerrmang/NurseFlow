@@ -88,6 +88,9 @@ class WardService(
         val hospital = hospitals.requireForWard(command.hospitalSource, command.hospitalExternalId)
         val userId = runCatching { UUID.fromString(subject) }.getOrNull()
         if (userId == null || !repo.lockUser(userId)) throw BusinessException(ErrorCode.USER_NOT_FOUND)
+        // A same-key request that waited on this lock sees the committed first result here and replays it,
+        // instead of failing the duplicate or cap check below.
+        replayed(key, requestHash)?.let { return it }
         // A second ward with the same hospital and name by the same account is almost always a double submit
         // with a fresh key; other admins may still use the same names (decision 3).
         if (repo.existsCreatedBy(subject, hospital.source, hospital.externalId, command.wardName)) {
