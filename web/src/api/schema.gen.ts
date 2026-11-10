@@ -185,11 +185,16 @@ export interface paths {
         get: operations["listMyWards"];
         put?: never;
         /**
-         * 시연용 첫 병동과 관리자 생성
-         * @description 서버의 NURSEFLOW_BOOTSTRAP_CODE와 일치할 때만 병동을 만들고 호출자를 WARD_ADMIN으로 등록한다.
-         *     코드가 설정되지 않으면 404 BOOTSTRAP_DISABLED. 다른 구성원은 초대로만 가입한다.
+         * 병원을 골라 자기 병동을 만들고 관리자가 됨
+         * @description 로그인 사용자가 병원 검색(`GET /hospitals/search`) 결과에서 고른 병원과 병동명으로 새 병동을 만든다.
+         *     호출자는 그 병동의 `WARD_ADMIN`이 되며 간호사 기록은 만들지 않는다. 병원 선택은 재직 인증이 아니다.
+         *     클라이언트는 병원의 `source`·`externalId`만 보낸다. 서버가 복제된 공식 병원 목록에서 병원명·주소를 찾아
+         *     생성 시점의 표시값으로 저장하므로 클라이언트가 병원명을 바꿔 보낼 수 없다.
+         *     목록에 없거나 폐업으로 비활성화된 병원은 422 `HOSPITAL_NOT_FOUND`이며 직접 입력으로 만드는 경로는 없다.
+         *     같은 병원·같은 병동명의 병동을 다른 관리자가 만들 수 있고, 서로의 병동에 권한이 생기지 않는다.
+         *     같은 `Idempotency-Key`로 다시 보내면 처음 만든 병동을 그대로 돌려준다(재시도·중복 탭 대비).
          */
-        post: operations["bootstrapWard"];
+        post: operations["createWard"];
         delete?: never;
         options?: never;
         head?: never;
@@ -211,6 +216,7 @@ export interface paths {
          *     병원·요양병원·정신병원·치과병원·한방병원) → 의원급, 같은 급에서는 앞부분 일치 → 포함 → 이름순이다.
          *     목록을 아직 적재하지 않은 서버는 같은 기관의 실시간 병원정보서비스 API로 대신 검색한다. 이 대체 경로는 응답에 10초 이상 걸릴 수 있고,
          *     검색어 일치 방식과 정렬은 외부 API를 따르므로 위의 기호 무시·정렬 규칙을 보장하지 않는다. 운영 서버는 복제 목록을 적재한다.
+         *     병동 생성(`POST /wards`)은 복제 목록으로 병원을 확인하므로, 대체 경로로 찾은 병원으로는 목록이 적재될 때까지 병동을 만들 수 없다(503).
          *     결과가 없으면 200과 빈 `items`를 돌려준다. 실시간 API 장애·시간 초과·호출 한도 초과는 503 `HOSPITAL_SEARCH_UNAVAILABLE`이다.
          *     화면에는 응답의 `attribution`(데이터 기준 시점 포함)을 출처로 표시하고, 검색은 입력할 때마다가 아니라 검색 실행 시 호출한다.
          */
@@ -494,6 +500,77 @@ export interface paths {
         put?: never;
         /** 간호사가 입력한 경력 정보 확인 (이미 확인됐으면 변화 없음) */
         post: operations["confirmStaffProfile"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/wards/{wardId}/teams/{teamId}/order": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                wardId: components["parameters"]["WardId"];
+                teamId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * 팀 안 경력순 저장 (관리자 드래그 결과)
+         * @description 팀에 속한 활성 간호사 전원을 위(가장 선임)에서 아래 순서로 보낸다. 이 순서가 팀 안의 상대 경력순이며
+         *     병원 입사 연월이나 경력 시작 연월보다 우선한다(결정 12). 목록이 현재 팀의 활성 간호사와 정확히 같지 않으면
+         *     다른 화면에서 팀 구성이 바뀐 것이므로 409 `TEAM_ORDER_STALE`를 돌려준다. 순서가 바뀐 간호사마다 조정 이력을 남긴다.
+         *     관리자가 아직 순서를 정하지 않은 간호사(새로 추가·팀 이동)는 `teamOrder`가 null이며, 목록에서 순서가 정해진 간호사
+         *     아래에 경력 시작 연월이 이른 순으로 놓인다. 팀을 옮기거나 비활성화하면 순서가 지워지고, 다시 활성화되면 새로 놓는다.
+         */
+        put: operations["reorderTeam"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/wards/{wardId}/staff/{nurseId}/roster-settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                wardId: components["parameters"]["WardId"];
+                nurseId: components["parameters"]["NurseId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * 선임 자격·편성 단계 조정 (관리자만)
+         * @description 선임 자격은 관리자가 직접 지정한다(결정 11, 자동 제안 없음). `stageOverride`는 확정 경력으로 계산한
+         *     단계 대신 편성에 쓸 단계이며 null이면 계산값을 쓴다. 바뀐 항목마다 조정 이력을 남긴다.
+         */
+        put: operations["updateRosterSettings"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/wards/{wardId}/staff/{nurseId}/adjustments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                wardId: components["parameters"]["WardId"];
+                nurseId: components["parameters"]["NurseId"];
+            };
+            cookie?: never;
+        };
+        /** 간호사 편성 정보 조정 이력 (관리자만, 최신순) */
+        get: operations["listStaffAdjustments"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -873,6 +950,11 @@ export interface components {
             /** Format: date-time */
             expiresAt: string;
             linksExistingNurse: boolean;
+            /**
+             * @description 병동을 만들 때 고른 병원 이름. 같은 이름의 병동이 여러 병원에 있을 수 있으므로 가입 전 확인용으로 보여준다. 병원 없이 만들어진 이전 병동은 null
+             * @example 가상대학교병원
+             */
+            hospitalName?: string | null;
         };
         CreateInvitationRequest: {
             /** @enum {string} */
@@ -972,11 +1054,20 @@ export interface components {
                 newUser: boolean;
             };
         };
-        BootstrapWardRequest: {
-            name: string;
+        CreateWardRequest: {
+            /** @description 병원 검색 결과의 `source`·`externalId` 그대로 */
+            hospital: {
+                /** @enum {string} */
+                source: "HIRA";
+                externalId: string;
+            };
+            /**
+             * @description 앞뒤 공백을 제거해 저장한다
+             * @example 가상 내과 병동
+             */
+            wardName: string;
             /** @default Asia/Seoul */
             timeZone: string;
-            bootstrapCode: string;
         };
         CurrentUser: {
             /** Format: uuid */
@@ -990,6 +1081,11 @@ export interface components {
             wardName: string;
             roles: ("WARD_ADMIN" | "WARD_MEMBER")[];
             canViewWardCalendar: boolean;
+            /**
+             * @description 병동을 만들 때 고른 병원의 이름(생성 시점 값). 같은 이름의 병동을 구분하는 데 쓴다. 병원 없이 만들어진 이전 병동은 null
+             * @example 가상대학교병원
+             */
+            hospitalName?: string | null;
         };
         StaffPage: {
             items: components["schemas"]["StaffMember"][];
@@ -1083,6 +1179,53 @@ export interface components {
             linkedAccount: boolean;
             team?: components["schemas"]["Team"] | null;
             profile: components["schemas"]["CareerProfile"];
+            /** @description 관리자가 정한 팀 안 순서(1이 가장 선임, 빈 번호 없이 1부터 연속). 팀이 없거나 아직 정하지 않았으면 null. 이 순서가 팀 안 상대 경력순이다 */
+            teamOrder: number | null;
+            /** @description 관리자가 지정한 선임 자격 */
+            seniorEligible: boolean;
+            /** @description 관리자가 정한 편성 단계. null이면 확정 경력으로 계산 */
+            stageOverride: number | null;
+            /** @description 편성에 쓰는 단계 = stageOverride, 없으면 profile.scoringStage. 둘 다 없으면 null */
+            rosterStage: number | null;
+        };
+        /** @description 간호사 본인 기록. 팀 안 순서·선임 자격·편성 단계 같은 관리자 판단 값은 담지 않는다 */
+        MyStaffProfile: {
+            /** Format: uuid */
+            nurseId: string;
+            displayName: string;
+            qualifications: string[];
+            active: boolean;
+            linkedAccount: boolean;
+            team?: components["schemas"]["Team"] | null;
+            profile: components["schemas"]["CareerProfile"];
+        };
+        TeamOrderRequest: {
+            /** @description 팀의 활성 간호사 전원, 위(선임)에서 아래 순서 */
+            nurseIds: string[];
+        };
+        /** @description 전체 교체. 두 필드 모두 보내야 하며 stageOverride를 빼면 400이다(선임만 바꾸다 단계 조정이 지워지지 않도록) */
+        RosterSettingsRequest: {
+            seniorEligible: boolean;
+            /** @description null이면 계산 단계 사용 */
+            stageOverride: number | null;
+        };
+        StaffAdjustment: {
+            /** Format: uuid */
+            adjustmentId: string;
+            /** @enum {string} */
+            kind: "TEAM_ORDER" | "SENIOR_ELIGIBLE" | "STAGE_OVERRIDE" | "TEAM_ASSIGNED" | "PROFILE_SET_BY_ADMIN" | "PROFILE_CONFIRMED";
+            /**
+             * @description 바뀌기 전 값을 화면에 보여 줄 문자열로 담는다(예 팀 순서 "3", 단계 "2", 경력 "2020-03 / 과장").
+             *     TEAM_ASSIGNED는 팀 ID가 아니라 변경 당시의 팀 이름이다. 팀 이름이 나중에 바뀌거나 팀이 삭제돼도 그때의 팀을 보여 준다.
+             *     팀 삭제 때 남아 있던 비활성 간호사의 팀 해제도 TEAM_ASSIGNED(팀 이름 → null)로 남는다.
+             */
+            before?: string | null;
+            after?: string | null;
+            /** Format: uuid */
+            actorUserId: string;
+            actorName?: string | null;
+            /** Format: date-time */
+            at: string;
         };
         ShiftType: {
             /** Format: uuid */
@@ -1823,20 +1966,23 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
         };
     };
-    bootstrapWard: {
+    createWard: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Unique UUID per logical mutation; retrying the same key must not duplicate the operation. */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
             path?: never;
             cookie?: never;
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["BootstrapWardRequest"];
+                "application/json": components["schemas"]["CreateWardRequest"];
             };
         };
         responses: {
-            /** @description 생성된 병동 소속 */
+            /** @description 생성된 병동과 호출자의 관리자 소속 */
             201: {
                 headers: {
                     [name: string]: unknown;
@@ -1846,9 +1992,8 @@ export interface operations {
                 };
             };
             400: components["responses"]["BadRequest"];
-            401: components["responses"]["Unauthorized"];
-            /** @description BOOTSTRAP_CODE_INVALID */
-            403: {
+            /** @description 유효한 access token이 없거나(UNAUTHORIZED 계열) 토큰의 사용자가 없음(USER_NOT_FOUND, 다시 로그인) */
+            401: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -1856,8 +2001,30 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ApiProblem"];
                 };
             };
-            /** @description BOOTSTRAP_DISABLED */
-            404: {
+            /**
+             * @description IDEMPOTENCY_KEY_REUSED — 같은 키를 다른 요청 본문이나 다른 사용자가 사용함.
+             *     WARD_ALREADY_CREATED — 같은 계정이 같은 병원·같은 병동명의 병동을 이미 만듦(새 키로 다시 보낸 이중 제출). 다른 관리자는 해당 없음.
+             *     WARD_CREATION_LIMIT_REACHED — 한 계정이 만들 수 있는 병동 수(기본 5개)를 모두 사용함. 같은 키 재시도는 상한과 관계없이 처음 병동을 돌려준다.
+             */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description HOSPITAL_NOT_FOUND — 복제 목록에 없거나 비활성화된 병원 */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description HOSPITAL_SEARCH_NOT_CONFIGURED — 서버에 병원 목록이 적재되지 않아 병원을 확인할 수 없음 */
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -2755,6 +2922,156 @@ export interface operations {
             };
         };
     };
+    reorderTeam: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                wardId: components["parameters"]["WardId"];
+                teamId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TeamOrderRequest"];
+            };
+        };
+        responses: {
+            /** @description 새 순서의 팀 간호사 목록(위가 선임) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["StaffMember"][];
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            /** @description WARD_ADMIN_REQUIRED */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description TEAM_NOT_FOUND */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description TEAM_ORDER_STALE — 보낸 목록이 현재 팀의 활성 간호사와 다름. 다시 불러와 정렬한다 */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+        };
+    };
+    updateRosterSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                wardId: components["parameters"]["WardId"];
+                nurseId: components["parameters"]["NurseId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RosterSettingsRequest"];
+            };
+        };
+        responses: {
+            /** @description 갱신됨 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StaffMember"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            /** @description WARD_ADMIN_REQUIRED */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description NURSE_NOT_FOUND */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+        };
+    };
+    listStaffAdjustments: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                wardId: components["parameters"]["WardId"];
+                nurseId: components["parameters"]["NurseId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 조정 이력 */
+            200: {
+                headers: {
+                    "Cache-Control"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["StaffAdjustment"][];
+                    };
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            /** @description WARD_ADMIN_REQUIRED */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description NURSE_NOT_FOUND */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+        };
+    };
     getMyProfile: {
         parameters: {
             query?: never;
@@ -2772,7 +3089,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["StaffMember"];
+                    "application/json": components["schemas"]["MyStaffProfile"];
                 };
             };
             401: components["responses"]["Unauthorized"];
@@ -2817,7 +3134,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["StaffMember"];
+                    "application/json": components["schemas"]["MyStaffProfile"];
                 };
             };
             /** @description INVALID_REQUEST 또는 INVALID_HOSPITAL_JOIN_MONTH */

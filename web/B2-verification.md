@@ -237,7 +237,41 @@
 **미검증**
 - 이번 6절의 `KOE010` 로그 확인은 A 미병합 브랜치의 참고 실행에서만 했다. dev 기준으로는 A 병합 뒤 다시 확인한다.
 
-### 아직 실행하지 않은 검증 (2026-11-10 오전 기준, 5·6절에서 일부 해소)
+### 7. 최신 dev 반영과 재검증 (2026-11-10 밤)
+
+**반영 내용**
+- A4(#36)와 A5(#37, `bdc96a6`)가 병합된 `origin/dev`를 병합 커밋 `ad1a22e`로 반영했다.
+- 충돌은 없었다. dev 변경은 백엔드와 공유 문서뿐이며, `web/`과 CI 파일은 바뀌지 않았다.
+- `docs/openapi.yaml`이 바뀌어 `npm run api:check`가 "stale"로 실패했다. `npm run api:gen`으로 `src/api/schema.gen.ts`를 다시 만들었다.
+  - 생성 타입만 바뀌었고 웹 코드는 바꾸지 않았다.
+  - 빌드 결과 JS 크기가 270.50 kB(gzip 86.07 kB)로 이전과 같다. 런타임 코드 변화는 없다.
+- dev의 `WardMembership`에 `hospitalName`이 추가됐다. 웹 병동 목록에는 아직 표시하지 않는다(후속 후보).
+
+**A 후속 수정 상태 (PR 대기 항목)**
+- `origin/fix/kakao-diagnostics-invite-contract`(`be6d78c`)는 dev에 반영되지 않았다. 이 브랜치가 401 교환 거절의 `KOE010` 로그 수정을 담고 있다.
+- 따라서 dev 기준 `KOE010` 로그는 다시 확인하지 않았다. B2에는 섞지 않았다.
+
+**재검증**
+
+| 검사 | 결과 |
+| --- | --- |
+| Windows: `api:check`·`typecheck`·`lint` | 모두 통과 |
+| WSL(CI와 같은 6단계, 트리 해시 `b5b58ea3c8e1306e`): `npm ci`→`api:check`→`lint`→`typecheck`→`test`→`build` | 모두 exit 0. 테스트 3개 파일 49/49, 빌드 성공 |
+| 실서버(WSL, dev 반영 백엔드, Client Secret 포함, 새 임시 DB) | SPA 경로 6개 모두 셸 응답 |
+| | refresh: 쿠키 없음 401 `INVALID_REFRESH_TOKEN`. 헤더 없음·악성 Origin·cross-site는 403 `WEB_CLIENT_REQUIRED` |
+| | `/me` 토큰 없음 401, 가짜 토큰 `/wards` 401 |
+| | 세션 없는 logout은 204이며 쿠키 속성은 `Path=/api/v1/auth/web; Max-Age=0; Secure; HttpOnly; SameSite=Strict` |
+| | 쿼리가 붙은 redirect URI는 400 `INVALID_REDIRECT_URI` |
+| | 가짜 코드 교환은 앱에 401 `INVALID_AUTHORIZATION_CODE`를 반환한다. 서버 로그 `status=400 kakaoErrorCode=KOE320`(client 인증 통과) |
+| 로그 노출 | 키·Secret 값, 토큰·쿠키·코드·state·Kakao 응답 원문 0회. WARN은 가짜 코드 재현 1건뿐이다 |
+
+**백엔드 테스트**
+- B2는 백엔드를 바꾸지 않는다. 같은 dev 백엔드(`bdc96a6`)의 전체 테스트는 B3a 브랜치 반영 검증에서 167건, 실패 0으로 확인했다.
+
+**다시 하지 않은 것**
+- dev 반영 뒤 실제 Kakao 브라우저 로그인. 5·6절의 실제 로그인은 반영 전 코드로 했다. 그 사이 웹 런타임 코드는 바뀌지 않았다.
+
+### 아직 실행하지 않은 검증 (2026-11-10 오전 기준, 5·6·7절에서 일부 해소)
 
 - **실제 브라우저에서의 SPA 동작**: 브라우저 자동화 도구를 쓰지 않았다. 사용자가 직접 확인할 항목은 다음과 같다.
   - 첫 진입 시 로그인 화면이 나온다.
