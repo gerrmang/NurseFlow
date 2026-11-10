@@ -16,7 +16,7 @@
 | A1 초대·경력 월 | `feat/invitation-24h-career-month` | #27 | `dev` 병합 완료 | 병합 확인 | 없음 |
 | B1 Android Kakao 세션 | `feat/android-kakao-session` | #30 | `dev` 병합 완료 (2026-11-09, 일반 병합 커밋 `9239fa6`) | 로컬 단위·기기·실서버 검증은 [`B1 검증 기록`](../android/B1-verification.md)에 기록. GitHub CI·PR 리뷰 여부는 별도 확인 | 기록된 미해결 P1 없음. 병합 방식은 아래 참고 |
 | A2 웹 세션 API | `feat/auth-web-session-v2` | #33 | `dev` 병합 완료 (2026-11-09, 스쿼시 병합 커밋 `fa47a5a`) | 2026-11-09 로컬 `./gradlew test --offline`: 108건 통과, 건너뜀 1. 동시 state 테스트(`FOR UPDATE` 제거 변이 3/3 실패)와 client_secret 전달(전달 줄 제거 변이 실패) 검출력 확인. 실제 Kakao E2E 미검증(목업만) | 없음 |
-| B2 웹 기반 세션 | `feat/web-foundation-session` | 미개설 | 미착수. A2 PR #33이 `dev`에 병합되어 선행 조건 충족 | 해당 없음 | 없음 |
+| B2 웹 기반 세션 | `feat/web-foundation-session` (`dev` `23af850` 기준, 원격에 푸시) | 미개설 | **구현 완료·검증 대기**. 로컬 자동 검사와 curl 연동은 통과. 실제 브라우저 화면 확인과 실제 Kakao 왕복은 미검증(Kakao 개발자 계정이 팀원 소유라 대기) | 2026-11-10 WSL Ubuntu: CI와 같은 6단계(`npm ci`→`api:check`→`lint`→`typecheck`→`test` 49/49→`build`) 통과. 세션 변이 9개 중 등가 1개를 뺀 8개 검출. 로컬 백엔드 프록시 연동(curl) dev 20/20, preview 23/23. Windows에서는 스마트 앱 컨트롤 때문에 test·build 불가. [B2 검증 기록](../web/B2-verification.md) | 리뷰 전 |
 | B9a Android 공개 근무표 조회 | `feat/android-published-roster` (`dev` `fa47a5a` 통합) | [#34](https://github.com/gerrmang/NurseFlow/pull/34) | `dev` 병합 완료 (2026-11-10, 스쿼시 병합 커밋 `d1b8729`). 구현·기기·실서버 검증과 PR P3 수정 완료, 병합 전 Backend tests·Android debug build 통과 | [B9a 검증 기록](../android/B9a-verification.md), 아래 최종 검증 참조 | 기존 P2 해결, P3 수정 후 재리뷰 대기 |
 | 에이전트 지침 정합성 | `docs/agent-guidance-alignment` | #32 | `dev` 병합 완료 (2026-11-09, 일반 병합 커밋 `ab8347d`. 스쿼시 원칙에서 벗어남) | `git diff --check` 통과. GitHub Actions `Verify` PR 실행 성공, `dev` push 실행 성공 | 없음 |
 | A3 병원 검색 API | `feat/hospital-search` | #35 | PR 열림. Codex 리뷰 P2 1건·재리뷰 P3 1건, hyen11 계약 리뷰 P3 2건 모두 수정(P1/P2 없음). hyen11 수정분 확인·CI 재실행(2026-11-10 새벽 GitHub Actions 장애로 실패)·스쿼시 병합 대기 | 2026-11-10 야간 QA: `./gradlew test --offline` 133건 통과(건너뜀 3). 실제 2026.9. 파일 79,899곳 누락 없이 적재 0.7초, 검색 15~40ms. 임시 H2 파일 DB로 서버 2회 기동: 첫 기동 적재·재기동 건너뜀, 토큰 없는 검색 401. 실시간 API 실키 호출은 200 정상이나 10~17초 | 없음 |
@@ -91,6 +91,63 @@
 ## 기타 브랜치
 
 - `feat/android-auth-invite` (`95cf33d`): **병합 대상에서 제외(2026-11-09 사용자 결정).** 현재 A/B 기능 분해 이전(11/2~11/3)의 백엔드+Android 통합 시제품 브랜치다. 같은 기능이 #17~#20, A1(#27), B1(#30)로 따로 병합됐고, `dev`와 합치면 174개 파일이 충돌하며, 병동 직접 생성(`74c9036`)은 #24 이후 A3·A4로 다시 기획됐다. 원격에 참고용으로만 남기고, B3a(첫 화면 선택·초대 가입 화면)·B4a(병동 생성 화면) 작업 때 최신 `dev`에서 새로 구현하며 참고한다. 이 브랜치에서 PR을 열거나 이어서 작업하지 않는다.
+
+## B2 인계 (2026-11-10, Claude)
+
+### 브랜치와 보존한 변경
+
+- 최신 `origin/dev` `23af850`(A3 #35 병합 포함)에서 `git switch --merge -c feat/web-foundation-session origin/dev`로 브랜치를 만들었다.
+- 이전 브랜치 `feat/android-published-roster`에 있던 미커밋 Codex 기록("A3 PR #35 B4a/B4b 소비자 계약 검토" 절)은 3-way 병합으로 그대로 옮겼다. 전환 전 diff 사본과 비교해 내용이 바뀌지 않았음을 확인했다.
+- 미추적 `nurseflow.mv.db`는 건드리지 않았다.
+- 이 브랜치는 원격 추적을 해제했다(`dev`로 잘못 푸시되지 않도록).
+- 사용자 지시에 따라 B2 변경만 커밋해 `origin/feat/web-foundation-session`에 푸시했다.
+  - Codex 절은 이 커밋에서 빼고 공유 worktree에 미커밋 상태로 보존했다.
+  - `nurseflow.mv.db`도 커밋하지 않았다.
+  - PR 생성·병합·배포는 하지 않았다.
+
+### 구현 범위 (B 소유 경로만)
+
+- 수정한 경로:
+  - `web/**` 신설
+  - `.github/workflows/verify.yml`: `Web checks` 작업 추가만 하고 기존 줄은 바꾸지 않음
+  - 루트 `README.md`, `CLAUDE.md`, 이 문서
+- 수정하지 않은 경로: `backend/**`, `docs/openapi.yaml`, `docs/feature-breakdown.md`.
+- §7 #19 결정 사항:
+  - "React+Vite 확정"과 호스팅 후보는 [웹 안내](../web/README.md)에 기록했다.
+  - breakdown 반영은 별도 결정 반영 문서 PR로 한다.
+
+### 세션 설계
+
+- 쿠키를 바꾸는 refresh, 코드 교환, logout은 공통 락 `nurseflow-web-session` 안에서만 실행한다. Web Locks API를 쓰고, 없으면 탭 안 대기열로 대신한다.
+- 이 세 호출은 중간에 취소하지 않는다.
+- 로그아웃은 `SigningOut` → 락 대기 → 서버 logout → `SignedOut` 또는 `LogoutFailed` 순서다.
+- 콜백 경로에서는 시작 시 복원 refresh를 생략한다.
+- epoch로 늦게 도착한 응답을 버린다.
+- 서버 `AuthService.logout`은 이미 회전된 토큰으로도 계열을 폐기함을 코드로 확인했다.
+
+### 검증
+
+- **통과**: `api:check`, `lint`, `typecheck` 3종.
+- **미실행**: `npm test`, `npm run build`, 로컬 실서버, 실제 Kakao.
+- **원인**: 스마트 앱 컨트롤(`VerifiedAndReputablePolicyState = 1`)이 `@rolldown/binding-win32-x64-msvc`를 차단한다. WASI 대체 바인딩도 Windows 경로를 해석하지 못해 실패했다.
+- **WSL 재검증 (2026-11-10 16:45~17:05, Claude)**: 사용자가 WSL Ubuntu 26.04.1을 설치했다.
+  - **설치한 도구**: 공식 배포본 Node v24.22.2와 Temurin JDK 21.0.13+9를 `~/.local`에 설치했다(체크섬 확인, sudo 없음).
+  - **작업 위치**: WSL 홈 사본 `~/nf-b2`에서 실행했다. 공유 worktree, Windows `node_modules`, `nurseflow.mv.db`는 건드리지 않았다.
+  - **CI와 같은 6단계**: 모두 통과했다(테스트 49/49, 빌드 JS gzip 86.07 kB).
+    - 첫 실행에서는 테스트 6건이 실패했다. 모두 테스트 코드 결함(fetch를 생성 시점에 잡아 둠, 역할 중복 질의)이었고 수정했다.
+    - 변이 검사로 가짜 서버가 응답 시점의 쿠키를 읽던 결함을 찾아, 요청 시점의 쿠키를 쓰도록 고쳤다. 이제 9개 중 등가 1개를 뺀 8개를 검출한다.
+  - **로컬 백엔드 연동(curl, 프록시 경유)**: dev(Kakao 키 없음) 20/20, preview(가짜 키, Kakao 미호출) 23/23.
+  - **보안 점검**: 번들에 Web Storage·`console.log`·테스트 문자열 0회. 서버 로그에 WARN/ERROR와 쿠키·토큰 값 0건.
+- **남은 검증**
+  - 브라우저 수동 확인(로그인 화면, 503 안내, Storage 비어 있음).
+  - 실제 Kakao 왕복: 키 설정을 준비한 뒤 별도로 진행한다.
+  - GitHub CI.
+- 상세 결과는 [B2 검증 기록](../web/B2-verification.md)에 있다.
+
+### 다른 단위 상태 관찰
+
+- 위 표의 A3 행은 "PR 열림"으로 남아 있다. 그러나 `origin/dev`에는 A3 #35가 `23af850`으로 병합돼 있다(2026-11-10 15:47 KST).
+- A3 행은 B2 범위가 아니어서 고치지 않았다.
 
 ## 리뷰 지점 기록
 
