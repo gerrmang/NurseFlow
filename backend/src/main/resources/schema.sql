@@ -4,13 +4,16 @@ CREATE TABLE IF NOT EXISTS wards (
     time_zone VARCHAR(100) NOT NULL
 );
 
--- A single locked row makes demo bootstrap a one-time operation across app instances.
-CREATE TABLE IF NOT EXISTS bootstrap_state (
-    state_id INT PRIMARY KEY CHECK (state_id = 1),
-    consumed BOOLEAN NOT NULL DEFAULT FALSE
-);
-INSERT INTO bootstrap_state(state_id, consumed)
-SELECT 1, FALSE WHERE NOT EXISTS (SELECT 1 FROM bootstrap_state WHERE state_id = 1);
+-- Hospital chosen when the ward was created (A4): official-list id plus the name/address shown at that time.
+-- Null for wards created before hospital selection existed. The demo-only bootstrap_state table of older
+-- databases is no longer used and is left untouched.
+ALTER TABLE wards ADD COLUMN IF NOT EXISTS hospital_source VARCHAR(20);
+ALTER TABLE wards ADD COLUMN IF NOT EXISTS hospital_external_id VARCHAR(255);
+ALTER TABLE wards ADD COLUMN IF NOT EXISTS hospital_name VARCHAR(200);
+ALTER TABLE wards ADD COLUMN IF NOT EXISTS hospital_address VARCHAR(500);
+ALTER TABLE wards ADD COLUMN IF NOT EXISTS created_by VARCHAR(255);
+ALTER TABLE wards ADD COLUMN IF NOT EXISTS created_at VARCHAR(40);
+CREATE INDEX IF NOT EXISTS ix_wards_created_by ON wards(created_by);
 
 CREATE TABLE IF NOT EXISTS ward_memberships (
     ward_id UUID NOT NULL REFERENCES wards(ward_id),

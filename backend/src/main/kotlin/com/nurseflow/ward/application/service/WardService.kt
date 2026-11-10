@@ -1,25 +1,34 @@
 package com.nurseflow.ward.application.service
 
 import com.nurseflow.common.audit.AuditLog
-import com.nurseflow.common.config.BootstrapProperties
 import com.nurseflow.common.error.BusinessException
 import com.nurseflow.common.error.ErrorCode
-import com.nurseflow.ward.application.model.BootstrapWardCommand
+import com.nurseflow.common.idempotency.MutationReplayRepository
+import com.nurseflow.common.idempotency.ReplayLookup
+import com.nurseflow.hospital.application.service.HospitalSearchService
+import com.nurseflow.ward.application.model.CreateWardCommand
 import com.nurseflow.ward.application.model.WardMembershipResult
 import com.nurseflow.ward.application.model.WardRole
+import com.nurseflow.ward.config.WardProperties
+import com.nurseflow.ward.persistence.repository.NewWard
 import com.nurseflow.ward.persistence.repository.WardJdbcRepository
+import org.springframework.dao.DuplicateKeyException
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
-import java.security.MessageDigest
+import org.springframework.transaction.support.TransactionTemplate
 import java.time.DateTimeException
+import java.time.Instant
 import java.time.ZoneId
 import java.util.UUID
 
 @Service
 class WardService(
     private val repo: WardJdbcRepository,
-    private val bootstrap: BootstrapProperties,
+    private val hospitals: HospitalSearchService,
     private val audit: AuditLog,
+    private val transactions: TransactionTemplate,
+    private val replays: MutationReplayRepository,
+    private val properties: WardProperties,
 ) {
     /** Only memberships stored on the server count; token claims never grant ward access. */
     @Transactional(readOnly = true)
@@ -31,6 +40,7 @@ class WardService(
                 wardName = rows.first().wardName,
                 roles = rows.map { WardRole.valueOf(it.role) }.distinct().sorted(),
                 canViewWardCalendar = rows.any { it.canViewWardCalendar },
+                hospitalName = rows.first().hospitalName,
             )
         }
 
@@ -47,32 +57,76 @@ class WardService(
     }
 
     /**
-     * Demo-only: creates a ward and makes the caller its first WARD_ADMIN when the configured
-     * bootstrap code matches. Every other member must join through an invitation.
+     * Creates a ward for a hospital from the official list and makes the caller its only WARD_ADMIN.
+     * No nurse record is created. Picking a hospital proves no employment and grants nothing on other
+     * wards of the same hospital, so the same hospital and ward name may be used by several admins.
+     * Retrying with the same Idempotency-Key returns the first result; a concurrent duplicate loses on
+     * the replay row's primary key and is answered from it.
      */
-    @Transactional
-    fun bootstrapWard(command: BootstrapWardCommand, subject: String): WardMembershipResult {
-        val expected = bootstrap.code
-        if (expected.isBlank()) throw BusinessException(ErrorCode.BOOTSTRAP_DISABLED)
-        if (!MessageDigest.isEqual(expected.toByteArray(), command.bootstrapCode.toByteArray())) {
-            throw BusinessException(ErrorCode.BOOTSTRAP_CODE_INVALID)
+    fun createWard(request: CreateWardCommand, idempotencyKey: UUID, subject: String): WardMembershipResult {
+        // Hash what is stored, so a retry that differs only in surrounding spaces replays instead of conflicting.
+        val command = request.copy(
+            hospitalExternalId = request.hospitalExternalId.trim(),
+            wardName = request.wardName.trim(),
+            timeZone = request.timeZone.trim(),
+        )
+        val requestHash = replays.requestHash(listOf(subject, command))
+        replayed(idempotencyKey, requestHash)?.let { return it }
+        return try {
+            transactions.execute { create(command, idempotencyKey, requestHash, subject) }!!
+        } catch (ex: DuplicateKeyException) {
+            replayed(idempotencyKey, requestHash) ?: throw ex
         }
-        // Lock a stable singleton row so even concurrent requests on different app instances
-        // can create at most one bootstrap ward. Keep the existing-ward check for pre-upgrade DBs.
-        if (repo.lockBootstrapState() || repo.hasAnyWard()) {
-            throw BusinessException(ErrorCode.BOOTSTRAP_DISABLED)
-        }
-        repo.markBootstrapConsumed()
+    }
+
+    private fun create(command: CreateWardCommand, key: UUID, requestHash: String, subject: String): WardMembershipResult {
         val zone = try {
             ZoneId.of(command.timeZone)
         } catch (_: DateTimeException) {
             throw BusinessException(ErrorCode.INVALID_TIME_ZONE)
         }
-        val wardId = UUID.randomUUID()
-        val name = command.name.trim()
-        repo.insertWard(wardId, name, zone.id)
-        repo.insertMembership(wardId, subject, WardRole.WARD_ADMIN.name, canViewWardCalendar = true)
-        audit.record(wardId, subject, "WARD_BOOTSTRAPPED", wardId.toString())
-        return WardMembershipResult(wardId, name, listOf(WardRole.WARD_ADMIN), canViewWardCalendar = true)
+        val hospital = hospitals.requireForWard(command.hospitalSource, command.hospitalExternalId)
+        val userId = runCatching { UUID.fromString(subject) }.getOrNull()
+        if (userId == null || !repo.lockUser(userId)) throw BusinessException(ErrorCode.USER_NOT_FOUND)
+        // A same-key request that waited on this lock sees the committed first result here and replays it,
+        // instead of failing the duplicate or cap check below.
+        replayed(key, requestHash)?.let { return it }
+        // A second ward with the same hospital and name by the same account is almost always a double submit
+        // with a fresh key; other admins may still use the same names (decision 3).
+        if (repo.existsCreatedBy(subject, hospital.source, hospital.externalId, command.wardName)) {
+            throw BusinessException(ErrorCode.WARD_ALREADY_CREATED)
+        }
+        if (repo.countCreatedBy(subject) >= properties.maxCreatedPerUser) {
+            throw BusinessException(ErrorCode.WARD_CREATION_LIMIT_REACHED)
+        }
+        val ward = NewWard(
+            wardId = UUID.randomUUID(),
+            name = command.wardName,
+            timeZone = zone.id,
+            hospitalSource = hospital.source,
+            hospitalExternalId = hospital.externalId,
+            hospitalName = hospital.name,
+            hospitalAddress = hospital.address,
+            createdBy = subject,
+            createdAt = Instant.now(),
+        )
+        repo.insertWard(ward)
+        repo.insertMembership(ward.wardId, subject, WardRole.WARD_ADMIN.name, canViewWardCalendar = true)
+        audit.record(ward.wardId, subject, "WARD_CREATED", hospital.externalId)
+        val result = WardMembershipResult(ward.wardId, ward.name, listOf(WardRole.WARD_ADMIN), true, hospital.name)
+        replays.recordReplay(key, OPERATION, requestHash, result)
+        return result
+    }
+
+    /** The key is global, so another user's key or a different body is a conflict rather than a replay. */
+    private fun replayed(key: UUID, requestHash: String): WardMembershipResult? =
+        when (val found = replays.replay(key, OPERATION, requestHash, WardMembershipResult::class.java)) {
+            ReplayLookup.Missing -> null
+            ReplayLookup.Conflict -> throw BusinessException(ErrorCode.IDEMPOTENCY_KEY_REUSED)
+            is ReplayLookup.Found -> found.value
+        }
+
+    private companion object {
+        const val OPERATION = "CREATE_WARD"
     }
 }

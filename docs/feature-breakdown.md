@@ -115,7 +115,7 @@
 | 2 · A2 `feat/auth-web-session` | 웹 로그인용 서버 경로가 생긴다 (화면은 B2) | A | 없음 | `backend/auth/**`, `openapi.yaml`, `application.yml` 설정 키 | `POST /auth/kakao/code`(코드 교환), refresh는 HttpOnly 쿠키, CSRF 대책 | Redirect URI 허용 목록, state·nonce 검증 | 가짜 OIDC 공급자로 성공·state 불일치·재사용 거부 | CI, B의 계약 검토. 기존 `feat/auth-web-session` 브랜치는 참고만 하고 최신 `dev`에서 다시 작성 |
 | 2 · B2 `feat/web-foundation-session` | 웹에서 Kakao 로그인 후 내 병동 목록을 본다 | B | A2(실연동), 웹 프레임워크 결정 | `web/**`(신규), `.github/workflows/verify.yml`(웹 작업 추가) | 소비: A2, `/me`, `/wards` | 쿠키 기반 refresh, 토큰을 localStorage에 두지 않음 | 웹 단위 테스트, 빌드, 로그인→목록 시연 | CI에 웹 작업 추가·통과 |
 | 3 · A3 `feat/hospital-search` | (서버) 병원 이름으로 검색하면 실제 공식 데이터의 병원명·주소·식별자가 나온다 | A | 없음 (키 발급 필요) | `backend/hospital/**`(신규, 검색 전용), `application.yml`, `openapi.yaml` | `GET /api/v1/hospitals/search?query=&page=` → 이름·주소·외부 식별자·출처. 외부 키는 환경변수. DB 변경 없음 | 로그인 사용자만 호출, 병원 권한 개념 없음. 외부 응답의 필요한 필드만 반환 | 가짜 외부 서버로 정상·빈 결과·장애(시간 초과·5xx)·동명 병원, 실제 키 수동 호출 기록 | CI, 실제 API 호출 확인 기록, 키 미노출 |
-| 4 · A4 `feat/ward-self-create` | 로그인한 사용자가 병원을 고르고 병동명을 입력해 자기 병동을 만들고 관리자가 된다 | A | A3 | `backend/ward/**`, `backend/common/config/BootstrapProperties.kt`(삭제), `schema.sql`, `openapi.yaml` | `POST /wards` 요청 교체: `{hospital{source, externalId, name, address}, wardName, timeZone?}` + `Idempotency-Key`. `wards`에 병원 표시 스냅샷 컬럼. `bootstrapCode`·`BOOTSTRAP_*` 오류 코드 제거. `GET /wards`에 병원명 | 생성자만 그 병동의 `WARD_ADMIN`(간호사 기록은 만들지 않음). 같은 병원을 골라도 기존 병동 권한 없음 | 생성·재시도 멱등·동시 생성·타 병동 접근 거부·기존 H2 파일 DB 업그레이드 | CI, 결정 사항 1~3(§7) 반영 |
+| 4 · A4 `feat/ward-self-create` | 로그인한 사용자가 병원을 고르고 병동명을 입력해 자기 병동을 만들고 관리자가 된다 | A | A3 | `backend/ward/**`, `backend/common/config/BootstrapProperties.kt`(삭제), `schema.sql`, `openapi.yaml` | `POST /wards` 요청 교체: `{hospital{source, externalId}, wardName, timeZone?}` + `Idempotency-Key`(병원명·주소는 서버가 복제 목록에서 조회, 결정 2). `wards`에 병원 표시 스냅샷 컬럼. `bootstrapCode`·`BOOTSTRAP_*` 오류 코드 제거. `GET /wards`에 병원명 | 생성자만 그 병동의 `WARD_ADMIN`(간호사 기록은 만들지 않음). 같은 병원을 골라도 기존 병동 권한 없음 | 생성·재시도 멱등·동시 생성·타 병동 접근 거부·기존 H2 파일 DB 업그레이드 | CI, 결정 사항 1~3(§7) 반영 |
 | 5 · B3a `feat/android-invite-join` | 관리자는 초대 발급·복사·공유·상태 확인·재발급·철회, 간호사는 링크를 열어 로그인→병동/역할 확인→입사 연월 입력→가입 | B | A1, B1 | `android/**` | 소비: 초대 API(A1) | 초대 화면은 관리자만. 링크 토큰은 URL fragment로만 받고 로그에 남기지 않음 | 만료·철회·이미 소속·이미 사용된 링크 오류 화면, 딥링크 수신 테스트, 실서버 가입 시연 | A1 병합 후 실연동 확인 |
 | 5 · B3b `feat/web-invite-join` | 웹에서 같은 초대 관리·가입 흐름 | B | A1, B2 | `web/**` | 소비: A1 | 같음 | 같음(웹) | 같음 |
 | 6 · B4a `feat/android-ward-create` | Android에서 병원 검색→선택→병동명 입력→병동 생성, 생성 뒤 설정 안내 첫 화면(항목 목록만) | B | 계약: A3·A4 합의 후 목업 / 실연동: A4 병합 | `android/**` | 소비: A3, A4 | 검색 빈 결과와 외부 장애를 다르게 표시, 동명 병원은 주소 표시, 생성 재시도 시 같은 `Idempotency-Key` | 목업·실서버 각각 시연, 오류 상태 단위 테스트 | 실연동 확인 |
@@ -420,9 +420,9 @@ A16 + A18 ──► B10a/b ──► B12
 
 | # | 결정할 내용 | 막히는 PR |
 | --- | --- | --- |
-| 1 | 검색되지 않는 병원·의료기관 처리: 관리자 임시 입력 허용 / 별도 확인 요청 / 생성 불가 | A4, B4 |
-| 2 | 병동 생성 시 서버가 선택한 병원의 외부 식별자를 외부 API로 다시 확인할지, 클라이언트가 보낸 스냅샷을 저장할지 | A4 |
-| 3 | 같은 병원·같은 병동명의 병동을 여러 관리자가 만들 때 허용 여부와 목록 표시 구분 방법 | A4, B4 |
+| 1 | **해결됨(2026-11-10):** 생성 불가. 공식 목록에서 고른 병원으로만 병동을 만든다. 신규 기관은 분기 갱신 때 반영된다 | A4, B4 |
+| 2 | **해결됨(2026-11-10):** 클라이언트는 `source`·`externalId`만 보내고, 서버가 복제 목록에서 병원명·주소를 찾아 생성 시점 값으로 저장한다 | A4 |
+| 3 | **해결됨(2026-11-10):** 허용한다. 병원 선택은 재직 인증이 아니므로 서로의 병동 권한이 없고, 병동 목록·`/me`에 병원명을 함께 보여 구분한다 | A4, B4 |
 | 4 | 관리자 계정을 잃었을 때(퇴사·Kakao 계정 상실) 병동 인계 절차. 다른 관리자가 없을 때 복구 경로 | A6 |
 | 5 | **해결됨(2026-11-10):** 실시간 병원정보서비스 API는 실측 10~17초(조건 없는 조회는 40초 초과)로 화면 검색에 쓸 수 없다. 공공데이터포털 「전국 병의원 및 약국 현황」(15051059, 분기 갱신, 공공누리 제1유형) 파일의 병원정보서비스 CSV를 서버 DB에 복제해 검색한다(웹 수집이 아닌 공식 파일 데이터). 실시간 API는 목록 미적재 시 대체 경로로만 둔다. 출처 문구는 데이터 기준 시점을 포함한다. 운영 활용 승인·자동 내려받기 주기는 배포 단계에서 정한다 | A3 |
 | 6 | 초대 링크 형식: Android 사용자 정의 스킴과 웹 주소를 하나의 https 링크로 통합할지, 도메인 | B3a, B3b |

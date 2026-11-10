@@ -2,6 +2,7 @@ package com.nurseflow.hospital.application.service
 
 import com.nurseflow.common.error.BusinessException
 import com.nurseflow.common.error.ErrorCode
+import com.nurseflow.hospital.application.model.HospitalCandidate
 import com.nurseflow.hospital.application.model.HospitalSearchResult
 import com.nurseflow.hospital.config.HospitalProperties
 import com.nurseflow.hospital.domain.HospitalSearchName
@@ -34,6 +35,19 @@ class HospitalSearchService(
         }
         if (!properties.hira.configured) throw BusinessException(ErrorCode.HOSPITAL_SEARCH_NOT_CONFIGURED)
         return hira.search(query.trim(), page, size)
+    }
+
+    /**
+     * The institution a new ward is attached to, read from the imported official list so the client
+     * cannot choose the stored name. Hospitals outside the list cannot be used (no manual entry).
+     */
+    fun requireForWard(source: String, externalId: String): HospitalCandidate {
+        hospitals.findActive(source, externalId)?.let { return it }
+        // Without an imported list the live API fallback cannot vouch for a hospital, so creation waits for the list.
+        if (!hospitals.hasActive(HospitalDatasetImporter.SOURCE)) {
+            throw BusinessException(ErrorCode.HOSPITAL_SEARCH_NOT_CONFIGURED)
+        }
+        throw BusinessException(ErrorCode.HOSPITAL_NOT_FOUND)
     }
 
     companion object {

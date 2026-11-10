@@ -15,7 +15,6 @@ Java 21 is required. Set these environment variables in the run configuration (n
 | `NURSEFLOW_KAKAO_REDIRECT_URIS` | Web login. Comma-separated **exact** callback URIs (for example `http://localhost:5173/auth/kakao/callback`), also registered in Kakao Developers. |
 | `NURSEFLOW_WEB_ALLOWED_ORIGINS` | Optional. Comma-separated `Origin` values allowed on `/api/v1/auth/web/*`. Empty → the origins of the redirect URIs. |
 | `NURSEFLOW_WEB_COOKIE_SECURE` | Optional, default `true`. Keep `true`; browsers treat `http://localhost` as secure. |
-| `NURSEFLOW_BOOTSTRAP_CODE` | Optional, demo only. Enables `POST /api/v1/wards` so the first signed-in user can create a ward and become `WARD_ADMIN`. Leave empty otherwise. |
 | `NURSEFLOW_HOSPITAL_DATASET_PATH` | Recommended. Path to the downloaded 「전국 병의원 및 약국 현황」 zip (data.go.kr dataset 15051059, updated quarterly) or its `병원정보서비스` CSV. Imported at startup when the file changed (about 80,000 rows in under a second); searches then run on this local copy in milliseconds. A file with fewer than 10,000 rows is rejected and the previous list is kept. |
 | `NURSEFLOW_HOSPITAL_API_KEY` | Optional fallback. data.go.kr key for the live 병원정보서비스 API (Decoding or Encoding form), used only until a dataset is imported; each live search often takes 10+ seconds. Without a dataset and a key, search returns 503 `HOSPITAL_SEARCH_NOT_CONFIGURED`. Never commit it. |
 | `NURSEFLOW_INVITE_LINK_BASE` | Optional. Invitation page URL; responses then include `inviteUrl`. |
@@ -39,6 +38,10 @@ The web app does not handle Kakao tokens or the refresh token. Every `/api/v1/au
 The Android routes above are unchanged and never set cookies.
 
 Tests use an in-process fake OIDC provider (`src/test/kotlin/com/nurseflow/support/FakeOidcProvider.kt`) instead of Kakao. Real Kakao end-to-end login has not been verified until the Kakao Developers app, keys and redirect URIs are registered.
+
+### Ward creation
+
+A signed-in user creates a ward with `POST /api/v1/wards {hospital{source:"HIRA", externalId}, wardName, timeZone?}` and an `Idempotency-Key`, using a result of `GET /api/v1/hospitals/search`, and becomes its only `WARD_ADMIN` (no nurse record). The server looks the hospital up in the imported official list and stores that name and address with the ward, so a hospital that is not listed or was deactivated returns 422 `HOSPITAL_NOT_FOUND`; without an imported list it returns 503 `HOSPITAL_SEARCH_NOT_CONFIGURED`. Picking a hospital is not proof of employment: other admins may create wards with the same hospital and name, and none gains access to another's ward. `GET /api/v1/wards` and `/me` include `hospitalName`. Retrying with the same key returns the first ward. One account may create at most `NURSEFLOW_WARD_MAX_CREATED_PER_USER` wards (default 5; 409 `WARD_CREATION_LIMIT_REACHED`), and creating the same hospital and ward name twice from one account with a new key is rejected as a double submit (409 `WARD_ALREADY_CREATED`). The former demo bootstrap code (`NURSEFLOW_BOOTSTRAP_CODE`) is removed.
 
 ### Invitations
 

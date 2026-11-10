@@ -27,7 +27,10 @@ class InvitationRedemptionController(private val redemption: InvitationRedemptio
     ): ResponseEntity<InvitationPreviewResponse> {
         val preview = redemption.preview(request.token)
         return ResponseEntity.ok().header("Cache-Control", "private, no-store").body(
-            InvitationPreviewResponse(preview.wardId, preview.wardName, preview.role.name, preview.expiresAt, preview.linksExistingNurse),
+            InvitationPreviewResponse(
+                preview.wardId, preview.wardName, preview.role.name, preview.expiresAt, preview.linksExistingNurse,
+                preview.hospitalName,
+            ),
         )
     }
 
