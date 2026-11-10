@@ -22,6 +22,8 @@ CREATE TABLE IF NOT EXISTS ward_memberships (
     can_view_ward_calendar BOOLEAN NOT NULL DEFAULT FALSE,
     PRIMARY KEY (ward_id, subject, role)
 );
+-- A6: a deactivated member keeps the row (history, reactivation) but every access check ignores it.
+ALTER TABLE ward_memberships ADD COLUMN IF NOT EXISTS active BOOLEAN DEFAULT TRUE NOT NULL;
 
 CREATE TABLE IF NOT EXISTS nurses (
     nurse_id UUID PRIMARY KEY,

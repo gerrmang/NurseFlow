@@ -12,6 +12,17 @@ data class WardMembershipResult(
     val hospitalName: String?,
 )
 
+data class WardMemberResult(
+    val userId: String,
+    val displayName: String,
+    val roles: List<WardRole>,
+    val active: Boolean,
+    val canViewWardCalendar: Boolean,
+    val nurseId: UUID?,
+)
+
+data class UpdateMembershipCommand(val admin: Boolean?, val active: Boolean?)
+
 data class CreateWardCommand(
     val hospitalSource: String,
     val hospitalExternalId: String,

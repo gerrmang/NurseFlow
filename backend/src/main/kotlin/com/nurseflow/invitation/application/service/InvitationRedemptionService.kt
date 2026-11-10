@@ -57,7 +57,7 @@ class InvitationRedemptionService(
         // request that started before expiration redeem the invitation after its deadline.
         val now = Instant.now()
         requireRedeemable(invitation, now)
-        if (wardRepo.rolesIn(invitation.wardId, subject).isNotEmpty()) {
+        if (wardRepo.hasMembership(invitation.wardId, subject)) {
             // Role changes for existing members are an admin action, not a second invitation.
             throw BusinessException(ErrorCode.ALREADY_WARD_MEMBER)
         }

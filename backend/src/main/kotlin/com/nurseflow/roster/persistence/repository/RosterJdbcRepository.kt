@@ -82,13 +82,13 @@ class RosterJdbcRepository(
             ).isNotEmpty()
 
     fun memberships(wardId: UUID, subject: String): Set<String> = jdbc.query(
-        "SELECT role FROM ward_memberships WHERE ward_id=? AND subject=?",
+        "SELECT role FROM ward_memberships WHERE ward_id=? AND subject=? AND active=TRUE",
         { rs, _ -> rs.getString("role") }, wardId, subject,
     ).toSet()
 
     fun canViewWardCalendar(wardId: UUID, subject: String): Boolean =
         (jdbc.queryForObject(
-            "SELECT COUNT(*) FROM ward_memberships WHERE ward_id=? AND subject=? AND can_view_ward_calendar=TRUE",
+            "SELECT COUNT(*) FROM ward_memberships WHERE ward_id=? AND subject=? AND can_view_ward_calendar=TRUE AND active=TRUE",
             Int::class.java, wardId, subject,
         ) ?: 0) > 0
 
