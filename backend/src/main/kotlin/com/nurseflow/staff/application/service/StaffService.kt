@@ -169,6 +169,11 @@ class StaffService(
             repo.assignTeam(nurseId, teamId)
             val before = nurse.teamId?.let(context.teams::get)?.name
             adjust(wardId, nurseId, "TEAM_ASSIGNED", before, newTeam?.name, actor)
+            if (nurse.teamOrder != null && nurse.teamId != null) {
+                // Leaving an ordered team, like deactivation, must not leave a gap (1,3) in that team's order.
+                adjust(wardId, nurseId, "TEAM_ORDER", nurse.teamOrder.toString(), null, actor)
+                closeOrderGaps(wardId, nurse.teamId, actor)
+            }
             audit.record(wardId, actor, "STAFF_TEAM_ASSIGNED", nurseId.toString())
         }
         return requireStaff(wardId, nurseId).toResult(context(wardId))

@@ -148,10 +148,11 @@ class StaffRosterSettingsHttpTest : ApiTestBase() {
             setOf("PROFILE_SET_BY_ADMIN", "TEAM_ORDER", "SENIOR_ELIGIBLE", "STAGE_OVERRIDE", "TEAM_ASSIGNED"),
             items.map { it.get("kind").asString() }.toSet(),
         )
-        val teamOrder = items.single { it.get("kind").asString() == "TEAM_ORDER" }
-        // Never ordered before, so the first placement has no previous position.
-        assertTrue(teamOrder.get("before").isNull)
-        assertEquals("2", teamOrder.get("after").asString())
+        // Placed at 2 (never ordered before), then the move to B cleared the position.
+        val teamOrder = items.filter { it.get("kind").asString() == "TEAM_ORDER" }.map {
+            it.get("before").takeIf { n -> !n.isNull }?.asString() to it.get("after").takeIf { n -> !n.isNull }?.asString()
+        }
+        assertEquals(listOf("2" to null, null to "2"), teamOrder)
         val moved = items.single { it.get("kind").asString() == "TEAM_ASSIGNED" }
         assertEquals("A팀", moved.get("before").asString())
         assertEquals("B팀", moved.get("after").asString())
@@ -192,6 +193,29 @@ class StaffRosterSettingsHttpTest : ApiTestBase() {
 
         assertEquals(listOf(1, 2), staff().map { it.get("teamOrder").asInt() })
         assertEquals(listOf("가상 1", "가상 3"), staff().map { it.get("displayName").asString() })
+    }
+
+    @Test
+    fun `moving or unassigning an ordered nurse keeps the old team's positions contiguous`() {
+        val a = team("A팀")
+        val b = team("B팀")
+        val ids = (1..4).map { nurse("가상 $it", a) }
+        order(a, *ids.toTypedArray())
+        fun teamOrders(teamName: String) = staff().filter { !it.get("team").isNull && it.get("team").get("name").asString() == teamName }
+            .map { it.get("displayName").asString() to it.get("teamOrder").asInt() }
+
+        http.put("${base()}/staff/${ids[1]}/team", mapOf("teamId" to b), admin)
+        assertEquals(listOf("가상 1" to 1, "가상 3" to 2, "가상 4" to 3), teamOrders("A팀"))
+
+        // The most senior one leaves: everyone moves up instead of starting at 2.
+        http.put("${base()}/staff/${ids[0]}/team", mapOf("teamId" to b), admin)
+        assertEquals(listOf("가상 3" to 1, "가상 4" to 2), teamOrders("A팀"))
+
+        http.put("${base()}/staff/${ids[2]}/team", mapOf("teamId" to null), admin)
+        assertEquals(listOf("가상 4" to 1), teamOrders("A팀"))
+        val history = http.get("${base()}/staff/${ids[3]}/adjustments", admin).json!!.get("items").toList()
+            .filter { it.get("kind").asString() == "TEAM_ORDER" }.map { it.get("before").asString() to it.get("after").asString() }
+        assertEquals(listOf("2" to "1", "3" to "2", "4" to "3"), history.take(3))
     }
 
     @Test
