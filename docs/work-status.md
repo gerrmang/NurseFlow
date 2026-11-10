@@ -21,6 +21,7 @@
 | 에이전트 지침 정합성 | `docs/agent-guidance-alignment` | #32 | `dev` 병합 완료 (2026-11-09, 일반 병합 커밋 `ab8347d`. 스쿼시 원칙에서 벗어남) | `git diff --check` 통과. GitHub Actions `Verify` PR 실행 성공, `dev` push 실행 성공 | 없음 |
 | A3 병원 검색 API | `feat/hospital-search` | #35 | `dev` 병합 완료 (2026-11-10, 스쿼시 병합 커밋 `23af850`) | 병합 전 `./gradlew test --offline` 134건 통과, CI 통과. 실제 2026.9. 파일 79,899곳 적재 0.7초, 검색 15~40ms | 없음 |
 | A4 병동 생성 | `feat/ward-self-create` | #36 | 구현 완료. Codex 리뷰 P3·P4, /code-review 지적 7건, 계정당 생성 상한 5개, Codex 재리뷰 P2·P3 수정. 결정 1(목록 밖 병원 생성 불가)·2(서버가 목록으로 병원 확인)·3(같은 병원·병동명 허용, 권한 분리) 반영. 시연용 부트스트랩 제거. hyen11 계약 검토(`3e5da53`)·스쿼시 병합 대기 | 2026-11-10 `./gradlew test --offline` 138건 통과(건너뜀 4). 같은 키 동시 요청 테스트는 중복 키 처리 제거 변이 3/3 실패로 검출력 확인. 이전 스키마 H2에 schema.sql 두 번 적용 테스트 통과 | 없음 |
+| A8 근무 유형 설정 | `feat/shift-type-settings` (`/private/tmp/NurseFlow-a8`) | PR 미개설(앞 PR 병합 뒤 개설) | 구현 완료, 리뷰 대기. `/wards/{id}/shift-types` 조회·생성·수정·비활성화, 휴게·인정·월 환산 시간, 병동 정책 revision(`policyRevision`), 사용 중 유형 변경 시 DRAFT `needsRevalidation`. 미결: 결정 14·23(휴일·목표 시간)은 범위 밖, 비활성 유형 코드는 재사용 불가 | 2026-11-10 `./gradlew test --offline` 155건 통과(건너뜀 4). 같은 코드 동시 생성은 병동 잠금 제거 변이 3/3 실패로 검출력 확인. 이전 스키마 H2 파일 DB에 schema.sql 두 번 적용 테스트 통과 | 없음 |
 | A5 이후 | 해당 없음 | 미개설 | 미착수. A5는 결정 10·11, A6·A8은 A4 병합 대기 | 해당 없음 | 없음 |
 
 ## 리뷰 상태
@@ -121,5 +122,6 @@ Claude와 Codex가 같은 진행 기록을 사용한다. PR 또는 정기 리뷰
 | `/Users/sihwan/Documents/ChatGPT/NurseFlow` | `feat/ward-self-create` | `fbbfe031f0f285da4d54357db497aa13a21cbc82` | 미커밋 변경 없음 | 2026-11-10 | Codex | P2 수정 확인: 잠금 뒤 replay 재확인은 READ_COMMITTED에서 타당, 부분 쓰기 없음, 계약·README 일치. 남은 P3(테스트): 동시 테스트가 경합 구간을 매번 강제하지 못함. 서비스에 테스트용 동기화 지점이 필요해 수정하지 않음 |
 | GitHub PR #36 리뷰 | `feat/ward-self-create` | `d82fa2da5778601b3ade50367005b143250e649b` | 해당 없음(PR diff 기준) | 2026-11-10 | hyen11 | P1~P3·P5 없음. P4(테스트) 2건: 잠금 뒤 replay 재확인 경로를 강제하지 못함, 다른 계정 같은 키 경합·롤백 미검증 |
 | `/Users/sihwan/Documents/ChatGPT/NurseFlow` | `feat/ward-self-create` | `bbd7b550202490ccdbed8f14823f2b03ca5b3da3` | 미커밋 변경 없음 | 2026-11-10 | Claude | 위 P4 2건 수정: 테스트 전용 하위 클래스로 순서 강제. 두 경로 변이 각 3/3 검출 |
+| `/private/tmp/NurseFlow-a8` | `feat/shift-type-settings` | `d407e55` (구현 HEAD, 이후 문서 커밋 추가) | 미커밋 변경 없음 | 2026-11-10 | Claude(Sonnet) | A8 구현: 근무 유형 CRUD(`policy` 패키지), 휴게·인정·환산 시간, 정책 revision, DRAFT 재검증 표시, 스키마 업그레이드 테스트. 계약 커밋 `9860a57` 선행 |
 
 이 문서는 Claude와 Codex가 각 기능 단위 작업 후 진행 결과를 함께 기록하는 단일 공유 현황이다.
