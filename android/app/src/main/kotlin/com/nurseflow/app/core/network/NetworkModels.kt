@@ -42,3 +42,41 @@ data class MembershipDto(
 ) {
     val isAdmin: Boolean get() = "WARD_ADMIN" in roles
 }
+
+// ── Published rosters (docs/openapi.yaml: PublishedWardCalendar / PublishedPersonalCalendar) ──
+// Only fields the screen needs. Absences, drafts and admin memo are never part of this contract.
+
+@Serializable
+data class PublishedWardCalendarDto(
+    val month: String,
+    val timeZone: String,
+    val slots: List<StaffingSlotDto>,
+)
+
+@Serializable
+data class StaffingSlotDto(
+    val date: String,
+    val shiftTypeId: String,
+    val startAt: String,
+    val endAt: String,
+    val status: String,
+    val assignment: AssignmentDto? = null,
+)
+
+@Serializable
+data class AssignmentDto(val displayName: String)
+
+@Serializable
+data class PublishedPersonalCalendarDto(
+    val month: String,
+    val timeZone: String,
+    val assignments: List<PersonalAssignmentDto>,
+)
+
+@Serializable
+data class PersonalAssignmentDto(
+    val date: String,
+    val shiftType: String,
+    val startsAt: String,
+    val endsAt: String,
+)
