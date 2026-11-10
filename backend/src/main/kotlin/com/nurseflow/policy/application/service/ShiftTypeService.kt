@@ -3,11 +3,14 @@ package com.nurseflow.policy.application.service
 import com.nurseflow.common.audit.AuditLog
 import com.nurseflow.common.error.BusinessException
 import com.nurseflow.common.error.ErrorCode
+import com.nurseflow.common.idempotency.MutationReplayRepository
+import com.nurseflow.common.idempotency.ReplayLookup
 import com.nurseflow.policy.application.model.ShiftTypeCommand
 import com.nurseflow.policy.application.model.ShiftTypeListResult
 import com.nurseflow.policy.application.model.ShiftTypeResult
 import com.nurseflow.policy.application.model.ShiftTypeRow
 import com.nurseflow.policy.persistence.repository.ShiftTypeJdbcRepository
+import com.nurseflow.roster.domain.model.ShiftKind
 import com.nurseflow.ward.application.service.WardService
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
@@ -26,6 +29,7 @@ class ShiftTypeService(
     private val repo: ShiftTypeJdbcRepository,
     private val wards: WardService,
     private val audit: AuditLog,
+    private val replays: MutationReplayRepository,
 ) {
     @Transactional(readOnly = true)
     fun list(wardId: UUID, includeInactive: Boolean, actor: String): ShiftTypeListResult {
@@ -36,17 +40,22 @@ class ShiftTypeService(
         )
     }
 
+    /** Retrying with the same Idempotency-Key returns the first result instead of a duplicate-code 409. */
     @Transactional
-    fun create(wardId: UUID, command: ShiftTypeCommand, actor: String): ShiftTypeResult {
+    fun create(wardId: UUID, command: ShiftTypeCommand, idempotencyKey: UUID, actor: String): ShiftTypeResult {
         wards.requireAdmin(wardId, actor)
         val resolved = resolve(command)
+        val requestHash = replays.requestHash(listOf(actor, wardId, command))
+        replayed(idempotencyKey, requestHash)?.let { return it }
         lock(wardId)
+        // A same-key request that waited on the lock sees the committed first result here.
+        replayed(idempotencyKey, requestHash)?.let { return it }
         if (repo.codeExists(wardId, command.code, except = null)) throw BusinessException(ErrorCode.SHIFT_TYPE_CODE_DUPLICATE)
         val row = resolved.toRow(UUID.randomUUID(), wardId, command.active ?: true)
         repo.insert(row)
         repo.bumpPolicyRevision(wardId, actor, Instant.now())
         audit.record(wardId, actor, "SHIFT_TYPE_CREATED", row.id.toString())
-        return row.toResult()
+        return row.toResult().also { replays.recordReplay(idempotencyKey, CREATE_OPERATION, requestHash, it) }
     }
 
     @Transactional
@@ -59,6 +68,9 @@ class ShiftTypeService(
         val row = resolved.toRow(shiftTypeId, wardId, command.active ?: old.active)
         repo.update(row)
         repo.bumpPolicyRevision(wardId, actor, Instant.now())
+        if (old.start != row.start || old.end != row.end || old.spansMidnight != row.spansMidnight) {
+            repo.recomputeDraftSlotTimes(wardId, shiftTypeId, row.start, row.end, row.spansMidnight)
+        }
         if (affectsSlots(old.toResult(), row.toResult())) repo.markDraftsForRevalidation(wardId, shiftTypeId)
         audit.record(
             wardId, actor,
@@ -96,7 +108,16 @@ class ShiftTypeService(
         )
     }
 
+    private fun replayed(key: UUID, requestHash: String): ShiftTypeResult? =
+        when (val found = replays.replay(key, CREATE_OPERATION, requestHash, ShiftTypeResult::class.java)) {
+            ReplayLookup.Missing -> null
+            ReplayLookup.Conflict -> throw BusinessException(ErrorCode.IDEMPOTENCY_KEY_REUSED)
+            is ReplayLookup.Found -> found.value
+        }
+
     private fun resolve(command: ShiftTypeCommand): Resolved {
+        // OTHER has no rest rules yet (decision 23 pending); allowing it would let a night-like type skip them.
+        if (command.kind == ShiftKind.OTHER) throw BusinessException(ErrorCode.INVALID_REQUEST)
         if (command.start == command.end) throw BusinessException(ErrorCode.INVALID_SHIFT_INTERVAL)
         if (command.spansMidnight != command.end.isBefore(command.start)) {
             throw BusinessException(ErrorCode.SHIFT_SPANS_MIDNIGHT_MISMATCH)
@@ -118,6 +139,8 @@ class ShiftTypeService(
     }
 
     companion object {
+        private const val CREATE_OPERATION = "CREATE_SHIFT_TYPE"
+
         fun durationMinutes(start: LocalTime, end: LocalTime, spansMidnight: Boolean): Int =
             Duration.between(start, end).toMinutes().toInt() + if (spansMidnight) 24 * 60 else 0
     }

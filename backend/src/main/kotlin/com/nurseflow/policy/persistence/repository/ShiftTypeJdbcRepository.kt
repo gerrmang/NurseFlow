@@ -7,6 +7,8 @@ import org.springframework.stereotype.Repository
 import java.sql.ResultSet
 import java.time.Instant
 import java.time.LocalTime
+import java.time.LocalDate
+import java.time.ZoneId
 import java.util.UUID
 
 @Repository
@@ -67,6 +69,36 @@ class ShiftTypeJdbcRepository(private val jdbc: JdbcTemplate) {
     }
 
     /** Marks DRAFT rosters of the ward that already have slots of this shift type. Published rosters are untouched. */
+    /**
+     * Rewrites the start/end instants of the type's slots in DRAFT rosters from the new hours (slots store the
+     * times they were created with, and confirmation checks rules against them) and bumps those rosters'
+     * revision so a client holding the old view must reload before confirming. Returns the affected rosters.
+     */
+    fun recomputeDraftSlotTimes(wardId: UUID, shiftTypeId: UUID, start: LocalTime, end: LocalTime, spansMidnight: Boolean): Set<UUID> {
+        val slots = jdbc.query(
+            """SELECT s.slot_id, s.roster_id, s.shift_date, w.time_zone FROM roster_slots s
+               JOIN rosters r ON r.roster_id=s.roster_id JOIN wards w ON w.ward_id=r.ward_id
+               WHERE r.ward_id=? AND r.status='DRAFT' AND s.shift_type_id=?""",
+            { rs, _ ->
+                SlotDate(
+                    UUID.fromString(rs.getString("slot_id")), UUID.fromString(rs.getString("roster_id")),
+                    rs.getObject("shift_date", LocalDate::class.java), ZoneId.of(rs.getString("time_zone")),
+                )
+            },
+            wardId, shiftTypeId,
+        )
+        slots.forEach { slot ->
+            val startsAt = slot.date.atTime(start).atZone(slot.zone).toInstant()
+            val endsAt = (if (spansMidnight) slot.date.plusDays(1) else slot.date).atTime(end).atZone(slot.zone).toInstant()
+            jdbc.update("UPDATE roster_slots SET starts_at=?, ends_at=? WHERE slot_id=?", startsAt.toString(), endsAt.toString(), slot.id)
+        }
+        val rosters = slots.map { it.rosterId }.toSet()
+        rosters.forEach { jdbc.update("UPDATE rosters SET revision=revision+1 WHERE roster_id=?", it) }
+        return rosters
+    }
+
+    private data class SlotDate(val id: UUID, val rosterId: UUID, val date: LocalDate, val zone: ZoneId)
+
     fun markDraftsForRevalidation(wardId: UUID, shiftTypeId: UUID): Int = jdbc.update(
         """UPDATE rosters SET needs_revalidation=TRUE
             WHERE ward_id=? AND status='DRAFT' AND needs_revalidation=FALSE

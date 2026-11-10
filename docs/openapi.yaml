@@ -1209,9 +1209,12 @@ paths:
       description: |
         관리자만 호출할 수 있다. 같은 병동에서 `code`는 비활성 유형을 포함해 유일하다
         (`SHIFT_TYPE_CODE_DUPLICATE`). 서로 다른 유형의 시간대가 겹치는 것은 허용한다.
-        `Idempotency-Key`는 받지 않는다. 같은 요청을 재시도하면 `code` 중복으로 409가 된다.
-        병동 단위로 직렬화되므로 같은 `code`를 동시에 만들면 하나만 201이다.
+        같은 `Idempotency-Key`로 재시도하면(응답 유실 등) 처음 만든 유형을 그대로 돌려준다. 다른 본문이나 다른 사용자가
+        같은 키를 쓰면 409 `IDEMPOTENCY_KEY_REUSED`. 병동 단위로 직렬화되므로 같은 `code`를 새 키로 동시에 만들면 하나만 201이다.
+        `kind`는 DAY·EVENING·NIGHT만 받는다. OTHER(특수 근무)는 휴식 규칙이 정해지지 않아 결정 23 전까지 입력할 수 없다.
       x-required-role: WARD_ADMIN
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         required: true
         content:
@@ -1238,7 +1241,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiProblem'
         '409':
-          description: SHIFT_TYPE_CODE_DUPLICATE
+          description: SHIFT_TYPE_CODE_DUPLICATE 또는 IDEMPOTENCY_KEY_REUSED
           content:
             application/problem+json:
               schema:
@@ -1265,7 +1268,9 @@ paths:
         `active`를 생략하면 현재 값을 유지하고, `true`로 보내면 비활성 유형을 다시 켠다.
         시간·휴게·인정시간·월 환산시간·종류·`spansMidnight`·활성 여부가 바뀌면 이 유형을 쓰는 DRAFT 근무표는
         `needsRevalidation=true`가 된다. 표시 이름·코드만 바꾸면 표시하지 않는다.
-        이미 만들어진 근무 칸의 시각은 바뀌지 않는다. PUBLISHED 근무표는 영향받지 않는다.
+        시작·종료·`spansMidnight`가 바뀌면 이 유형을 쓰는 DRAFT 근무표의 근무 칸 시각을 새 시간으로 다시 계산하고 그 근무표의
+        revision을 올린다(이전 화면의 ETag로는 확정할 수 없다). 확정 시 필수 규칙은 새 시각으로 다시 검사된다.
+        PUBLISHED 근무표의 칸은 바뀌지 않는다. `kind`는 생성과 같이 DAY·EVENING·NIGHT만 받는다.
       x-required-role: WARD_ADMIN
       requestBody:
         required: true
@@ -2585,7 +2590,8 @@ components:
           maxLength: 64
         kind:
           type: string
-          enum: [DAY, EVENING, NIGHT, OTHER]
+          enum: [DAY, EVENING, NIGHT]
+          description: 입력 가능한 종류. 응답의 기존 OTHER 유형은 읽기만 가능(결정 23 전)
         startTime:
           type: string
           pattern: '^([01]\d|2[0-3]):[0-5]\d$'

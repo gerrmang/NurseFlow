@@ -16,6 +16,7 @@ import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.PutMapping
 import org.springframework.web.bind.annotation.RequestBody
+import org.springframework.web.bind.annotation.RequestHeader
 import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RequestParam
 import org.springframework.web.bind.annotation.RestController
@@ -39,9 +40,10 @@ class ShiftTypeController(private val shiftTypes: ShiftTypeService) {
     fun create(
         @PathVariable wardId: UUID,
         @Valid @RequestBody request: ShiftTypeRequest,
+        @RequestHeader("Idempotency-Key") idempotencyKey: UUID,
         @CurrentSubject subject: String,
     ): ResponseEntity<ShiftTypeResponse> = ResponseEntity.status(HttpStatus.CREATED)
-        .body(shiftTypes.create(wardId, request.toCommand(), subject).toResponse())
+        .body(shiftTypes.create(wardId, request.toCommand(), idempotencyKey, subject).toResponse())
 
     @PutMapping("/{shiftTypeId}")
     fun update(

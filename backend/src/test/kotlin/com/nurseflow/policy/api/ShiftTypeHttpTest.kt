@@ -39,9 +39,50 @@ class ShiftTypeHttpTest : ApiTestBase() {
         mapOf("code" to code, "displayName" to name, "kind" to kind, "startTime" to start, "endTime" to end, "spansMidnight" to spans) + extra
 
     private fun create(b: Map<String, Any?> = body()): JsonNode {
-        val r = http.post(base(), b, admin)
+        val r = postType(b, admin)
         assertEquals(201, r.status, r.body)
         return r.json!!
+    }
+
+    private fun postType(b: Map<String, Any?>, token: String?, key: String = UUID.randomUUID().toString()) =
+        http.post(base(), b, token, mapOf("Idempotency-Key" to key))
+
+    @Test
+    fun `retrying a create with the same key returns the first type`() {
+        val key = UUID.randomUUID().toString()
+        val first = postType(body(code = "R1"), admin, key)
+        val retry = postType(body(code = "R1"), admin, key)
+
+        assertEquals(201, first.status, first.body)
+        assertEquals(201, retry.status, retry.body)
+        assertEquals(first.json!!.get("shiftTypeId").asString(), retry.json!!.get("shiftTypeId").asString())
+        assertEquals("IDEMPOTENCY_KEY_REUSED", postType(body(code = "R2"), admin, key).code)
+        assertEquals(400, http.post(base(), body(code = "R3"), admin).status)
+    }
+
+    @Test
+    fun `OTHER kind cannot be entered until its rest rules are decided`() {
+        assertEquals("INVALID_REQUEST", postType(body(code = "S1", kind = "OTHER"), admin).code)
+    }
+
+    @Test
+    fun `changing hours rewrites draft slot times and bumps the draft revision, published slots stay`() {
+        val id = create().get("shiftTypeId").asString()
+        val draft = roster("DRAFT", "2026-11", id)
+        val published = roster("PUBLISHED", "2026-12", id)
+        fun slotTimes(rosterId: UUID) = jdbc.queryForMap("SELECT starts_at, ends_at FROM roster_slots WHERE roster_id=?", rosterId)
+            .mapKeys { it.key.lowercase() }.mapValues { it.value.toString() }
+        fun rosterRevision(rosterId: UUID) = jdbc.queryForObject("SELECT revision FROM rosters WHERE roster_id=?", Int::class.java, rosterId)
+        val publishedBefore = slotTimes(published)
+
+        val updated = http.put("${base()}/$id", body(code = "N", kind = "NIGHT", start = "21:00", end = "06:00", spans = true), admin)
+
+        assertEquals(200, updated.status, updated.body)
+        // 2026-11-05 21:00 Asia/Seoul = 12:00Z, ends next day 06:00 KST = 21:00Z.
+        assertEquals(mapOf("starts_at" to "2026-11-05T12:00:00Z", "ends_at" to "2026-11-05T21:00:00Z"), slotTimes(draft))
+        assertEquals(2, rosterRevision(draft))
+        assertEquals(publishedBefore, slotTimes(published))
+        assertEquals(1, rosterRevision(published))
     }
 
     private fun revision(): Int = http.get(base(), admin).json!!.get("policyRevision").asInt()
@@ -59,7 +100,7 @@ class ShiftTypeHttpTest : ApiTestBase() {
         ).forEach { c ->
             assertEquals(c.list, http.get(base(), c.token).status, "list ${c.who}")
             assertEquals(c.write, http.put("${base()}/$id", put, c.token).status, "put ${c.who}")
-            val created = http.post(base(), body(code = "X_${c.who.take(3).uppercase()}"), c.token).status
+            val created = postType(body(code = "X_${c.who.take(3).uppercase()}"), c.token).status
             assertEquals(if (c.who == "admin") 201 else c.write, created, "post ${c.who}")
             assertEquals(c.missing, http.delete("${base()}/$id", c.token).status, "delete ${c.who}")
         }
@@ -116,7 +157,7 @@ class ShiftTypeHttpTest : ApiTestBase() {
 
     @Test
     fun `invalid times and minutes are rejected with stable codes`() {
-        fun post(b: Map<String, Any?>) = http.post(base(), b, admin)
+        fun post(b: Map<String, Any?>) = postType(b, admin)
         assertEquals("INVALID_REQUEST", post(body(start = "7:00")).code)
         assertEquals("INVALID_REQUEST", post(body(start = "24:00")).code)
         assertEquals("INVALID_REQUEST", post(body(end = "07:00:00")).code)
@@ -146,10 +187,10 @@ class ShiftTypeHttpTest : ApiTestBase() {
     @Test
     fun `duplicate code is a conflict but overlapping times are allowed`() {
         create(body("D", "데이", "DAY", "07:00", "15:00", false))
-        val dup = http.post(base(), body("D", "다른 데이", "DAY", "08:00", "16:00", false), admin)
+        val dup = postType(body("D", "다른 데이", "DAY", "08:00", "16:00", false), admin)
         assertEquals(409, dup.status)
         assertEquals("SHIFT_TYPE_CODE_DUPLICATE", dup.code)
-        assertEquals(201, http.post(base(), body("D2", "중간", "DAY", "08:00", "16:00", false), admin).status)
+        assertEquals(201, postType(body("D2", "중간", "DAY", "08:00", "16:00", false), admin).status)
 
         val other = create(body("E", "이브닝", "EVENING", "15:00", "23:00", false)).get("shiftTypeId").asString()
         val clash = http.put("${base()}/$other", body("D", "이브닝", "EVENING", "15:00", "23:00", false), admin)
@@ -178,8 +219,8 @@ class ShiftTypeHttpTest : ApiTestBase() {
         assertEquals(2, revision())
         http.delete("${base()}/$id", admin)
         assertEquals(3, revision())
-        http.post(base(), body(start = "7:00"), admin)
-        http.post(base(), body(code = "D", kind = "DAY", start = "07:00", end = "15:00", spans = false), admin)
+        postType(body(start = "7:00"), admin)
+        postType(body(code = "D", kind = "DAY", start = "07:00", end = "15:00", spans = false), admin)
         assertEquals(4, revision())
         assertEquals(4, jdbc.queryForObject("SELECT revision FROM ward_policy_revisions WHERE ward_id=?", Int::class.java, wardId))
     }
@@ -245,7 +286,7 @@ class ShiftTypeHttpTest : ApiTestBase() {
             val results = (1..2).map { n ->
                 pool.submit<Int> {
                     ready.countDown(); go.await()
-                    http.post(base(), body("D", "데이$n", "DAY", "07:00", "15:00", false), admin).status
+                    postType(body("D", "데이$n", "DAY", "07:00", "15:00", false), admin).status
                 }
             }
             ready.await(); go.countDown()
