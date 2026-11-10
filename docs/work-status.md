@@ -123,5 +123,7 @@ Claude와 Codex가 같은 진행 기록을 사용한다. PR 또는 정기 리뷰
 | GitHub PR #36 리뷰 | `feat/ward-self-create` | `d82fa2da5778601b3ade50367005b143250e649b` | 해당 없음(PR diff 기준) | 2026-11-10 | hyen11 | P1~P3·P5 없음. P4(테스트) 2건: 잠금 뒤 replay 재확인 경로를 강제하지 못함, 다른 계정 같은 키 경합·롤백 미검증 |
 | `/Users/sihwan/Documents/ChatGPT/NurseFlow` | `feat/ward-self-create` | `bbd7b550202490ccdbed8f14823f2b03ca5b3da3` | 미커밋 변경 없음 | 2026-11-10 | Claude | 위 P4 2건 수정: 테스트 전용 하위 클래스로 순서 강제. 두 경로 변이 각 3/3 검출 |
 | `/private/tmp/NurseFlow-a8` | `feat/shift-type-settings` | `d407e55` (구현 HEAD, 이후 문서 커밋 추가) | 미커밋 변경 없음 | 2026-11-10 | Claude(Sonnet) | A8 구현: 근무 유형 CRUD(`policy` 패키지), 휴게·인정·환산 시간, 정책 revision, DRAFT 재검증 표시, 스키마 업그레이드 테스트. 계약 커밋 `9860a57` 선행 |
+| `/private/tmp/NurseFlow-a8` | `feat/shift-type-settings` | `ed32d2fd67a9e1656dafc077d786b80ca710f114` | 미커밋 변경 없음 | 2026-11-10 | Codex | A8 리뷰. P2 시간 변경 후 초안 칸 시각이 옛 값이라 확정 검사가 옛 시간 기준, P2 kind=OTHER로 휴식 규칙 우회, P3 POST Idempotency-Key 제거 |
+| `/private/tmp/NurseFlow-a8` | `feat/shift-type-settings` | `67896e789610fba587d9fcfa3944dc3aec556fc5` | 미커밋 변경 없음 | 2026-11-10 | Claude | 위 3건 수정: 초안 칸 시각 재계산·revision 증가, OTHER 입력 차단, Idempotency-Key 복원(잠금 뒤 재확인). Codex 재리뷰 전 |
 
 이 문서는 Claude와 Codex가 각 기능 단위 작업 후 진행 결과를 함께 기록하는 단일 공유 현황이다.
