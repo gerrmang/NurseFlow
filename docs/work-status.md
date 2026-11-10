@@ -21,7 +21,8 @@
 | 에이전트 지침 정합성 | `docs/agent-guidance-alignment` | #32 | `dev` 병합 완료 (2026-11-09, 일반 병합 커밋 `ab8347d`. 스쿼시 원칙에서 벗어남) | `git diff --check` 통과. GitHub Actions `Verify` PR 실행 성공, `dev` push 실행 성공 | 없음 |
 | A3 병원 검색 API | `feat/hospital-search` | #35 | `dev` 병합 완료 (2026-11-10, 스쿼시 병합 커밋 `23af850`) | 병합 전 `./gradlew test --offline` 134건 통과, CI 통과. 실제 2026.9. 파일 79,899곳 적재 0.7초, 검색 15~40ms | 없음 |
 | A4 병동 생성 | `feat/ward-self-create` | #36 | 구현 완료. Codex 리뷰 P3·P4, /code-review 지적 7건, 계정당 생성 상한 5개, Codex 재리뷰 P2·P3 수정. 결정 1(목록 밖 병원 생성 불가)·2(서버가 목록으로 병원 확인)·3(같은 병원·병동명 허용, 권한 분리) 반영. 시연용 부트스트랩 제거. hyen11 계약 검토(`3e5da53`)·스쿼시 병합 대기 | 2026-11-10 `./gradlew test --offline` 138건 통과(건너뜀 4). 같은 키 동시 요청 테스트는 중복 키 처리 제거 변이 3/3 실패로 검출력 확인. 이전 스키마 H2에 schema.sql 두 번 적용 테스트 통과 | 없음 |
-| A5 이후 | 해당 없음 | 미개설 | 미착수. A5는 결정 10·11, A6·A8은 A4 병합 대기 | 해당 없음 | 없음 |
+| A6 구성원 관리 | `feat/membership-admin` (`/private/tmp/NurseFlow-a6`) | 미개설(#37 병합 뒤 개설) | 구현 완료, 로컬 커밋만(푸시 안 함). 구성원 목록·관리자 지정/해제·비활성화·재활성화, 마지막 활성 관리자 보호(결정 4, 복구 절차는 미구현), 비활성 구성원 즉시 접근 차단(`ward_memberships.active`), 연결 간호사 기록은 비활성화 시 함께 비활성화(재활성화는 직원 관리에서 별도) | 2026-11-10 `./gradlew test --offline` 167건 통과, 건너뜀 4(실서버·라이브 확인용), 실패 0. 잠금 제거 변이로 동시 테스트 3회 실행 시 22건 중 10·8·10건 실패 확인 후 복원 | 없음 |
+| A7 이후 | 해당 없음 | 미개설 | 미착수. A7은 A6 병합 대기, A8은 A4 병합 대기 | 해당 없음 | 없음 |
 
 ## 리뷰 상태
 
@@ -123,3 +124,5 @@ Claude와 Codex가 같은 진행 기록을 사용한다. PR 또는 정기 리뷰
 | `/Users/sihwan/Documents/ChatGPT/NurseFlow` | `feat/ward-self-create` | `bbd7b550202490ccdbed8f14823f2b03ca5b3da3` | 미커밋 변경 없음 | 2026-11-10 | Claude | 위 P4 2건 수정: 테스트 전용 하위 클래스로 순서 강제. 두 경로 변이 각 3/3 검출 |
 
 이 문서는 Claude와 Codex가 각 기능 단위 작업 후 진행 결과를 함께 기록하는 단일 공유 현황이다.
+
+| `/private/tmp/NurseFlow-a6` | `feat/membership-admin` | `73990f9` (구현 커밋. 상태 문서 커밋 전) | 미커밋 변경 없음 | 2026-11-10 | Claude(Sonnet) | A6 구현 전체: 계약 선행 커밋, 구성원 목록·PATCH, 활성 필터(rolesIn·membershipsOf·roster 구성원/조회 권한), 마지막 관리자 보호, 동시 테스트, 스키마 업그레이드 테스트. Codex 리뷰 전 |
