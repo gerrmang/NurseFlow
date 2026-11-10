@@ -18,7 +18,7 @@
 | A2 웹 세션 API | `feat/auth-web-session-v2` | #33 | `dev` 병합 완료 (2026-11-09, 스쿼시 병합 커밋 `fa47a5a`) | 2026-11-09 로컬 `./gradlew test --offline`: 108건 통과, 건너뜀 1. 동시 state 테스트(`FOR UPDATE` 제거 변이 3/3 실패)와 client_secret 전달(전달 줄 제거 변이 실패) 검출력 확인. 실제 Kakao E2E 미검증(목업만) | 없음 |
 | B2 웹 기반 세션 | `feat/web-foundation-session` | 미개설 | 미착수. A2 PR #33이 `dev`에 병합되어 선행 조건 충족 | 해당 없음 | 없음 |
 | B9a Android 공개 근무표 조회 | `feat/android-published-roster` (`dev` `fa47a5a` 통합) | [#34](https://github.com/gerrmang/NurseFlow/pull/34) | `dev` 병합 완료 (2026-11-10, 스쿼시 병합 커밋 `d1b8729`). 구현·기기·실서버 검증과 PR P3 수정 완료, 병합 전 Backend tests·Android debug build 통과 | [B9a 검증 기록](../android/B9a-verification.md), 아래 최종 검증 참조 | 기존 P2 해결, P3 수정 후 재리뷰 대기 |
-| B3a Android 초대 관리·가입 | `feat/android-invite-join` (`dev` `23af850`에서 분기) | 미개설 | 구현·로컬 검증 완료. 첫 커밋·푸시 완료(2026-11-10). 실제 Kakao 검증은 B2 검증 후 이어서 진행. PR 생성은 미승인 | [B3a 검증 기록](../android/B3a-verification.md): JVM 68건 통과, Lint 오류 0, 기기 28건 중 22건 통과·6건 opt-in 건너뜀, 가짜 OIDC 실서버 가입 E2E `OK (1 test)`·서버 `BUILD SUCCESSFUL`, 백엔드 135건 중 실패 0. 실제 Kakao·GitHub CI 미검증 | 리뷰 전 |
+| B3a Android 초대 관리·가입 | `feat/android-invite-join` (`dev` `23af850`에서 분기) | 미개설 | 구현·로컬 검증과 실제 Kakao 1계정 검증 완료(2026-11-10), 커밋·푸시. PR 생성은 미승인 | [B3a 검증 기록](../android/B3a-verification.md): JVM 68건 통과, Lint 오류 0, 기기 28건 중 22건 통과·6건 opt-in 건너뜀, 가짜 OIDC 실서버 가입 E2E `OK (1 test)`·서버 `BUILD SUCCESSFUL`, 백엔드 135건 중 실패 0. 실제 Kakao 1계정으로 콜드 링크 로그인 재개·가입·오류 4종·이미 소속·관리자 가입·초대 관리·프로세스 재시작·세션 종료 시 초대 삭제 확인. 두 계정 전환·클립보드·실제 메신저·GitHub CI 미검증 | 리뷰 전 |
 | 에이전트 지침 정합성 | `docs/agent-guidance-alignment` | #32 | `dev` 병합 완료 (2026-11-09, 일반 병합 커밋 `ab8347d`. 스쿼시 원칙에서 벗어남) | `git diff --check` 통과. GitHub Actions `Verify` PR 실행 성공, `dev` push 실행 성공 | 없음 |
 | A3 병원 검색 API | `feat/hospital-search` | #35 | PR 열림. Codex 리뷰 P2 1건·재리뷰 P3 1건, hyen11 계약 리뷰 P3 2건 모두 수정(P1/P2 없음). hyen11 수정분 확인·CI 재실행(2026-11-10 새벽 GitHub Actions 장애로 실패)·스쿼시 병합 대기 | 2026-11-10 야간 QA: `./gradlew test --offline` 133건 통과(건너뜀 3). 실제 2026.9. 파일 79,899곳 누락 없이 적재 0.7초, 검색 15~40ms. 임시 H2 파일 DB로 서버 2회 기동: 첫 기동 적재·재기동 건너뜀, 토큰 없는 검색 401. 실시간 API 실키 호출은 200 정상이나 10~17초 | 없음 |
 | A4 이후 | 해당 없음 | 미개설 | 미착수. A3 검색 계약·서버 기능에 의존 | 해당 없음 | 없음 |
@@ -106,11 +106,11 @@
   - `backend/README.md`의 `expiresInHours` 서술
   - §7 #8 미결 표기 (구현은 재발급 시 원본을 철회함)
 - **다음 단계:**
-  1. 실제 Kakao 로그인으로 초대 흐름을 검증하고 결과를 이 브랜치에 기록 (B2 작업 이후)
-  2. PR 생성은 별도 승인 후. GitHub CI 확인
-  3. Codex 리뷰 (P1/P2 수정)
-  4. 오류 상태 화면 캡처 (가상 데이터)
-- **미검증:** 실제 Kakao 로그인, 실제 메신저의 사용자 스킴 링크 표시, 물리 기기, 프로세스 재시작 시 초대 유실.
+  1. PR 생성은 별도 승인 후. GitHub CI 확인
+  2. Codex 리뷰 (P1/P2 수정)
+  3. 오류 상태 화면 캡처 (가상 데이터)
+- **실제 Kakao 검증 (2026-11-10 저녁):** 사용자 실제 계정 1개, 임시 에뮬레이터·임시 DB, 가상 병동·초대. 결과는 검증 기록의 같은 이름 절. 서버 로그 WARN·ERROR 0, 토큰 0회. logcat의 시드 토큰은 검증용 adb 명령(adbd)에만 있었다.
+- **미검증:** 두 실제 계정 전환, KakaoTalk 앱 로그인, 클립보드 복사·가림, 실제 메신저의 사용자 스킴 링크 표시, 물리 기기, 화면에서의 명시적 로그아웃 시 대기 초대 삭제(기기 테스트로만 확인).
 
 ## 기타 브랜치
 
