@@ -313,20 +313,27 @@ paths:
           $ref: '#/components/responses/Unauthorized'
     post:
       tags: [Wards]
-      operationId: bootstrapWard
-      summary: 시연용 첫 병동과 관리자 생성
+      operationId: createWard
+      summary: 병원을 골라 자기 병동을 만들고 관리자가 됨
       description: |
-        서버의 NURSEFLOW_BOOTSTRAP_CODE와 일치할 때만 병동을 만들고 호출자를 WARD_ADMIN으로 등록한다.
-        코드가 설정되지 않으면 404 BOOTSTRAP_DISABLED. 다른 구성원은 초대로만 가입한다.
+        로그인 사용자가 병원 검색(`GET /hospitals/search`) 결과에서 고른 병원과 병동명으로 새 병동을 만든다.
+        호출자는 그 병동의 `WARD_ADMIN`이 되며 간호사 기록은 만들지 않는다. 병원 선택은 재직 인증이 아니다.
+        클라이언트는 병원의 `source`·`externalId`만 보낸다. 서버가 복제된 공식 병원 목록에서 병원명·주소를 찾아
+        생성 시점의 표시값으로 저장하므로 클라이언트가 병원명을 바꿔 보낼 수 없다.
+        목록에 없거나 폐업으로 비활성화된 병원은 422 `HOSPITAL_NOT_FOUND`이며 직접 입력으로 만드는 경로는 없다.
+        같은 병원·같은 병동명의 병동을 다른 관리자가 만들 수 있고, 서로의 병동에 권한이 생기지 않는다.
+        같은 `Idempotency-Key`로 다시 보내면 처음 만든 병동을 그대로 돌려준다(재시도·중복 탭 대비).
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/BootstrapWardRequest'
+              $ref: '#/components/schemas/CreateWardRequest'
       responses:
         '201':
-          description: 생성된 병동 소속
+          description: 생성된 병동과 호출자의 관리자 소속
           content:
             application/json:
               schema:
@@ -335,14 +342,20 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
-        '403':
-          description: BOOTSTRAP_CODE_INVALID
+        '409':
+          description: IDEMPOTENCY_KEY_REUSED — 같은 키를 다른 요청 본문에 사용함
           content:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/ApiProblem'
-        '404':
-          description: BOOTSTRAP_DISABLED
+        '422':
+          description: HOSPITAL_NOT_FOUND — 복제 목록에 없거나 비활성화된 병원
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ApiProblem'
+        '503':
+          description: HOSPITAL_SEARCH_NOT_CONFIGURED — 서버에 병원 목록이 적재되지 않아 병원을 확인할 수 없음
           content:
             application/problem+json:
               schema:
@@ -2137,20 +2150,33 @@ components:
               type: string
             newUser:
               type: boolean
-    BootstrapWardRequest:
+    CreateWardRequest:
       type: object
       additionalProperties: false
-      required: [name, bootstrapCode]
+      required: [hospital, wardName]
       properties:
-        name:
+        hospital:
+          type: object
+          additionalProperties: false
+          required: [source, externalId]
+          description: 병원 검색 결과의 `source`·`externalId` 그대로
+          properties:
+            source:
+              type: string
+              enum: [HIRA]
+            externalId:
+              type: string
+              minLength: 1
+              maxLength: 255
+        wardName:
           type: string
+          minLength: 1
           maxLength: 100
+          description: 앞뒤 공백을 제거해 저장한다
+          example: 가상 내과 병동
         timeZone:
           type: string
           default: Asia/Seoul
-        bootstrapCode:
-          type: string
-          maxLength: 200
     CurrentUser:
       type: object
       required: [userId, displayName, memberships]
@@ -2182,6 +2208,10 @@ components:
             enum: [WARD_ADMIN, WARD_MEMBER]
         canViewWardCalendar:
           type: boolean
+        hospitalName:
+          type: [string, 'null']
+          description: 병동을 만들 때 고른 병원의 이름(생성 시점 값). 같은 이름의 병동을 구분하는 데 쓴다. 병원 없이 만들어진 이전 병동은 null
+          example: 가상대학교병원
     StaffPage:
       type: object
       required: [items, page, pageSize, totalItems]
