@@ -10,5 +10,12 @@ nurseflow:
       secret: test-only-session-secret-0123456789-abcdef
   bootstrap:
     code: test-bootstrap-code
+  hospital:
+    hira:
+      service-key: nurseflow+test/hira=key==
+      timeout: 500ms
+    dataset:
+      min-rows: 1
+      max-deactivation-ratio: 0.5
   invitation:
     link-base-url: https://nurseflow.test/invite

@@ -16,6 +16,8 @@ Java 21 is required. Set these environment variables in the run configuration (n
 | `NURSEFLOW_WEB_ALLOWED_ORIGINS` | Optional. Comma-separated `Origin` values allowed on `/api/v1/auth/web/*`. Empty → the origins of the redirect URIs. |
 | `NURSEFLOW_WEB_COOKIE_SECURE` | Optional, default `true`. Keep `true`; browsers treat `http://localhost` as secure. |
 | `NURSEFLOW_BOOTSTRAP_CODE` | Optional, demo only. Enables `POST /api/v1/wards` so the first signed-in user can create a ward and become `WARD_ADMIN`. Leave empty otherwise. |
+| `NURSEFLOW_HOSPITAL_DATASET_PATH` | Recommended. Path to the downloaded 「전국 병의원 및 약국 현황」 zip (data.go.kr dataset 15051059, updated quarterly) or its `병원정보서비스` CSV. Imported at startup when the file changed (about 80,000 rows in under a second); searches then run on this local copy in milliseconds. A file with fewer than 10,000 rows is rejected and the previous list is kept. |
+| `NURSEFLOW_HOSPITAL_API_KEY` | Optional fallback. data.go.kr key for the live 병원정보서비스 API (Decoding or Encoding form), used only until a dataset is imported; each live search often takes 10+ seconds. Without a dataset and a key, search returns 503 `HOSPITAL_SEARCH_NOT_CONFIGURED`. Never commit it. |
 | `NURSEFLOW_INVITE_LINK_BASE` | Optional. Invitation page URL; responses then include `inviteUrl`. |
 
 ### Sign-in and session

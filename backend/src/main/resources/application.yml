@@ -36,6 +36,17 @@ nurseflow:
       cookie-secure: ${NURSEFLOW_WEB_COOKIE_SECURE:true}
       # Comma-separated Origins allowed to call /api/v1/auth/web/*. Empty: origins of the redirect URIs.
       allowed-origins: ${NURSEFLOW_WEB_ALLOWED_ORIGINS:}
+  hospital:
+    hira:
+      # data.go.kr key for 건강보험심사평가원 병원정보서비스 (Decoding or Encoding form). Never committed.
+      # Empty: GET /api/v1/hospitals/search returns 503 HOSPITAL_SEARCH_NOT_CONFIGURED.
+      service-key: ${NURSEFLOW_HOSPITAL_API_KEY:}
+      # data.go.kr often answers in several seconds; a 3s limit timed out real searches.
+      timeout: 10s
+    dataset:
+      # Downloaded 「전국 병의원 및 약국 현황」 zip (data.go.kr 15051059, quarterly) or its 병원정보서비스 CSV.
+      # Imported at startup when the file changed. Empty: search falls back to the live API above.
+      path: ${NURSEFLOW_HOSPITAL_DATASET_PATH:}
   invitation:
     # Page that opens an invitation, e.g. https://<web-host>/invite. The token is appended as #token=...
     link-base-url: ${NURSEFLOW_INVITE_LINK_BASE:}

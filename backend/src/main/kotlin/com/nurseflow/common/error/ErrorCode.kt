@@ -19,6 +19,8 @@ enum class ErrorCode(val status: HttpStatus, val safeMessage: String) {
     GENERATION_NOT_CANCELLABLE(HttpStatus.CONFLICT, "이미 종료된 자동배치 작업입니다."),
     GENERATION_TOO_LARGE(HttpStatus.UNPROCESSABLE_CONTENT, "자동배치 한도는 2000칸입니다."),
     HOSPITAL_JOIN_MONTH_REQUIRED(HttpStatus.BAD_REQUEST, "가입하려면 병원 입사 년월을 입력해 주세요."),
+    HOSPITAL_SEARCH_NOT_CONFIGURED(HttpStatus.SERVICE_UNAVAILABLE, "병원 검색 설정이 완료되지 않았습니다."),
+    HOSPITAL_SEARCH_UNAVAILABLE(HttpStatus.SERVICE_UNAVAILABLE, "병원 정보 서비스에 일시적으로 연결할 수 없습니다. 잠시 후 다시 검색해 주세요."),
     IDEMPOTENCY_KEY_REUSED(HttpStatus.CONFLICT, "다른 요청에 이미 사용한 키입니다."),
     IDENTITY_PROVIDER_NOT_CONFIGURED(HttpStatus.SERVICE_UNAVAILABLE, "로그인 설정이 완료되지 않았습니다."),
     IDENTITY_PROVIDER_UNAVAILABLE(HttpStatus.SERVICE_UNAVAILABLE, "로그인 서비스에 일시적으로 연결할 수 없습니다."),

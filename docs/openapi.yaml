@@ -30,6 +30,7 @@ tags:
   - name: Auth
   - name: Identity
   - name: Wards
+  - name: Hospitals
   - name: Invitations
   - name: Staff
   - name: Rosters
@@ -342,6 +343,73 @@ paths:
                 $ref: '#/components/schemas/ApiProblem'
         '404':
           description: BOOTSTRAP_DISABLED
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ApiProblem'
+
+  /hospitals/search:
+    get:
+      tags: [Hospitals]
+      operationId: searchHospitals
+      summary: 병원 이름으로 공식 의료기관 검색
+      description: |
+        병동을 만들 때 병원을 고르기 위한 검색이다. 로그인 사용자면 누구나 호출할 수 있고 병원 단위 권한은 없다.
+        서버는 건강보험심사평가원 「전국 병의원 및 약국 현황」(공공데이터포털, 분기 갱신)의 병·의원 목록을 서버 DB에 복제해 두고 검색한다.
+        약국은 포함하지 않는다. 복제 목록 검색은 띄어쓰기·괄호·기호를 무시하고 이름 일부로 찾으며, 정렬은 정확 일치 → 병원급(상급종합·종합병원·
+        병원·요양병원·정신병원·치과병원·한방병원) → 의원급, 같은 급에서는 앞부분 일치 → 포함 → 이름순이다.
+        목록을 아직 적재하지 않은 서버는 같은 기관의 실시간 병원정보서비스 API로 대신 검색한다. 이 대체 경로는 응답에 10초 이상 걸릴 수 있고,
+        검색어 일치 방식과 정렬은 외부 API를 따르므로 위의 기호 무시·정렬 규칙을 보장하지 않는다. 운영 서버는 복제 목록을 적재한다.
+        결과가 없으면 200과 빈 `items`를 돌려준다. 실시간 API 장애·시간 초과·호출 한도 초과는 503 `HOSPITAL_SEARCH_UNAVAILABLE`이다.
+        화면에는 응답의 `attribution`(데이터 기준 시점 포함)을 출처로 표시하고, 검색은 입력할 때마다가 아니라 검색 실행 시 호출한다.
+      parameters:
+        - name: query
+          in: query
+          required: true
+          description: |
+            병원 이름 일부. 앞뒤 공백을 제거한 뒤 2~50자, 제어 문자 불가.
+            또한 띄어쓰기·괄호·기호를 뺀 문자·숫자가 2자 이상이어야 한다(예 `(가)`는 400). 두 검색 경로에 같이 적용한다.
+          schema:
+            type: string
+            minLength: 2
+            maxLength: 50
+            example: 가상대학교병원
+        - name: page
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 1
+        - name: size
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 20
+            default: 10
+      responses:
+        '200':
+          description: 검색 결과(없으면 빈 목록)
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+                example: private, no-store
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HospitalSearchPage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          description: |
+            HOSPITAL_SEARCH_NOT_CONFIGURED — 병원 목록이 적재되지 않았고 실시간 API 키도 설정되지 않음.
+            HOSPITAL_SEARCH_UNAVAILABLE — (목록 미적재 시) 실시간 API 장애·시간 초과·호출 한도 초과·응답 형식 오류.
           content:
             application/problem+json:
               schema:
@@ -2714,6 +2782,49 @@ components:
         endsAt:
           type: string
           format: date-time
+    HospitalSearchPage:
+      type: object
+      required: [items, page, size, totalCount, attribution]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/HospitalCandidate'
+        page:
+          type: integer
+          minimum: 1
+        size:
+          type: integer
+          minimum: 1
+        totalCount:
+          type: integer
+          minimum: 0
+          description: 조건에 맞는 전체 결과 수
+        attribution:
+          type: string
+          description: 화면에 표시할 데이터 출처(공공누리 제1유형 출처 표시). 복제 목록이면 기준 시점을 포함한다
+          example: 건강보험심사평가원 전국 병의원 및 약국 현황 (2026.9. 기준)
+    HospitalCandidate:
+      type: object
+      required: [source, externalId, name, address]
+      properties:
+        source:
+          type: string
+          enum: [HIRA]
+          description: 데이터 출처. HIRA는 건강보험심사평가원
+        externalId:
+          type: string
+          description: 출처가 발급한 요양기관 식별자(암호화된 요양기관기호). 병동 생성(A4) 때 그대로 보낸다
+        name:
+          type: string
+          example: 가상대학교병원
+        address:
+          type: string
+          example: 서울특별시 가상구 가상로 1
+        category:
+          type: [string, 'null']
+          description: 의료기관 종별(예 상급종합, 종합병원, 병원, 의원). 같은 이름의 기관을 구분하는 데 쓴다
+          example: 종합병원
     ApiProblem:
       type: object
       additionalProperties: true
