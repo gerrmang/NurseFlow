@@ -244,7 +244,7 @@
 - 충돌은 없었다. dev 변경은 백엔드와 공유 문서뿐이며, `web/`과 CI 파일은 바뀌지 않았다.
 - `docs/openapi.yaml`이 바뀌어 `npm run api:check`가 "stale"로 실패했다. `npm run api:gen`으로 `src/api/schema.gen.ts`를 다시 만들었다.
   - 생성 타입만 바뀌었고 웹 코드는 바꾸지 않았다.
-  - 빌드 결과 JS 크기가 270.50 kB(gzip 86.07 kB)로 이전과 같다. 런타임 코드 변화는 없다.
+  - 빌드 결과 JS 크기는 270.50 kB(gzip 86.07 kB)다. 크기 일치만으로 코드 동일성을 판단하지 않는다. Codex가 `git diff cd66358 0f4ddd4 --name-only -- web`를 확인한 결과 변경은 이 검증 문서와 `src/api/schema.gen.ts`뿐이며, 생성 타입은 `src/api/types.ts`의 `import type`으로 참조된다. 해당 비교 범위에서 웹 런타임 소스 변경은 없다. 서버의 A4·A5 동작 변경은 별도이며, dev 반영 후 실제 Kakao 브라우저 검증을 다시 했다는 뜻은 아니다.
 - dev의 `WardMembership`에 `hospitalName`이 추가됐다. 웹 병동 목록에는 아직 표시하지 않는다(후속 후보).
 
 **A 후속 수정 상태 (PR 대기 항목)**
@@ -299,7 +299,7 @@
     - 쿠키 차단 안내.
   - **실행 위치**: 개발 서버를 WSL에서 띄우고 Windows 브라우저에서 `http://localhost:5173`으로 접속하는 구성으로 확인했다(WSL localhost 전달).
 - **실서버에서 세션이 성공하는 경로**(로그인 → 복원 → 갱신 → `/me`·`/wards`): 실제 Kakao 로그인 없이는 refresh 쿠키를 얻을 수 없어 단위·컴포넌트 테스트(가짜 서버)로만 확인했다.
-- **GitHub CI의 `Web checks`**: PR이 열려야 실행된다.
+- **GitHub CI의 `Web checks`**: PR #39 구현 head `0f4ddd4344cd80eecd93ea11af471e87c70471fc`의 [Verify 42826773185](https://github.com/gerrmang/NurseFlow/actions/runs/42826773185)에서 Backend tests·Android debug build·Web checks 모두 성공했다. 아래 PR 기록 참조.
 
 ## API·데이터·설정 변경
 
@@ -333,7 +333,7 @@
 
 ## 최종 확인
 
-- [x] 대상 브랜치 `feat/web-foundation-session`(`dev` `23af850` 기준) 커밋·푸시. PR·병합·배포 없음
+- [x] 대상 브랜치 `feat/web-foundation-session`(`dev` `bdc96a6` 반영), [Draft PR #39](https://github.com/gerrmang/NurseFlow/pull/39) 개설. 병합·배포 없음
 - [x] CI와 같은 6단계 통과(WSL), 테스트 49/49
 - [x] 세션 경합 테스트의 검출력 확인(변이 9개 중 등가 1개를 뺀 8개 검출)
 - [x] 로컬 백엔드 연동: dev 20/20, preview 23/23 (curl 기준)
@@ -342,4 +342,12 @@
 - [x] 실제 브라우저에서의 SPA 화면 확인 (웨일, 사용자 직접 확인. 다른 브라우저는 미검증)
 - [x] 실제 Kakao 브라우저 왕복 (1계정. 두 계정 전환은 미검증)
 - [ ] 쿠키 속성·Web Storage·Console·콜백 재사용의 브라우저 측 확인
-- [ ] GitHub CI와 PR 리뷰
+- [x] 구현 head `0f4ddd4`의 GitHub CI 성공(아래 기록). 후속 문서 커밋의 CI는 최종 head 기준으로 별도 확인
+- [ ] 전체 코드에 대한 Codex PR 리뷰
+
+## PR·CI 현황 확인 (2026-11-10, Codex)
+
+- [PR #39](https://github.com/gerrmang/NurseFlow/pull/39): 대상 `dev`, open·Draft. 확인한 구현 head `0f4ddd4344cd80eecd93ea11af471e87c70471fc`.
+- GitHub API로 [Verify 42826773185](https://github.com/gerrmang/NurseFlow/actions/runs/42826773185)의 completed/success와 Backend tests·Android debug build·Web checks 각각의 성공을 확인했다. 이는 위 구현 head의 결과이며 후속 문서 커밋까지 포함한 검사로 표현하지 않는다.
+- A5 PR #37 병합 커밋 `bdc96a6`은 반영됐고, A 진단·초대 계약 후속 `be6d78c`는 별도 브랜치에 남아 있다. Draft 사유와 dev 기준 `KOE010` 재확인 대기를 유지한다.
+- 이번 작업은 diff·타입 참조·PR·CI 메타데이터 확인과 문서 정정이다. 앱·서버·브라우저 검사는 재실행하지 않았으며 전체 코드 리뷰나 독립 승인으로 주장하지 않는다. 문서 커밋·푸시 뒤 최종 head의 CI를 별도로 확인한다.
