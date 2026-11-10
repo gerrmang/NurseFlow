@@ -147,6 +147,56 @@ class WardCreationHttpTest : ApiTestBase() {
     }
 
     @Test
+    fun `one account may create at most five wards, and a retry still replays at the cap`() {
+        val (_, token) = userToken()
+        val keys = (1..5).map { UUID.randomUUID().toString() }
+        keys.forEachIndexed { i, key -> assertEquals(201, create(token, body(wardName = "가상 병동 $i"), key).status) }
+
+        val sixth = create(token, body(wardName = "가상 병동 6"))
+        val retry = create(token, body(wardName = "가상 병동 0"), keys[0])
+
+        assertEquals(409, sixth.status)
+        assertEquals("WARD_CREATION_LIMIT_REACHED", sixth.code)
+        assertEquals(201, retry.status)
+        assertEquals(5, jdbc.queryForObject("SELECT COUNT(*) FROM wards", Int::class.java))
+        val (_, other) = userToken("가상 다른 관리자")
+        assertEquals(201, create(other, body(wardName = "가상 병동 6")).status)
+    }
+
+    @Test
+    fun `concurrent creations cannot pass the cap`() {
+        val (_, token) = userToken()
+        (1..3).forEach { assertEquals(201, create(token, body(wardName = "가상 기존 병동 $it")).status) }
+        val start = CountDownLatch(1)
+        val executor = Executors.newFixedThreadPool(12)
+        try {
+            val results = (1..12).map { i ->
+                executor.submit<Int> { start.await(); create(token, body(wardName = "가상 동시 병동 $i")).status }
+            }
+            start.countDown()
+            val statuses = results.map { it.get(10, TimeUnit.SECONDS) }
+
+            assertEquals(2, statuses.count { it == 201 }, statuses.toString())
+            assertEquals(10, statuses.count { it == 409 }, statuses.toString())
+            assertEquals(5, jdbc.queryForObject("SELECT COUNT(*) FROM wards", Int::class.java))
+        } finally {
+            executor.shutdownNow()
+        }
+    }
+
+    @Test
+    fun `the same account cannot create the same hospital and ward name twice with a new key`() {
+        val (_, token) = userToken()
+        assertEquals(201, create(token).status)
+
+        val again = create(token, body(wardName = " 가상 내과 병동 "))
+
+        assertEquals(409, again.status)
+        assertEquals("WARD_ALREADY_CREATED", again.code)
+        assertEquals(201, create(token, body(wardName = "가상 외과 병동")).status)
+    }
+
+    @Test
     fun `invalid input is rejected before anything is stored`() {
         val (_, token) = userToken()
 

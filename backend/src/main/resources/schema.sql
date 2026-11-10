@@ -13,6 +13,7 @@ ALTER TABLE wards ADD COLUMN IF NOT EXISTS hospital_name VARCHAR(200);
 ALTER TABLE wards ADD COLUMN IF NOT EXISTS hospital_address VARCHAR(500);
 ALTER TABLE wards ADD COLUMN IF NOT EXISTS created_by VARCHAR(255);
 ALTER TABLE wards ADD COLUMN IF NOT EXISTS created_at VARCHAR(40);
+CREATE INDEX IF NOT EXISTS ix_wards_created_by ON wards(created_by);
 
 CREATE TABLE IF NOT EXISTS ward_memberships (
     ward_id UUID NOT NULL REFERENCES wards(ward_id),

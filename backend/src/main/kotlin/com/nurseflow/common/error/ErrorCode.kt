@@ -67,6 +67,8 @@ enum class ErrorCode(val status: HttpStatus, val safeMessage: String) {
     USER_NOT_FOUND(HttpStatus.UNAUTHORIZED, "사용자 정보를 찾을 수 없습니다. 다시 로그인해 주세요."),
     WEB_CLIENT_REQUIRED(HttpStatus.FORBIDDEN, "허용되지 않은 웹 요청입니다."),
     WARD_ADMIN_REQUIRED(HttpStatus.FORBIDDEN, "관리자 권한이 필요합니다."),
+    WARD_ALREADY_CREATED(HttpStatus.CONFLICT, "같은 병원에 같은 이름의 병동을 이미 만들었습니다. 병동 목록을 확인해 주세요."),
     WARD_CALENDAR_VIEW_REQUIRED(HttpStatus.FORBIDDEN, "병동 전체 근무표 조회 권한이 없습니다."),
+    WARD_CREATION_LIMIT_REACHED(HttpStatus.CONFLICT, "한 계정이 만들 수 있는 병동 수를 모두 사용했습니다."),
     WARD_NOT_FOUND(HttpStatus.NOT_FOUND, "병동을 찾을 수 없습니다.");
 }

@@ -9,6 +9,7 @@ import com.nurseflow.hospital.application.service.HospitalSearchService
 import com.nurseflow.ward.application.model.CreateWardCommand
 import com.nurseflow.ward.application.model.WardMembershipResult
 import com.nurseflow.ward.application.model.WardRole
+import com.nurseflow.ward.config.WardProperties
 import com.nurseflow.ward.persistence.repository.NewWard
 import com.nurseflow.ward.persistence.repository.WardJdbcRepository
 import org.springframework.dao.DuplicateKeyException
@@ -27,6 +28,7 @@ class WardService(
     private val audit: AuditLog,
     private val transactions: TransactionTemplate,
     private val replays: MutationReplayRepository,
+    private val properties: WardProperties,
 ) {
     /** Only memberships stored on the server count; token claims never grant ward access. */
     @Transactional(readOnly = true)
@@ -84,6 +86,16 @@ class WardService(
             throw BusinessException(ErrorCode.INVALID_TIME_ZONE)
         }
         val hospital = hospitals.requireForWard(command.hospitalSource, command.hospitalExternalId)
+        val userId = runCatching { UUID.fromString(subject) }.getOrNull()
+        if (userId == null || !repo.lockUser(userId)) throw BusinessException(ErrorCode.USER_NOT_FOUND)
+        // A second ward with the same hospital and name by the same account is almost always a double submit
+        // with a fresh key; other admins may still use the same names (decision 3).
+        if (repo.existsCreatedBy(subject, hospital.source, hospital.externalId, command.wardName)) {
+            throw BusinessException(ErrorCode.WARD_ALREADY_CREATED)
+        }
+        if (repo.countCreatedBy(subject) >= properties.maxCreatedPerUser) {
+            throw BusinessException(ErrorCode.WARD_CREATION_LIMIT_REACHED)
+        }
         val ward = NewWard(
             wardId = UUID.randomUUID(),
             name = command.wardName,

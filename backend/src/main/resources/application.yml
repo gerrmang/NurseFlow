@@ -47,6 +47,9 @@ nurseflow:
       # Downloaded 「전국 병의원 및 약국 현황」 zip (data.go.kr 15051059, quarterly) or its 병원정보서비스 CSV.
       # Imported at startup when the file changed. Empty: search falls back to the live API above.
       path: ${NURSEFLOW_HOSPITAL_DATASET_PATH:}
+  ward:
+    # Wards one account may create; protects against scripted mass creation.
+    max-created-per-user: ${NURSEFLOW_WARD_MAX_CREATED_PER_USER:5}
   invitation:
     # Page that opens an invitation, e.g. https://<web-host>/invite. The token is appended as #token=...
     link-base-url: ${NURSEFLOW_INVITE_LINK_BASE:}

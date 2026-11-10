@@ -58,6 +58,21 @@ class WardJdbcRepository(private val jdbc: JdbcTemplate) {
         jdbc.query("SELECT ward_id FROM wards WHERE ward_id=? FOR UPDATE", { rs, _ -> rs.getString(1) }, wardId)
             .isNotEmpty()
 
+    /** Serializes ward creation per account so the creation cap holds under concurrent requests. */
+    fun lockUser(userId: UUID): Boolean =
+        jdbc.query("SELECT user_id FROM users WHERE user_id=? FOR UPDATE", { rs, _ -> rs.getString(1) }, userId)
+            .isNotEmpty()
+
+    fun countCreatedBy(subject: String): Int =
+        jdbc.queryForObject("SELECT COUNT(*) FROM wards WHERE created_by=?", Int::class.java, subject)!!
+
+    fun existsCreatedBy(subject: String, hospitalSource: String, hospitalExternalId: String, name: String): Boolean =
+        jdbc.queryForObject(
+            """SELECT COUNT(*) FROM wards
+               WHERE created_by=? AND hospital_source=? AND hospital_external_id=? AND name=?""",
+            Int::class.java, subject, hospitalSource, hospitalExternalId, name,
+        )!! > 0
+
     fun insertWard(ward: NewWard) {
         jdbc.update(
             """INSERT INTO wards(ward_id,name,time_zone,hospital_source,hospital_external_id,hospital_name,
