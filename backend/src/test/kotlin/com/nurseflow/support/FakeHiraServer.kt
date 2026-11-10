@@ -38,7 +38,8 @@ object FakeHiraServer {
                 URLDecoder.decode(k, Charsets.UTF_8) to URLDecoder.decode(v, Charsets.UTF_8)
             }
             lastQuery.set(params)
-            // Real data.go.kr answers an unregistered key with 403 and a JSON OpenAPI_ServiceResponse.
+            // Real data.go.kr answers a missing key with 401 (reason 20) and an unregistered key with 403 (reason 30).
+            if (params["serviceKey"].isNullOrBlank()) return@createContext exchange.reply(401, gatewayErrorJson(20))
             if (params["serviceKey"] != SERVICE_KEY) return@createContext exchange.reply(403, gatewayErrorJson(30))
             when (params["yadmNm"]) {
                 TWO_HITS -> exchange.reply(200, normal(

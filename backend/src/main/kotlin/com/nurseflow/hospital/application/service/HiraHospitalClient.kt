@@ -7,7 +7,7 @@ import com.nurseflow.hospital.application.model.HospitalSearchResult
 import com.nurseflow.hospital.config.HospitalProperties
 import org.slf4j.LoggerFactory
 import org.springframework.http.MediaType
-import org.springframework.http.client.SimpleClientHttpRequestFactory
+import org.springframework.http.client.JdkClientHttpRequestFactory
 import org.springframework.stereotype.Component
 import org.springframework.web.client.RestClient
 import org.springframework.web.client.RestClientException
@@ -16,6 +16,7 @@ import org.springframework.web.util.UriComponentsBuilder
 import tools.jackson.databind.JsonNode
 import tools.jackson.databind.json.JsonMapper
 import java.net.URLDecoder
+import java.net.http.HttpClient
 
 /**
  * Calls 건강보험심사평가원 병원정보서비스 (`getHospBasisList`) and keeps only the fields a ward
@@ -26,11 +27,11 @@ import java.net.URLDecoder
 class HiraHospitalClient(private val properties: HospitalProperties, private val mapper: JsonMapper) {
     private val log = LoggerFactory.getLogger(javaClass)
 
+    /** java.net.http: HttpURLConnection drops 401 bodies, which hid data.go.kr's reason code (e.g. 20 for a null key). */
     private val client: RestClient by lazy {
         val timeout = properties.hira.timeout
         RestClient.builder()
-            .requestFactory(SimpleClientHttpRequestFactory().apply {
-                setConnectTimeout(timeout)
+            .requestFactory(JdkClientHttpRequestFactory(HttpClient.newBuilder().connectTimeout(timeout).build()).apply {
                 setReadTimeout(timeout)
             })
             .build()
