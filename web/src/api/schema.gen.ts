@@ -2945,7 +2945,10 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ApiProblem"];
                 };
             };
-            /** @description ADMIN_NURSE_RECORD_CONFLICT(관리자 계정에 연결된 간호사 기록은 다시 활성화할 수 없다. 관리자는 편성에서 제외된다) */
+            /**
+             * @description ADMIN_NURSE_RECORD_CONFLICT(관리자 계정에 연결된 간호사 기록은 다시 활성화할 수 없다. 관리자는 편성에서 제외된다) 또는
+             *     MEMBER_INACTIVE(비활성 구성원에 연결된 기록은 구성원을 먼저 재활성화해야 다시 활성화할 수 있다)
+             */
             409: {
                 headers: {
                     [name: string]: unknown;

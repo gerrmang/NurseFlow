@@ -87,6 +87,8 @@ class GenerationCancelWhileRunningTest @Autowired constructor(
         wardId = UUID.randomUUID()
         jdbc.update("INSERT INTO wards(ward_id,name,time_zone) VALUES(?,?,?)", wardId, "가상 병동", "Asia/Seoul")
         jdbc.update("INSERT INTO ward_memberships(ward_id,subject,role,can_view_ward_calendar) VALUES(?,?,'WARD_ADMIN',TRUE)", wardId, admin)
+        // The nurse record is linked to an account, so that account must be an active member to be rostered.
+        jdbc.update("INSERT INTO ward_memberships(ward_id,subject,role,can_view_ward_calendar) VALUES(?,'test-nurse','WARD_MEMBER',TRUE)", wardId)
         jdbc.update("INSERT INTO nurses(nurse_id,ward_id,subject,display_name,qualifications,active) VALUES(?,?,?,?,?,TRUE)",
             UUID.randomUUID(), wardId, "test-nurse", "가상 간호사", "[]")
         dayTypeId = UUID.randomUUID()

@@ -243,6 +243,30 @@ class WardMembershipHttpTest : ApiTestBase() {
         assertFalse(rosterRepo.findNurse(nurse, s.ward)!!.active)
     }
 
+    @Test
+    fun `a deactivated member's nurse record cannot be put back on the roster through staff management`() {
+        val s = setup()
+        val nurse = insertNurse(s.ward, "가상 간호사", subject = s.member.first.toString())
+        val staff = "/api/v1/wards/${s.ward}/staff/$nurse"
+        assertEquals(1, rosterRepo.activeNurseCount(s.ward))
+        assertEquals(200, patch(s.ward, s.member.first, s.admin.second, mapOf("active" to false)).status)
+
+        val reactivate = http.put(staff, mapOf("displayName" to "가상 간호사", "active" to true), s.admin.second)
+        assertEquals(409, reactivate.status, reactivate.body)
+        assertEquals("MEMBER_INACTIVE", reactivate.code)
+
+        // Even if the record is active anyway (data from before the rule), it is not rostered while the member is inactive.
+        jdbc.update("UPDATE nurses SET active=TRUE WHERE nurse_id=?", nurse)
+        assertEquals(0, rosterRepo.activeNurses(s.ward).size)
+        assertFalse(rosterRepo.findNurse(nurse, s.ward)!!.active)
+
+        // Reactivating the member first, then the record, brings the nurse back.
+        jdbc.update("UPDATE nurses SET active=FALSE WHERE nurse_id=?", nurse)
+        assertEquals(200, patch(s.ward, s.member.first, s.admin.second, mapOf("active" to true)).status)
+        assertEquals(200, http.put(staff, mapOf("displayName" to "가상 간호사", "active" to true), s.admin.second).status)
+        assertEquals(1, rosterRepo.activeNurseCount(s.ward))
+    }
+
     private fun roles(ward: UUID, user: UUID): Set<String> = jdbc.queryForList(
         "SELECT role FROM ward_memberships WHERE ward_id=? AND subject=?", String::class.java, ward, user.toString(),
     ).filterNotNull().toSet()

@@ -51,6 +51,9 @@ class WardService(
         if (WardRole.WARD_ADMIN.name !in roles) throw BusinessException(ErrorCode.WARD_ADMIN_REQUIRED)
     }
 
+    /** Active WARD_MEMBER of the ward: the only accounts whose linked nurse record may be rostered. */
+    fun isActiveMember(wardId: UUID, subject: String): Boolean = WardRole.WARD_MEMBER.name in repo.rolesIn(wardId, subject)
+
     /**
      * Holds the WARD_ADMIN role, even on a deactivated membership (it comes back on reactivation). Admin accounts
      * are never rostered, so they must not hold an active nurse record.

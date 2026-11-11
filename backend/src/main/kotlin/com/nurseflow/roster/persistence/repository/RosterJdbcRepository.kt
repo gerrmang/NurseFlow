@@ -162,13 +162,17 @@ class RosterJdbcRepository(
     // ── Nurses ──
 
     /**
-     * Admin accounts are never rostered. Membership rules keep an admin's linked record inactive; this predicate
-     * also covers data from before those rules, so candidates, manual and automatic assignment, confirmation and
-     * staffing counts all treat such a record as not rosterable.
+     * A record linked to an account is rostered only while that account is an active WARD_MEMBER and not an
+     * active admin (admins are never rostered; a deactivated member has no ward access). Membership and staff
+     * rules keep such records inactive; this predicate also covers data from before those rules, so candidates,
+     * manual and automatic assignment, confirmation and staffing counts agree. Records without an account
+     * (fictional demo staff) keep their current behaviour until A7 decides demo mode.
      */
-    private val rosterable = """nurses.active=TRUE AND NOT EXISTS (
-        SELECT 1 FROM ward_memberships m WHERE m.ward_id=nurses.ward_id AND m.subject=nurses.subject
-            AND m.role='WARD_ADMIN' AND m.active=TRUE)"""
+    private val rosterable = """nurses.active=TRUE AND (nurses.subject IS NULL OR (
+        EXISTS (SELECT 1 FROM ward_memberships m WHERE m.ward_id=nurses.ward_id AND m.subject=nurses.subject
+            AND m.role='WARD_MEMBER' AND m.active=TRUE)
+        AND NOT EXISTS (SELECT 1 FROM ward_memberships m WHERE m.ward_id=nurses.ward_id AND m.subject=nurses.subject
+            AND m.role='WARD_ADMIN' AND m.active=TRUE)))"""
 
     fun findNurse(id: UUID, wardId: UUID): DbNurse? = jdbc.query(
         "SELECT nurse_id,qualifications,($rosterable) AS active FROM nurses WHERE nurse_id=? AND ward_id=?",

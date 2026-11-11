@@ -47,6 +47,7 @@ enum class ErrorCode(val status: HttpStatus, val safeMessage: String) {
     INVITATION_REVOKED(HttpStatus.GONE, "철회된 초대입니다. 관리자에게 문의해 주세요."),
     LAST_WARD_ADMIN(HttpStatus.CONFLICT, "병동에는 활성 관리자가 한 명 이상 있어야 합니다. 다른 관리자를 먼저 지정해 주세요."),
     MEMBER_NOT_FOUND(HttpStatus.NOT_FOUND, "병동 구성원을 찾을 수 없습니다."),
+    MEMBER_INACTIVE(HttpStatus.CONFLICT, "비활성 구성원에 연결된 간호사 기록은 다시 활성화할 수 없습니다. 먼저 구성원을 재활성화해 주세요."),
     MEMBER_ROLE_REQUIRED(HttpStatus.CONFLICT, "간호사 역할이 없는 관리자는 해제할 수 없습니다. 접근을 막으려면 비활성화해 주세요."),
     NOT_DRAFT(HttpStatus.CONFLICT, "확정된 근무표는 수정할 수 없습니다."),
     NURSE_ALREADY_LINKED(HttpStatus.CONFLICT, "이미 다른 계정과 연결된 간호사입니다."),
