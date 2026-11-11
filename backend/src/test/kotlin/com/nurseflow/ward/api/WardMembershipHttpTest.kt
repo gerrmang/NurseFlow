@@ -185,6 +185,36 @@ class WardMembershipHttpTest : ApiTestBase() {
     }
 
     @Test
+    fun `an account with an active nurse record cannot become admin and an admin's nurse record stays off the roster`() {
+        val s = setup()
+        val nurse = insertNurse(s.ward, "가상 간호사", subject = s.member.first.toString())
+        val staff = "/api/v1/wards/${s.ward}/staff/$nurse"
+
+        val refused = patch(s.ward, s.member.first, s.admin.second, mapOf("admin" to true))
+        assertEquals(409, refused.status, refused.body)
+        assertEquals("ADMIN_NURSE_RECORD_CONFLICT", refused.code)
+        assertEquals(setOf("WARD_MEMBER"), roles(s.ward, s.member.first))
+
+        // Taking the nurse off the roster first allows the promotion.
+        assertEquals(200, http.put(staff, mapOf("displayName" to "가상 간호사", "active" to false), s.admin.second).status)
+        assertEquals(200, patch(s.ward, s.member.first, s.admin.second, mapOf("admin" to true)).status)
+
+        // An admin's nurse record cannot be put back on the roster.
+        val reactivate = http.put(staff, mapOf("displayName" to "가상 간호사", "active" to true), s.admin.second)
+        assertEquals(409, reactivate.status, reactivate.body)
+        assertEquals("ADMIN_NURSE_RECORD_CONFLICT", reactivate.code)
+        assertFalse(jdbc.queryForObject("SELECT active FROM nurses WHERE nurse_id=?", Boolean::class.java, nurse)!!)
+
+        // Back to a plain member, the record can be reactivated again.
+        assertEquals(200, patch(s.ward, s.member.first, s.admin.second, mapOf("admin" to false)).status)
+        assertEquals(200, http.put(staff, mapOf("displayName" to "가상 간호사", "active" to true), s.admin.second).status)
+    }
+
+    private fun roles(ward: UUID, user: UUID): Set<String> = jdbc.queryForList(
+        "SELECT role FROM ward_memberships WHERE ward_id=? AND subject=?", String::class.java, ward, user.toString(),
+    ).filterNotNull().toSet()
+
+    @Test
     fun `a deactivated admin can no longer administer the ward`() {
         val s = setup()
         val other = userToken("가상 부관리자")

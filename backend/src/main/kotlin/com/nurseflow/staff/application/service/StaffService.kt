@@ -142,6 +142,10 @@ class StaffService(
         // concurrent activation + reorder slip between the read and this write (duplicate team positions).
         wards.lockAsAdmin(wardId, actor)
         val current = requireStaff(wardId, nurseId)
+        if (!current.active && command.active && current.subject != null && wards.isAdmin(wardId, current.subject)) {
+            // Admin accounts are excluded from rostering: the linked record of an admin stays inactive.
+            throw BusinessException(ErrorCode.ADMIN_NURSE_RECORD_CONFLICT)
+        }
         repo.updateStaff(nurseId, command.displayName.trim(), command.qualifications.distinct(), command.active)
         if (!current.active && command.active && current.teamId != null && repo.findTeam(wardId, current.teamId) == null) {
             // Data from before team deletion cleared inactive members: never reactivate into a deleted team.
@@ -154,6 +158,10 @@ class StaffService(
         }
         return requireStaff(wardId, nurseId).toResult(context(wardId))
     }
+
+    /** Whether the account is linked to an active (rosterable) nurse record in this ward. */
+    fun hasActiveLinkedStaff(wardId: UUID, subject: String): Boolean =
+        repo.findStaffBySubject(wardId, subject)?.active == true
 
     /**
      * Membership deactivation takes the linked nurse off the roster the same way an admin deactivation does,

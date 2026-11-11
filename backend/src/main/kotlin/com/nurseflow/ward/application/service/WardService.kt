@@ -51,6 +51,9 @@ class WardService(
         if (WardRole.WARD_ADMIN.name !in roles) throw BusinessException(ErrorCode.WARD_ADMIN_REQUIRED)
     }
 
+    /** Active WARD_ADMIN of the ward. Admin accounts are never rostered, so they must not hold an active nurse record. */
+    fun isAdmin(wardId: UUID, subject: String): Boolean = WardRole.WARD_ADMIN.name in repo.rolesIn(wardId, subject)
+
     /**
      * Entry point of every admin write: checks the role, takes the ward lock, then checks again. A membership
      * change committed while this request waited for the lock (A6) must not let a revoked or deactivated admin
