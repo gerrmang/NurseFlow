@@ -291,7 +291,8 @@ class RosterJdbcRepository(
 
     fun markFailed(jobId: UUID) {
         jdbc.update(
-            """UPDATE generation_jobs SET status='FAILED',finished_at=?
+            // An accepted cancel wins over a failure, as in every other final decision of a generation.
+            """UPDATE generation_jobs SET status=CASE WHEN cancel_requested THEN 'CANCELLED' ELSE 'FAILED' END,finished_at=?
                 WHERE job_id=? AND status IN ('QUEUED','RUNNING')""",
             Instant.now().toString(), jobId,
         )
