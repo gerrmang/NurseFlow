@@ -363,3 +363,12 @@
 - P4 개발 의존성: WSL에서 `npm audit --package-lock-only`를 다시 실행했다. moderate 10개 패키지(ESLint·typescript-eslint·minimatch 체인), high/critical 0이며 `--omit=dev`는 0건이다. 이전 moderate 1건은 당시 결과로 보존한다. 현재 audit이 제안하는 수정은 ESLint 9 등 주 버전 변경/하향이며 `npm outdated`에서 확인한 typescript-eslint 최신 `8.72.2`도 권고 영향 범위에 있다. `--force`·임의 override·무관한 의존성 업그레이드는 적용하지 않았고 호환 수정판 추적은 후속으로 유지한다.
 - 검증: Windows `typecheck`·`lint` 성공. 저장소 밖 WSL 사본 `~/nf-b2-review-20261111`에서 Linux Node v24.22.2로 `npm ci` → `api:check` → `lint` → `typecheck` → `test -- --run` → `build` 모두 성공. 테스트 **55/55**(기존 49+신규 6), 빌드 성공.
 - 신규 세션 검사: 유효 access token이 남은 다른 탭 즉시 로그아웃, 진행 중 refresh의 늦은 응답 폐기와 서버 폐기 순서, 알림 실패 시 서버 logout 성공, 채널의 단순 신호·잘못된 메시지 무시·미지원 처리. 실제 브라우저·Kakao·서버 검증은 이번 수정 후 재실행하지 않았다. API·DB·서버 코드 변경 없음. 최종 CI와 수정 후 재리뷰는 푸시 뒤 확인한다.
+
+## B3a 병합 후 최신 dev 통합 (2026-11-11, Codex)
+
+- B3a [PR #38](https://github.com/gerrmang/NurseFlow/pull/38)의 `merged=true`, 대상 `dev`, 병합 커밋 `e4ca9bf`를 GitHub와 fetch 결과로 확인하고 B2 브랜치에 병합했다. 강제 푸시나 이력 재작성은 하지 않았다.
+- 충돌은 `docs/work-status.md`의 B2 현황 행과 문서 끝 인계 기록뿐이었다. B2 현황은 최신 내용으로 유지하고 B2·B3a 검증·리뷰 기록을 모두 보존했다. B3a 병합 완료와 PR #39의 현재 Ready 상태를 현황표에 반영했다.
+- `git diff bdc96a6 e4ca9bf --name-only -- web docs/openapi.yaml backend/src/main .github/workflows`는 빈 결과다. 이번 통합은 Android·테스트 fixture·공유 기록이며 웹 런타임·OpenAPI·서버 운영 코드·CI 변경은 없다. 기존 웹 리뷰 수정 `d47eb38`을 유지한다.
+- 통합 상태를 분리 WSL 사본에 복사하고 `npm ci --offline --no-audit --no-fund` → `api:check` → `lint` → `typecheck` → `test -- --run` → `build`를 재실행해 모두 성공했다. **55/55 통과**, 빌드 성공. `git diff --check`도 통과했다. audit은 이번에 재실행하지 않았으며 앞 절의 개발 의존성 경고·운영 의존성 0건 기록을 유지한다.
+- [PR #39 리뷰](https://github.com/gerrmang/NurseFlow/pull/39)에서 A가 `d47eb38` 수정의 해결을 재확인했고 APPROVED 리뷰가 존재함을 조회했다. 승인은 통합 전 head 기준이며 새 통합 커밋의 CI·승인 강제 설정을 대신하지 않는다.
+- 실제 Kakao·기기·실서버 검사는 이번 통합 뒤 재실행하지 않았고 개발 서버도 시작하지 않았다. A 진단·초대 계약 후속 `be6d78c`는 이번에 반영하지 않았으며 별도 후속으로 유지한다. PR은 기존 Ready 상태를 보존하고 병합·자동 병합·배포는 하지 않는다. 최종 CI는 푸시 뒤 별도 확인한다.

@@ -39,6 +39,7 @@ data class MembershipDto(
     val wardName: String,
     val roles: List<String>,
     val canViewWardCalendar: Boolean,
+    val hospitalName: String? = null,
 ) {
     val isAdmin: Boolean get() = "WARD_ADMIN" in roles
 }
