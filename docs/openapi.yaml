@@ -1099,6 +1099,149 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiProblem'
 
+  /wards/{wardId}/teams/{teamId}/order:
+    parameters:
+      - $ref: '#/components/parameters/WardId'
+      - name: teamId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    put:
+      tags: [Staff]
+      operationId: reorderTeam
+      summary: 팀 안 경력순 저장 (관리자 드래그 결과)
+      description: |
+        팀에 속한 활성 간호사 전원을 위(가장 선임)에서 아래 순서로 보낸다. 이 순서가 팀 안의 상대 경력순이며
+        병원 입사 연월이나 경력 시작 연월보다 우선한다(결정 12). 목록이 현재 팀의 활성 간호사와 정확히 같지 않으면
+        다른 화면에서 팀 구성이 바뀐 것이므로 409 `TEAM_ORDER_STALE`를 돌려준다. 순서가 바뀐 간호사마다 조정 이력을 남긴다.
+        관리자가 아직 순서를 정하지 않은 간호사(새로 추가·팀 이동)는 `teamOrder`가 null이며, 목록에서 순서가 정해진 간호사
+        아래에 경력 시작 연월이 이른 순으로 놓인다. 팀을 옮기거나 비활성화하면 순서가 지워지고, 다시 활성화되면 새로 놓는다.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TeamOrderRequest'
+      responses:
+        '200':
+          description: 새 순서의 팀 간호사 목록(위가 선임)
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/StaffMember'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: WARD_ADMIN_REQUIRED
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ApiProblem'
+        '404':
+          description: TEAM_NOT_FOUND
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ApiProblem'
+        '409':
+          description: TEAM_ORDER_STALE — 보낸 목록이 현재 팀의 활성 간호사와 다름. 다시 불러와 정렬한다
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ApiProblem'
+
+  /wards/{wardId}/staff/{nurseId}/roster-settings:
+    parameters:
+      - $ref: '#/components/parameters/WardId'
+      - $ref: '#/components/parameters/NurseId'
+    put:
+      tags: [Staff]
+      operationId: updateRosterSettings
+      summary: 선임 자격·편성 단계 조정 (관리자만)
+      description: |
+        선임 자격은 관리자가 직접 지정한다(결정 11, 자동 제안 없음). `stageOverride`는 확정 경력으로 계산한
+        단계 대신 편성에 쓸 단계이며 null이면 계산값을 쓴다. 바뀐 항목마다 조정 이력을 남긴다.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RosterSettingsRequest'
+      responses:
+        '200':
+          description: 갱신됨
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StaffMember'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: WARD_ADMIN_REQUIRED
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ApiProblem'
+        '404':
+          description: NURSE_NOT_FOUND
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ApiProblem'
+
+  /wards/{wardId}/staff/{nurseId}/adjustments:
+    parameters:
+      - $ref: '#/components/parameters/WardId'
+      - $ref: '#/components/parameters/NurseId'
+    get:
+      tags: [Staff]
+      operationId: listStaffAdjustments
+      summary: 간호사 편성 정보 조정 이력 (관리자만, 최신순)
+      responses:
+        '200':
+          description: 조정 이력
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+                example: private, no-store
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/StaffAdjustment'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: WARD_ADMIN_REQUIRED
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ApiProblem'
+        '404':
+          description: NURSE_NOT_FOUND
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ApiProblem'
+
   /wards/{wardId}/my-profile:
     parameters:
       - $ref: '#/components/parameters/WardId'
@@ -1112,7 +1255,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/StaffMember'
+                $ref: '#/components/schemas/MyStaffProfile'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
@@ -1143,7 +1286,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/StaffMember'
+                $ref: '#/components/schemas/MyStaffProfile'
         '400':
           description: INVALID_REQUEST 또는 INVALID_HOSPITAL_JOIN_MONTH
           content:
@@ -2416,7 +2559,7 @@ components:
           description: CONFIRMED일 때만 값이 있으며 팀 경력 구성 점수에 사용
     StaffMember:
       type: object
-      required: [nurseId, displayName, qualifications, active, linkedAccount, profile]
+      required: [nurseId, displayName, qualifications, active, linkedAccount, profile, teamOrder, seniorEligible, stageOverride, rosterStage]
       properties:
         nurseId:
           type: string
@@ -2440,6 +2583,99 @@ components:
             - type: 'null'
         profile:
           $ref: '#/components/schemas/CareerProfile'
+        teamOrder:
+          type: [integer, 'null']
+          minimum: 1
+          description: 관리자가 정한 팀 안 순서(1이 가장 선임, 빈 번호 없이 1부터 연속). 팀이 없거나 아직 정하지 않았으면 null. 이 순서가 팀 안 상대 경력순이다
+        seniorEligible:
+          type: boolean
+          description: 관리자가 지정한 선임 자격
+        stageOverride:
+          type: [integer, 'null']
+          minimum: 1
+          maximum: 5
+          description: 관리자가 정한 편성 단계. null이면 확정 경력으로 계산
+        rosterStage:
+          type: [integer, 'null']
+          minimum: 1
+          maximum: 5
+          description: 편성에 쓰는 단계 = stageOverride, 없으면 profile.scoringStage. 둘 다 없으면 null
+    MyStaffProfile:
+      type: object
+      description: 간호사 본인 기록. 팀 안 순서·선임 자격·편성 단계 같은 관리자 판단 값은 담지 않는다
+      required: [nurseId, displayName, qualifications, active, linkedAccount, profile]
+      properties:
+        nurseId:
+          type: string
+          format: uuid
+        displayName:
+          type: string
+        qualifications:
+          type: array
+          items:
+            type: string
+        active:
+          type: boolean
+        linkedAccount:
+          type: boolean
+        team:
+          oneOf:
+            - $ref: '#/components/schemas/Team'
+            - type: 'null'
+        profile:
+          $ref: '#/components/schemas/CareerProfile'
+    TeamOrderRequest:
+      type: object
+      additionalProperties: false
+      required: [nurseIds]
+      properties:
+        nurseIds:
+          type: array
+          maxItems: 200
+          uniqueItems: true
+          description: 팀의 활성 간호사 전원, 위(선임)에서 아래 순서
+          items:
+            type: string
+            format: uuid
+    RosterSettingsRequest:
+      type: object
+      additionalProperties: false
+      description: 전체 교체. 두 필드 모두 보내야 하며 stageOverride를 빼면 400이다(선임만 바꾸다 단계 조정이 지워지지 않도록)
+      required: [seniorEligible, stageOverride]
+      properties:
+        seniorEligible:
+          type: boolean
+        stageOverride:
+          type: [integer, 'null']
+          minimum: 1
+          maximum: 5
+          description: null이면 계산 단계 사용
+    StaffAdjustment:
+      type: object
+      required: [adjustmentId, kind, actorUserId, at]
+      properties:
+        adjustmentId:
+          type: string
+          format: uuid
+        kind:
+          type: string
+          enum: [TEAM_ORDER, SENIOR_ELIGIBLE, STAGE_OVERRIDE, TEAM_ASSIGNED, PROFILE_SET_BY_ADMIN, PROFILE_CONFIRMED]
+        before:
+          type: [string, 'null']
+          description: |
+            바뀌기 전 값을 화면에 보여 줄 문자열로 담는다(예 팀 순서 "3", 단계 "2", 경력 "2020-03 / 과장").
+            TEAM_ASSIGNED는 팀 ID가 아니라 변경 당시의 팀 이름이다. 팀 이름이 나중에 바뀌거나 팀이 삭제돼도 그때의 팀을 보여 준다.
+            팀 삭제 때 남아 있던 비활성 간호사의 팀 해제도 TEAM_ASSIGNED(팀 이름 → null)로 남는다.
+        after:
+          type: [string, 'null']
+        actorUserId:
+          type: string
+          format: uuid
+        actorName:
+          type: [string, 'null']
+        at:
+          type: string
+          format: date-time
     ShiftType:
       type: object
       additionalProperties: false
