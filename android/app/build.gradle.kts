@@ -37,9 +37,13 @@ android {
     buildTypes {
         debug {
             buildConfigField("String", "API_BASE_URL", "\"$debugApiBaseUrl\"")
+            // Fallback when the server omits inviteUrl (no NURSEFLOW_INVITE_LINK_BASE). Development only.
+            buildConfigField("String", "INVITE_LINK_BASE", "\"nurseflow://invite\"")
         }
         release {
             buildConfigField("String", "API_BASE_URL", "\"$releaseApiBaseUrl\"")
+            // No production link format yet (HTTPS App Links are a follow-up): issuance is disabled.
+            buildConfigField("String", "INVITE_LINK_BASE", "\"\"")
         }
     }
 
