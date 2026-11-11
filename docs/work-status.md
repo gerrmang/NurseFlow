@@ -246,6 +246,7 @@ Claude와 Codex가 같은 진행 기록을 사용한다. PR 또는 정기 리뷰
 | `/private/tmp/NurseFlow-a6` | `feat/membership-admin` | `d81916e9c9513dd527640e651756304130996341` | 미커밋 변경 없음 | 2026-11-11 | Codex | 위 P1 수정 재리뷰. P2(Claude 판단 P3) 본인 근무표 조회가 편성 필터를 우회 |
 | `/private/tmp/NurseFlow-a6` | `feat/membership-admin` | `b674f92bbf1b48f651ae88a8d21857783ea353b3` | 미커밋 변경 없음 | 2026-11-11 | Codex | 수정 확인, 지적 없음. 정상 구성원의 본인 근무표 경로 유지 확인 |
 | `/private/tmp/NurseFlow-a6` | `feat/membership-admin` | `77e2eae3a64756ca4292a8d330b27d9e32c2e4be` | 미커밋 변경 없음 | 2026-11-12 | hyen11 | PR #41 재리뷰 CHANGES_REQUESTED: P2 비활성화·본인 프로필 쓰기 경합, P5 관리자 지정 충돌 조건 문서. 다음 커밋에서 수정 |
+| `/private/tmp/NurseFlow-a6` | `feat/membership-admin` | `2624a21` | 미커밋 변경 없음 | 2026-11-12 | Codex | APPROVE. 다른 구성원 전용 쓰기 경로 없음, 잠금 순서 유지 확인. 낮은 위험(테스트가 모든 대기 세션을 셈) 지적에 따라 다음 커밋에서 대기 문장을 병동 잠금·간호사 UPDATE로 한정 |
 
 이 문서는 Claude와 Codex가 각 기능 단위 작업 후 진행 결과를 함께 기록하는 단일 공유 현황이다.
 

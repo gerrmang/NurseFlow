@@ -96,12 +96,17 @@ class MemberSelfWriteRaceHttpTest : ApiTestBase() {
             "SELECT hospital_joined_on FROM nurses WHERE nurse_id=?", String::class.java, nurseId))
     }
 
-    /** The deactivation pauses in Java, not in the database, so the only blocked session is the own write. */
+    /**
+     * The own write blocked in the database: on the ward lock with the fix, on the nurse row without it. The
+     * deactivation pauses in Java, not in the database, so it never matches.
+     */
     private fun awaitBlockedSession(): Boolean {
         val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10)
         while (System.nanoTime() < deadline) {
             val blocked = jdbc.queryForObject(
-                "SELECT COUNT(*) FROM INFORMATION_SCHEMA.SESSIONS WHERE BLOCKER_ID IS NOT NULL", Int::class.java,
+                """SELECT COUNT(*) FROM INFORMATION_SCHEMA.SESSIONS WHERE BLOCKER_ID IS NOT NULL AND (
+                    LOWER(EXECUTING_STATEMENT) LIKE '%from wards%for update%'
+                    OR LOWER(EXECUTING_STATEMENT) LIKE '%update nurses%')""", Int::class.java,
             )!!
             if (blocked > 0) return true
             Thread.sleep(10)
