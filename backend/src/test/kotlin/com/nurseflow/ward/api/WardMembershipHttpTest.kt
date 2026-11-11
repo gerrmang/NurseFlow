@@ -1,5 +1,6 @@
 package com.nurseflow.ward.api
 
+import com.nurseflow.roster.persistence.repository.RosterJdbcRepository
 import com.nurseflow.support.ApiTestBase
 import com.nurseflow.support.HttpTestClient
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -7,6 +8,7 @@ import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.RepeatedTest
 import org.junit.jupiter.api.Test
+import org.springframework.beans.factory.annotation.Autowired
 import java.util.UUID
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.CountDownLatch
@@ -14,6 +16,8 @@ import java.util.concurrent.TimeUnit
 
 /** Member administration (A6). All accounts, names and wards are fictional. */
 class WardMembershipHttpTest : ApiTestBase() {
+    @Autowired lateinit var rosterRepo: RosterJdbcRepository
+
     private class Setup(val ward: UUID, val admin: Pair<UUID, String>, val member: Pair<UUID, String>)
 
     private fun setup(): Setup {
@@ -208,6 +212,35 @@ class WardMembershipHttpTest : ApiTestBase() {
         // Back to a plain member, the record can be reactivated again.
         assertEquals(200, patch(s.ward, s.member.first, s.admin.second, mapOf("admin" to false)).status)
         assertEquals(200, http.put(staff, mapOf("displayName" to "가상 간호사", "active" to true), s.admin.second).status)
+    }
+
+    @Test
+    fun `granting admin while inactive and reactivating later cannot leave an active admin with an active nurse`() {
+        val s = setup()
+        val nurse = insertNurse(s.ward, "가상 간호사", subject = s.member.first.toString())
+        val staff = "/api/v1/wards/${s.ward}/staff/$nurse"
+        assertEquals(200, patch(s.ward, s.member.first, s.admin.second, mapOf("active" to false)).status)
+        // The membership is inactive, but its admin role would come back on reactivation.
+        assertEquals(200, patch(s.ward, s.member.first, s.admin.second, mapOf("admin" to true, "active" to false)).status)
+        assertEquals("ADMIN_NURSE_RECORD_CONFLICT",
+            http.put(staff, mapOf("displayName" to "가상 간호사", "active" to true), s.admin.second).code)
+
+        // Data from before the rules: the record is active anyway. Reactivating the admin is refused…
+        jdbc.update("UPDATE nurses SET active=TRUE WHERE nurse_id=?", nurse)
+        val reactivate = patch(s.ward, s.member.first, s.admin.second, mapOf("active" to true))
+        assertEquals(409, reactivate.status, reactivate.body)
+        assertEquals("ADMIN_NURSE_RECORD_CONFLICT", reactivate.code)
+    }
+
+    @Test
+    fun `an admin's active nurse record from before the rules is never rostered`() {
+        val s = setup()
+        val nurse = insertNurse(s.ward, "가상 간호사", subject = s.member.first.toString())
+        grant(s.ward, s.member.first, "WARD_ADMIN") // legacy state the API no longer produces
+        assertTrue(jdbc.queryForObject("SELECT active FROM nurses WHERE nurse_id=?", Boolean::class.java, nurse)!!)
+        assertEquals(0, rosterRepo.activeNurses(s.ward).size)
+        assertEquals(0, rosterRepo.activeNurseCount(s.ward))
+        assertFalse(rosterRepo.findNurse(nurse, s.ward)!!.active)
     }
 
     private fun roles(ward: UUID, user: UUID): Set<String> = jdbc.queryForList(

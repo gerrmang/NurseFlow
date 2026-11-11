@@ -188,8 +188,10 @@ class GenerationCancelWhileRunningTest @Autowired constructor(
     private fun awaitBlockedSession(): Boolean {
         val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10)
         while (System.nanoTime() < deadline) {
+            // Only the cancel's own statement counts: a session blocked on the generation job row lock.
             val blocked = jdbc.queryForObject(
-                "SELECT COUNT(*) FROM INFORMATION_SCHEMA.SESSIONS WHERE BLOCKER_ID IS NOT NULL", Int::class.java,
+                """SELECT COUNT(*) FROM INFORMATION_SCHEMA.SESSIONS WHERE BLOCKER_ID IS NOT NULL
+                    AND LOWER(EXECUTING_STATEMENT) LIKE '%from generation_jobs%for update%'""", Int::class.java,
             )!!
             if (blocked > 0) return true
             Thread.sleep(10)

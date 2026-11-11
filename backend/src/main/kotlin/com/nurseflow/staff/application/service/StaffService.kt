@@ -142,7 +142,7 @@ class StaffService(
         // concurrent activation + reorder slip between the read and this write (duplicate team positions).
         wards.lockAsAdmin(wardId, actor)
         val current = requireStaff(wardId, nurseId)
-        if (!current.active && command.active && current.subject != null && wards.isAdmin(wardId, current.subject)) {
+        if (!current.active && command.active && current.subject != null && wards.holdsAdminRole(wardId, current.subject)) {
             // Admin accounts are excluded from rostering: the linked record of an admin stays inactive.
             throw BusinessException(ErrorCode.ADMIN_NURSE_RECORD_CONFLICT)
         }

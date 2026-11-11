@@ -57,6 +57,11 @@ class WardJdbcRepository(private val jdbc: JdbcTemplate) {
         { rs, _ -> rs.getString("role") }, wardId, subject,
     ).toSet()
 
+    /** The role row exists, whether or not the membership is active. */
+    fun holdsRole(wardId: UUID, subject: String, role: String): Boolean = jdbc.queryForObject(
+        "SELECT COUNT(*) FROM ward_memberships WHERE ward_id=? AND subject=? AND role=?", Int::class.java, wardId, subject, role,
+    )!! > 0
+
     /** True for any membership row, including a deactivated one (an invitation cannot re-add that account). */
     fun hasMembership(wardId: UUID, subject: String): Boolean = jdbc.queryForObject(
         "SELECT COUNT(*) FROM ward_memberships WHERE ward_id=? AND subject=?", Int::class.java, wardId, subject,
