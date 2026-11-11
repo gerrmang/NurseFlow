@@ -241,6 +241,8 @@ class WardMembershipHttpTest : ApiTestBase() {
         assertEquals(0, rosterRepo.activeNurses(s.ward).size)
         assertEquals(0, rosterRepo.activeNurseCount(s.ward))
         assertFalse(rosterRepo.findNurse(nurse, s.ward)!!.active)
+        // No personal calendar either: admins have no schedule of their own.
+        assertEquals(null, rosterRepo.findNurseIdBySubject(s.ward, s.member.first.toString()))
     }
 
     @Test

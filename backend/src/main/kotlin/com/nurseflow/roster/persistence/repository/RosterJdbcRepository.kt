@@ -200,7 +200,8 @@ class RosterJdbcRepository(
         jdbc.queryForObject("SELECT COUNT(*) FROM nurses WHERE ward_id=? AND $rosterable", Int::class.java, wardId) ?: 0
 
     fun findNurseIdBySubject(wardId: UUID, subject: String): UUID? = jdbc.query(
-        "SELECT nurse_id FROM nurses WHERE ward_id=? AND subject=? AND active=TRUE",
+        // Same rule as rostering: an admin's (or inactive member's) leftover record has no personal calendar.
+        "SELECT nurse_id FROM nurses WHERE ward_id=? AND subject=? AND $rosterable",
         { rs, _ -> uuid(rs, "nurse_id") }, wardId, subject,
     ).firstOrNull()
 
