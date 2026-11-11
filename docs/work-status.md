@@ -7,6 +7,12 @@
 - 비밀키, 토큰, 실제 간호사 정보와 부재·건강 정보는 기록하지 않는다.
 - 새 작업을 시작하기 전에 [기능 분해표](feature-breakdown.md)의 현재 기능 행과 파일 소유 범위, 이 문서의 진행 현황을 확인한다.
 
+## A·B 공유: 확정 결정 요약 (2026-11-10)
+
+- 번호 결정: 1·2·3(A4), 5(A3), 6(B3a), 9(A7), 10·11(A5), 12, 19(B2) 해결, 4 보류. 세부는 [기능 분해 §7](feature-breakdown.md)과 구현 중 확정 정책 §7.1.
+- B가 화면에 반영할 서버 동작: 병원 검색은 검색 실행 시 호출·출처 표시(A3), 병동 생성 409 두 종류(`WARD_CREATION_LIMIT_REACHED`, `WARD_ALREADY_CREATED`)와 503(목록 미적재) 안내(A4), 초대 미리보기 `hospitalName` 표시(A4), 팀 순서 409 `TEAM_ORDER_STALE` 시 다시 불러오기(A5).
+- 로컬 실연동에 필요한 서버 환경변수: `NURSEFLOW_KAKAO_REST_API_KEY`, `NURSEFLOW_KAKAO_REDIRECT_URIS=http://localhost:5173/auth/kakao/callback`(웹 로그인), `NURSEFLOW_HOSPITAL_DATASET_PATH`(병원 검색·병동 생성). 키 값은 공유 문서·채팅에 두지 않고 Kakao Developers 멤버 초대나 비밀번호 관리자로 공유한다.
+
 ## 기능 단위 현황
 
 | 단위 | 브랜치 | PR | 상태 | 검증 | 미해결 리뷰 지적 |
@@ -16,13 +22,15 @@
 | A1 초대·경력 월 | `feat/invitation-24h-career-month` | #27 | `dev` 병합 완료 | 병합 확인 | 없음 |
 | B1 Android Kakao 세션 | `feat/android-kakao-session` | #30 | `dev` 병합 완료 (2026-11-09, 일반 병합 커밋 `9239fa6`) | 로컬 단위·기기·실서버 검증은 [`B1 검증 기록`](../android/B1-verification.md)에 기록. GitHub CI·PR 리뷰 여부는 별도 확인 | 기록된 미해결 P1 없음. 병합 방식은 아래 참고 |
 | A2 웹 세션 API | `feat/auth-web-session-v2` | #33 | `dev` 병합 완료 (2026-11-09, 스쿼시 병합 커밋 `fa47a5a`) | 2026-11-09 로컬 `./gradlew test --offline`: 108건 통과, 건너뜀 1. 동시 state 테스트(`FOR UPDATE` 제거 변이 3/3 실패)와 client_secret 전달(전달 줄 제거 변이 실패) 검출력 확인. 실제 Kakao E2E 미검증(목업만) | 없음 |
-| B2 웹 기반 세션 | `feat/web-foundation-session` | 미개설 | 미착수. A2 PR #33이 `dev`에 병합되어 선행 조건 충족 | 해당 없음 | 없음 |
+| B2 웹 기반 세션 | `feat/web-foundation-session` (`dev` `e4ca9bf` 반영) | [#39](https://github.com/gerrmang/NurseFlow/pull/39) (Ready) | 구현·주요 실제 Kakao 검증·A 리뷰 수정 완료. B3a 병합 후 최신 dev 통합 | 리뷰 수정 head `d47eb38`: 웹 55개 통과·빌드 성공, CI 3개 작업 성공. 통합 후 검증은 아래 2026-11-11 기록 | 개발 의존성 moderate 경고·기존 브라우저 검증 제한 유지. A 진단 후속은 별도 미반영 |
 | B9a Android 공개 근무표 조회 | `feat/android-published-roster` (`dev` `fa47a5a` 통합) | [#34](https://github.com/gerrmang/NurseFlow/pull/34) | `dev` 병합 완료 (2026-11-10, 스쿼시 병합 커밋 `d1b8729`). 구현·기기·실서버 검증과 PR P3 수정 완료, 병합 전 Backend tests·Android debug build 통과 | [B9a 검증 기록](../android/B9a-verification.md), 아래 최종 검증 참조 | 기존 P2 해결, P3 수정 후 재리뷰 대기 |
+| B3a Android 초대 관리·가입 | `feat/android-invite-join` | [#38](https://github.com/gerrmang/NurseFlow/pull/38) | `dev` 병합 완료 (2026-11-11, `e4ca9bf`). GitHub merged=true 확인 | 수정 head `691312c`: 단위 76개·빌드·Lint 성공, CI Backend·Android 성공. 기기 실행 제한은 기존 기록 유지 | 기존 알려진 제한은 android/B3a-verification.md 참조 |
 | 에이전트 지침 정합성 | `docs/agent-guidance-alignment` | #32 | `dev` 병합 완료 (2026-11-09, 일반 병합 커밋 `ab8347d`. 스쿼시 원칙에서 벗어남) | `git diff --check` 통과. GitHub Actions `Verify` PR 실행 성공, `dev` push 실행 성공 | 없음 |
 | A3 병원 검색 API | `feat/hospital-search` | #35 | `dev` 병합 완료 (2026-11-10, 스쿼시 병합 커밋 `23af850`) | 병합 전 `./gradlew test --offline` 134건 통과, CI 통과. 실제 2026.9. 파일 79,899곳 적재 0.7초, 검색 15~40ms | 없음 |
-| A4 병동 생성 | `feat/ward-self-create` | #36 | 구현 완료. Codex 리뷰 P3·P4, /code-review 지적 7건, 계정당 생성 상한 5개, Codex 재리뷰 P2·P3 수정. 결정 1(목록 밖 병원 생성 불가)·2(서버가 목록으로 병원 확인)·3(같은 병원·병동명 허용, 권한 분리) 반영. 시연용 부트스트랩 제거. hyen11 계약 검토(`3e5da53`)·스쿼시 병합 대기 | 2026-11-10 `./gradlew test --offline` 138건 통과(건너뜀 4). 같은 키 동시 요청 테스트는 중복 키 처리 제거 변이 3/3 실패로 검출력 확인. 이전 스키마 H2에 schema.sql 두 번 적용 테스트 통과 | 없음 |
+| A4 병동 생성 | `feat/ward-self-create` | #36 | `dev` 병합 완료 (2026-11-10, 스쿼시 병합 커밋 `6a2cf29`) | 2026-11-10 `./gradlew test --offline` 138건 통과(건너뜀 4). 같은 키 동시 요청 테스트는 중복 키 처리 제거 변이 3/3 실패로 검출력 확인. 이전 스키마 H2에 schema.sql 두 번 적용 테스트 통과 | 없음 |
+| A5 경력·팀 내 순서 | `feat/staff-admin-career-adjust` | [#37](https://github.com/gerrmang/NurseFlow/pull/37) | `dev` 병합 완료. GitHub 메타데이터와 `origin/dev`에서 `bdc96a6` 확인 | 기존 검증 기록은 아래 보존. 이번 문서 갱신에서 A5 검사를 재실행하지 않음 | 없음 |
 | A8 근무 유형 설정 | `feat/shift-type-settings` (`/private/tmp/NurseFlow-a8`) | PR 미개설(앞 PR 병합 뒤 개설) | 구현 완료, 리뷰 대기. `/wards/{id}/shift-types` 조회·생성·수정·비활성화, 휴게·인정·월 환산 시간, 병동 정책 revision(`policyRevision`), 사용 중 유형 변경 시 DRAFT `needsRevalidation`. 미결: 결정 14·23(휴일·목표 시간)은 범위 밖, 비활성 유형 코드는 재사용 불가 | 2026-11-10 `./gradlew test --offline` 155건 통과(건너뜀 4). 같은 코드 동시 생성은 병동 잠금 제거 변이 3/3 실패로 검출력 확인. 이전 스키마 H2 파일 DB에 schema.sql 두 번 적용 테스트 통과 | 없음 |
-| A5 이후 | 해당 없음 | 미개설 | 미착수. A5는 결정 10·11, A6·A8은 A4 병합 대기 | 해당 없음 | 없음 |
+| A6·A7 이후 | 해당 없음 | 미개설 | A6 `feat/membership-admin` 구현·리뷰 완료(A6 브랜치에 기록). A7은 A6 병합 대기 | 해당 없음 | 없음 |
 
 ## 리뷰 상태
 
@@ -90,9 +98,95 @@
 - opt-in 서버 검사가 캐시 결과를 재사용하는 것을 확인해, 실제 실행이 필요한 재현 명령에 `test --rerun`을 명시했다. 같은 worktree·브랜치에서 PR #34를 갱신하며, 로컬 DB는 보존하고 스쿼시 병합은 수행하지 않는다.
 - `git diff --check` 통과. 백엔드 전체 검사는 서버 코드 변경이 없어 재실행하지 않았고, 실서버 경로는 위 opt-in 서버 검사로 검증했다. 외부 Kakao 인증·운영 서버·물리 기기는 이번에 검증하지 않았다. 수정 후 독립 재리뷰는 아직 받지 않았다.
 
+## B3a 인계 (2026-11-10, Claude)
+
+- **작업 공간:** 공유 worktree `C:\Users\jjang\IdeaProjects\NurseFlow`, 브랜치 `feat/android-invite-join`, 분기점 `23af850`(= `origin/dev`). 검증된 B3a 변경을 첫 커밋으로 `origin/feat/android-invite-join`에 푸시했다. 진행 순서(사용자 확정)는 B3a 첫 커밋·푸시 → B2 실제 Kakao·브라우저 검증과 커밋 → 이 브랜치로 돌아와 B3a 실제 검증이다.
+- **보존한 미추적 항목:** `nurseflow.mv.db`와 `web/node_modules`(B2 브랜치에서 무시되던 잔여물)는 B3a 범위가 아니다. 커밋에 넣지 않는다.
+- **B2 기록:** B2 브랜치(`feat/web-foundation-session` `767abd6`)의 이 파일 인계 기록은 dev에 없으므로 이 브랜치에 가져오지 않았다.
+- **결정 (사용자 확정):**
+  - §7 #6: 개발용 `nurseflow://invite#token=`과 명시적 붙여넣기를 쓴다. 운영 HTTPS App Links는 후속이다.
+  - §7 #7: 역할 기반 고정 대상 문구를 쓰고 메모는 없다.
+  - §7 #21: A 소유 테스트 전용 `backend/src/test/.../AndroidInvitationE2eServerTest.kt` 1개를 B3a 범위로 승인받았다.
+  - 공통 정책 문서 반영은 별도 결정 반영 문서 PR에서 한다.
+- **계획과 달라진 점:** `MainActivity`를 `singleTask` 대신 `singleTop`으로 했다. Kakao 로그인 중인 Activity가 지워질 위험과 기존 `ActivityScenario` 테스트와의 비호환 때문이다. 이유와 검증은 검증 기록에 있다.
+- **문서와 코드 차이 (후속 A 또는 문서 PR):**
+  - OpenAPI의 WARD_ADMIN `hospitalJoinedOn` 서술
+  - redeem 오류 목록의 `INVALID_HOSPITAL_JOIN_MONTH`·`USER_NOT_FOUND` 누락
+  - `backend/README.md`의 `expiresInHours` 서술
+  - §7 #8 미결 표기 (구현은 재발급 시 원본을 철회함)
+- **다음 단계:**
+  1. PR 생성은 별도 승인 후. GitHub CI 확인
+  2. Codex 리뷰 (P1/P2 수정)
+  3. 오류 상태 화면 캡처 (가상 데이터)
+- **실제 Kakao 검증 (2026-11-10 저녁):** 사용자 실제 계정 1개, 임시 에뮬레이터·임시 DB, 가상 병동·초대. 결과는 검증 기록의 같은 이름 절. 서버 로그 WARN·ERROR 0, 토큰 0회. logcat의 시드 토큰은 검증용 adb 명령(adbd)에만 있었다.
+- **미검증:** 두 실제 계정 전환, KakaoTalk 앱 로그인, 클립보드 복사·가림, 실제 메신저의 사용자 스킴 링크 표시, 물리 기기, 화면에서의 명시적 로그아웃 시 대기 초대 삭제(기기 테스트로만 확인).
+
 ## 기타 브랜치
 
 - `feat/android-auth-invite` (`95cf33d`): **병합 대상에서 제외(2026-11-09 사용자 결정).** 현재 A/B 기능 분해 이전(11/2~11/3)의 백엔드+Android 통합 시제품 브랜치다. 같은 기능이 #17~#20, A1(#27), B1(#30)로 따로 병합됐고, `dev`와 합치면 174개 파일이 충돌하며, 병동 직접 생성(`74c9036`)은 #24 이후 A3·A4로 다시 기획됐다. 원격에 참고용으로만 남기고, B3a(첫 화면 선택·초대 가입 화면)·B4a(병동 생성 화면) 작업 때 최신 `dev`에서 새로 구현하며 참고한다. 이 브랜치에서 PR을 열거나 이어서 작업하지 않는다.
+
+## B2 인계 (2026-11-10, Claude)
+
+### 브랜치와 보존한 변경
+
+- 최신 `origin/dev` `23af850`(A3 #35 병합 포함)에서 `git switch --merge -c feat/web-foundation-session origin/dev`로 브랜치를 만들었다.
+- 이전 브랜치 `feat/android-published-roster`에 있던 미커밋 Codex 기록("A3 PR #35 B4a/B4b 소비자 계약 검토" 절)은 3-way 병합으로 그대로 옮겼다. 전환 전 diff 사본과 비교해 내용이 바뀌지 않았음을 확인했다.
+- 미추적 `nurseflow.mv.db`는 건드리지 않았다.
+- 이 브랜치는 원격 추적을 해제했다(`dev`로 잘못 푸시되지 않도록).
+- 사용자 지시에 따라 B2 변경만 커밋해 `origin/feat/web-foundation-session`에 푸시했다.
+  - Codex 절은 이 커밋에서 빼고 공유 worktree에 미커밋 상태로 보존했다.
+  - `nurseflow.mv.db`도 커밋하지 않았다.
+  - PR 생성·병합·배포는 하지 않았다.
+
+### 구현 범위 (B 소유 경로만)
+
+- 수정한 경로:
+  - `web/**` 신설
+  - `.github/workflows/verify.yml`: `Web checks` 작업 추가만 하고 기존 줄은 바꾸지 않음
+  - 루트 `README.md`, `CLAUDE.md`, 이 문서
+- 수정하지 않은 경로: `backend/**`, `docs/openapi.yaml`, `docs/feature-breakdown.md`.
+- §7 #19 결정 사항:
+  - "React+Vite 확정"과 호스팅 후보는 [웹 안내](../web/README.md)에 기록했다.
+  - breakdown 반영은 별도 결정 반영 문서 PR로 한다.
+
+### 세션 설계
+
+- 쿠키를 바꾸는 refresh, 코드 교환, logout은 공통 락 `nurseflow-web-session` 안에서만 실행한다. Web Locks API를 쓰고, 없으면 탭 안 대기열로 대신한다.
+- 이 세 호출은 중간에 취소하지 않는다.
+- 로그아웃은 `SigningOut` → 락 대기 → 서버 logout → `SignedOut` 또는 `LogoutFailed` 순서다.
+- 콜백 경로에서는 시작 시 복원 refresh를 생략한다.
+- epoch로 늦게 도착한 응답을 버린다.
+- 서버 `AuthService.logout`은 이미 회전된 토큰으로도 계열을 폐기함을 코드로 확인했다.
+
+### 검증
+
+- **통과**: `api:check`, `lint`, `typecheck` 3종.
+- **미실행**: `npm test`, `npm run build`, 로컬 실서버, 실제 Kakao.
+- **원인**: 스마트 앱 컨트롤(`VerifiedAndReputablePolicyState = 1`)이 `@rolldown/binding-win32-x64-msvc`를 차단한다. WASI 대체 바인딩도 Windows 경로를 해석하지 못해 실패했다.
+- **WSL 재검증 (2026-11-10 16:45~17:05, Claude)**: 사용자가 WSL Ubuntu 26.04.1을 설치했다.
+  - **설치한 도구**: 공식 배포본 Node v24.22.2와 Temurin JDK 21.0.13+9를 `~/.local`에 설치했다(체크섬 확인, sudo 없음).
+  - **작업 위치**: WSL 홈 사본 `~/nf-b2`에서 실행했다. 공유 worktree, Windows `node_modules`, `nurseflow.mv.db`는 건드리지 않았다.
+  - **CI와 같은 6단계**: 모두 통과했다(테스트 49/49, 빌드 JS gzip 86.07 kB).
+    - 첫 실행에서는 테스트 6건이 실패했다. 모두 테스트 코드 결함(fetch를 생성 시점에 잡아 둠, 역할 중복 질의)이었고 수정했다.
+    - 변이 검사로 가짜 서버가 응답 시점의 쿠키를 읽던 결함을 찾아, 요청 시점의 쿠키를 쓰도록 고쳤다. 이제 9개 중 등가 1개를 뺀 8개를 검출한다.
+  - **로컬 백엔드 연동(curl, 프록시 경유)**: dev(Kakao 키 없음) 20/20, preview(가짜 키, Kakao 미호출) 23/23.
+  - **보안 점검**: 번들에 Web Storage·`console.log`·테스트 문자열 0회. 서버 로그에 WARN/ERROR와 쿠키·토큰 값 0건.
+- **실제 Kakao 검증 (2026-11-10 저녁, Claude 진행·사용자 직접 조작)**
+  - **구성**: WSL 사본에서 백엔드·웹을 띄웠다. 매 실행 새 임시 H2 DB를 쓰고 access token 수명은 1분으로 줄였다.
+  - **비밀값**: Kakao 키와 Client Secret은 사용자가 만든 `~/.nurseflow-kakao.env`(권한 600)를 `source`로만 불러왔고 값은 출력하지 않았다.
+  - **첫 시도 실패**: 원인은 Kakao 앱의 Client Secret 활성화와 서버 설정 누락이었다(토큰 교환 401 `KOE010`). state·쿠키 단계는 정상이었다. 사용자가 secret을 추가한 뒤 해결됐다.
+  - **사용자 확인(웨일, 실제 계정 1개)**: 로그인, 소속 없음 화면, F5·새 탭 복원, 1분 뒤 갱신, 두 탭 동시 갱신, 로그아웃 전파, 브라우저 재시작 복원, 취소 후 로그인 화면 복귀가 모두 정상이었다.
+  - **서버 확인**
+    - DB 개수·시각: 로그인 시도 소비 각 1회, 두 탭 갱신 구간의 순차 회전(계열 폐기 없음), 로그아웃 시 계열 일괄 폐기.
+    - 로그: WARN·ERROR 0건이고, 토큰·쿠키·코드·키 값은 0회다.
+  - **미검증**: 두 실제 계정 전환, 웨일 외 브라우저, 쿠키 속성·Web Storage·Console·주소창·콜백 재사용의 브라우저 측 확인, 쿠키 차단 안내, GitHub CI.
+  - **A 후속**: Kakao 토큰 401일 때 서버 로그의 `kakaoErrorCode`가 비는 진단 공백.
+- 상세 결과는 [B2 검증 기록](../web/B2-verification.md) 5절에 있다.
+
+### 다른 단위 상태 관찰
+
+- 위 표의 A3 행은 "PR 열림"으로 남아 있다. 그러나 `origin/dev`에는 A3 #35가 `23af850`으로 병합돼 있다(2026-11-10 15:47 KST).
+- A3 행은 B2 범위가 아니어서 고치지 않았다.
 
 ## 리뷰 지점 기록
 
@@ -101,6 +195,7 @@ Claude와 Codex가 같은 진행 기록을 사용한다. PR 또는 정기 리뷰
 | 작업 경로 | 브랜치 | 리뷰한 HEAD SHA | 미커밋 diff 해시 | 리뷰 시각 | 검토 주체 | 범위/결과 |
 | --- | --- | --- | --- | --- | --- | --- |
 | `C:\Users\jjang\IdeaProjects\NurseFlow` | `feat/android-published-roster` | `ab8347dde6464379c8670cde6f937f408d349eb8` | `66410e40794e40222067c249c692fc76ca704e07ecc39f8383e5f4768eb9e2cf` (tracked diff, 신규 파일 해시는 위 기록) | 2026-11-09 | Codex | 기존 P2 해결 확인 후 기기 회귀·실서버 공개/재공개·권한 검증 완료. 같은 미커밋 브랜치에서 PR 준비 가능. 운영 코드 추가 수정 없음 |
+| `C:\Users\jjang\IdeaProjects\NurseFlow` | `feat/android-invite-join` | `23af850d2ee7e85a7bf6fa690f9714dc73b3bceb` | `1b59e8e03cbbe34eff816efaedf75177dca7fc381e828dd9a52dba5a49aa1762` (추적 파일 diff. 신규 파일은 미포함) | 2026-11-10 | Claude | B3a 구현 자체 검토. 관리자 권한 거부 후 재진입 시 바로 다시 닫히는 문제를 수정했고, 무재시도 테스트가 실제 결함을 잡지 못하던 것을 변형 검사로 발견해 보강. 독립 리뷰 전 |
 | GitHub PR #32 diff (`/private/tmp/NurseFlow-guidance`) | `docs/agent-guidance-alignment` | `5d4f45bcf7e5247d85f9f1a38fd0a59a081c499e` | `bffafc453496740f281aca22552cd1dcaf80516a2150a8bb741aa42efbdca3ab` (`git diff origin/dev...origin/pr-32 | shasum -a 256`) | 2026-11-09 | Codex | PR 메타데이터·diff·리뷰·체크 및 B1 격리 테스트 경로를 재검토. PR은 열림; GitHub 리뷰 없음, 결합 상태에서 Vercel만 성공 확인. 재검토 사항은 위에 기록 |
 | GitHub PR #34 diff | `feat/android-published-roster` | `209de0db506429050885968e9cd2c3d81cc14192` | `635976c6eab08175715a8813697306c26a4f43895ca820571c9c4f98cbe244d7` (`git diff fa47a5afc1bf3b92ed2cb7436e711ba2d57a8295..origin/feat/android-published-roster | shasum -a 256`) | 2026-11-10 | Codex | 12개 파일 읽기 전용 검토. P3 1건을 COMMENT 리뷰로 게시; Verify run 42613978040 성공 |
 | `/private/tmp/NurseFlow-guidance` | `docs/agent-guidance-alignment` | `f10d598b330de17a47a954558196e8df0be4a4ec` | `e638b1aa27f5c0cccc9f855d1cb5b9c19834bd1b1410a80b260b69a29cbb5fb5` (`git diff HEAD^ HEAD -- . ':!docs/work-status.md' | shasum -a 256`) | 2026-11-09 | Codex | Claude·Codex가 같은 worktree·브랜치·상태 기록·검증 기준을 이어 쓰도록 정리. `git diff --check` 통과. PR #32에 푸시 완료 |
@@ -122,8 +217,75 @@ Claude와 Codex가 같은 진행 기록을 사용한다. PR 또는 정기 리뷰
 | `/Users/sihwan/Documents/ChatGPT/NurseFlow` | `feat/ward-self-create` | `fbbfe031f0f285da4d54357db497aa13a21cbc82` | 미커밋 변경 없음 | 2026-11-10 | Codex | P2 수정 확인: 잠금 뒤 replay 재확인은 READ_COMMITTED에서 타당, 부분 쓰기 없음, 계약·README 일치. 남은 P3(테스트): 동시 테스트가 경합 구간을 매번 강제하지 못함. 서비스에 테스트용 동기화 지점이 필요해 수정하지 않음 |
 | GitHub PR #36 리뷰 | `feat/ward-self-create` | `d82fa2da5778601b3ade50367005b143250e649b` | 해당 없음(PR diff 기준) | 2026-11-10 | hyen11 | P1~P3·P5 없음. P4(테스트) 2건: 잠금 뒤 replay 재확인 경로를 강제하지 못함, 다른 계정 같은 키 경합·롤백 미검증 |
 | `/Users/sihwan/Documents/ChatGPT/NurseFlow` | `feat/ward-self-create` | `bbd7b550202490ccdbed8f14823f2b03ca5b3da3` | 미커밋 변경 없음 | 2026-11-10 | Claude | 위 P4 2건 수정: 테스트 전용 하위 클래스로 순서 강제. 두 경로 변이 각 3/3 검출 |
+| `/private/tmp/NurseFlow-a5` | `feat/staff-admin-career-adjust` | `2a4967badad87b4781a4b30825ea04d6d3c48e2b` | 미커밋 변경 없음 | 2026-11-10 | Codex | A5 리뷰. P2 생성·활성 변경이 병동 잠금 밖, P2 비활성 간호사 순번 잔존, P3 동일 경력 재저장 이력, P4 계약 required·테스트·B5 범위. 권한·단계 범위·roster 코드 무영향 확인 |
+| `/private/tmp/NurseFlow-a5` | `feat/staff-admin-career-adjust` | `68c6b412ba1b16f71a347adfae4990b1dbd17e97` | 미커밋 변경 없음 | 2026-11-10 | Claude | 위 지적 모두 수정. Codex 재리뷰 전 |
+| `/private/tmp/NurseFlow-a5` | `feat/staff-admin-career-adjust` | `8295380c5f148acd9154e4bd77e55a46fc0f65fe` | 미커밋 변경 없음 | 2026-11-10 | Claude(/code-review) | A5 10건 모두 수정: 이력 seq 정렬, 팀 삭제·이동 잠금, 편성 설정 행 잠금, 활성 변경 시에만 병동 잠금(lockWard 재사용), 본인 화면 MyStaffProfile, stageOverride 필수, 순번 연속, 죽은 검사 제거, 조인 개선 |
+| GitHub PR #37 리뷰 | `feat/staff-admin-career-adjust` | `9d16d482a78219d143abefbeaa338996af1b7a47` | 해당 없음(PR diff 기준) | 2026-11-10 | hyen11 | P2 2건: 잠금 여부를 잠금 밖 조회로 정해 활성화·순서 저장과 경합(중복 순번), 경력 입력·확정이 행 잠금 밖에서 이전 값을 읽어 이력 왜곡 |
+| `/private/tmp/NurseFlow-a5` | `feat/staff-admin-career-adjust` | `4fd88149eba66b4428e0bd46b8f77d9aa7deec00` | 미커밋 변경 없음 | 2026-11-10 | Claude | 위 P2 2건 수정: 간호사 수정 항상 병동 잠금, 경력 경로 행 잠금. 순서 강제 테스트 2건, 변이 각 3/3 검출 |
+| GitHub PR #37 리뷰 | `feat/staff-admin-career-adjust` | `53ed3dcfaf68da433dc2ffdb025647c4860e50a2` | 해당 없음(PR diff 기준) | 2026-11-10 | hyen11 | P2: 팀 이동·해제 시 이전 팀 순번에 빈칸(1,3)·선임 2부터 시작 |
+| `/private/tmp/NurseFlow-a5` | `feat/staff-admin-career-adjust` | `fbf71cb5a71a00e1b6097cb9420895d74f24a186` | 미커밋 변경 없음 | 2026-11-10 | Claude | 위 P2 수정(팀 이동·해제에 순번 정리). 같은 패턴 점검 결과 A6 구성원 비활성화 경로가 남아 A6 dev 반영 때 처리 예정 |
+| `/private/tmp/NurseFlow-a5` | `feat/staff-admin-career-adjust` | `87e1d1f3d1075a77cf0df545bce7db03a9958c78` | 미커밋 변경 없음 | 2026-11-10 | Codex | 팀 이동 순번 수정 재리뷰(`53ed3dc..HEAD`). 지적 없음. 잠금 안 읽기·판단·쓰기, 이력 이전 값, 잠금 순서(권한→병동→대상 행), staff 패키지의 순번 해제 경로 전수 확인 |
+| `/private/tmp/NurseFlow-a5` | `feat/staff-admin-career-adjust` | `931686c9c1f790bd030bc6e5c76bdf31a5ad313e` | 미커밋 변경 없음 | 2026-11-10 | Codex | PR 전체 불변 조건 감사(I1~I8). I1·I2·I3·I5·I6·I7·I8 통과. I4 TEAM_ASSIGNED가 팀 이름을 기록(설계상 화면용 문자열로 판단, 계약 명시), P3 순서 저장의 잠금 전 팀 확인 |
+| `/private/tmp/NurseFlow-a5` | `feat/staff-admin-career-adjust` | `16258026d63b7a5921a50743772ebe4a22b4e006` | 미커밋 변경 없음 | 2026-11-10 | Claude | 무작위 불변 조건 테스트 추가, 이 테스트가 찾은 '삭제된 팀의 활성 간호사' 수정, 위 P3 수정, I4 계약 명시 |
 | `/private/tmp/NurseFlow-a8` | `feat/shift-type-settings` | `d407e55` (구현 HEAD, 이후 문서 커밋 추가) | 미커밋 변경 없음 | 2026-11-10 | Claude(Sonnet) | A8 구현: 근무 유형 CRUD(`policy` 패키지), 휴게·인정·환산 시간, 정책 revision, DRAFT 재검증 표시, 스키마 업그레이드 테스트. 계약 커밋 `9860a57` 선행 |
 | `/private/tmp/NurseFlow-a8` | `feat/shift-type-settings` | `ed32d2fd67a9e1656dafc077d786b80ca710f114` | 미커밋 변경 없음 | 2026-11-10 | Codex | A8 리뷰. P2 시간 변경 후 초안 칸 시각이 옛 값이라 확정 검사가 옛 시간 기준, P2 kind=OTHER로 휴식 규칙 우회, P3 POST Idempotency-Key 제거 |
 | `/private/tmp/NurseFlow-a8` | `feat/shift-type-settings` | `67896e789610fba587d9fcfa3944dc3aec556fc5` | 미커밋 변경 없음 | 2026-11-10 | Claude | 위 3건 수정: 초안 칸 시각 재계산·revision 증가, OTHER 입력 차단, Idempotency-Key 복원(잠금 뒤 재확인). Codex 재리뷰 전 |
 
 이 문서는 Claude와 Codex가 각 기능 단위 작업 후 진행 결과를 함께 기록하는 단일 공유 현황이다.
+
+## A3 PR #35 B4a/B4b 소비자 계약 검토 (2026-11-10, Codex)
+
+> 아래는 이전 head에서 수행한 계약 검토의 시점 기록이다. 현재 코드에 지적이 남아 있다는 판정이 아니다.
+
+- 후속 게시: 사용자의 행별 리뷰 요청에 따라 [COMMENT 리뷰 5837141400](https://github.com/gerrmang/NurseFlow/pull/35#pullrequestreview-5837141400)을 head `68b5981`에 게시했다. `docs/openapi.yaml` 368행(입력 검증, discussion_r4521393260), 359~361행(검색 보장 범위, discussion_r4521393265)에 대응하는 diff hunk와 position 29/22를 GitHub API로 확인했다. 연결 도구는 403이어서 인증된 로컬 GitHub CLI를 사용했다. 아래의 'GitHub 리뷰 게시 없음'은 최초 정적 검토 시점 기록이며 이 후속 요청으로 게시 완료했다. 코드 변경·커밋·푸시·병합은 하지 않았다.
+
+- 검토 대상: GitHub PR #35의 최초 OpenAPI 계약 `aa1915c`와 최신 head `68b59814641f6341e0bfe611946db8b713ef3834`. `docs/openapi.yaml`, 검색 Controller/DTO/Service, DB·실시간 검색 경로와 관련 테스트를 정적으로 대조했다. 현재 로컬에는 A3가 없으므로 GitHub 연결 도구로 읽었으며 브랜치를 전환하지 않았다.
+- 판정: 검토 범위에서 P1/P2 없음. P3(계약/입력) 1건: OpenAPI 368행은 trim 후 2~50자만 명시하지만, DB 경로는 문자·숫자만 남긴 뒤에도 2자 이상을 요구한다. `(가)`는 계약상 허용되지만 400 `INVALID_REQUEST`이며 `HospitalDatasetSearchHttpTest`에도 거절 기대가 있다. 정규화 후 최소 길이를 계약에 명시하고 DB/실시간 경로의 공통 검증으로 맞춰야 B4 입력 안내가 일치한다.
+- P3(계약/검색) 1건: OpenAPI 359~361행의 기호 무시·정확 일치/병원급 우선 정렬은 DB 경로에서만 구현된다. 실시간 경로는 trim한 query를 yadmNm으로 보내고 외부 페이지 순서를 그대로 반환한다. 공통 보장으로 구현하거나, 해당 규칙이 DB 경로에 한정됨을 계약에 명시한다. 외부 API의 실제 검색·정렬 동작은 이번에 호출해 확인하지 않았다.
+- 소비자 확인: `source`·`externalId`로 선택 항목을 식별하고 `name`·`address`로 동명 병원을 구분할 수 있다. `category`는 선택적 nullable로 소비한다. 200 빈 목록과 503 두 오류 코드를 별도 상태로 처리하고 `attribution`을 표시한다. page 100 이후는 요청하지 않고 검색어 구체화를 안내해야 한다. 검색 실행 시 호출하고 늦게 도착한 이전 검색 결과는 폐기한다.
+- 범위 제한: `POST /wards`는 여전히 BootstrapWardRequest 계약이다. 병원 후보 검색 검토가 A4 병동 생성 계약 합의나 B4 전체 실연동 완료를 뜻하지 않는다. A4에서 hospital 스냅샷·Idempotency-Key·오류 계약을 별도로 검토한다.
+- 검증: GitHub 원본 파일·PR diff·기존 테스트 기대값 대조. Gradle·기기·외부 API·실데이터 검사는 실행하지 않았다(원격 A3 정적 계약 리뷰). 최신 head의 Verify run `42672162190`은 조회 시 completed/failure였다. 이번에 CI 실패 원인을 재검증하거나 재실행하지 않았다. 코드/API/DB 변경·배포 영향 없음. GitHub 리뷰 게시·커밋·푸시·병합 없음.
+- 공유 인계: 현재 `C:\Users\jjang\IdeaProjects\NurseFlow`, `feat/android-published-roster`, HEAD `209de0db506429050885968e9cd2c3d81cc14192`를 보존했다. 기존 Android 수정 4개와 미추적 `nurseflow.mv.db`는 검토·수정하지 않았다. 이 절만 현재 공유 브랜치에 남기며, A3 구현자가 위 두 계약 항목을 반영한 뒤 재검토한다. 기록 시각 2026-11-10 14:00 KST 이후. 기존 tracked diff 해시는 `abca27372b8422cbb7f54dec0e67a5019c213e961a89a5f58cfb9e486247c36b` (`git diff HEAD -- . ':!docs/work-status.md' | Out-String`의 UTF-8 바이트 SHA256; PowerShell 줄바꿈 포함).
+
+## 미커밋 기록 보존·로컬 브랜치 정리 (2026-11-10, Codex)
+
+- 사용자 요청으로 위 A3 계약 검토 미커밋 기록을 현재 B2 브랜치의 별도 문서 커밋에 보존한다. B2 구현 커밋 `55fb61b`와 가상 검증 결과는 변경하지 않았다.
+- `git fetch origin --prune` 성공. GitHub PR #33·#34의 `merged=true`·대상 `dev`, 병합 커밋 `fa47a5a`·`d1b8729`의 `origin/dev` 포함, 로컬 A2 head의 원본 PR head 포함을 확인한 뒤 로컬 `feat/auth-web-session-v2`·`feat/android-published-roster`만 삭제했다. 원격 브랜치는 삭제하지 않았다.
+- 공유 worktree는 `C:\Users\jjang\IdeaProjects\NurseFlow`, 현재 브랜치는 `feat/web-foundation-session`으로 유지한다. `main`·`dev`·B2 브랜치와 미추적 `nurseflow.mv.db`를 보존했다. 문서 변경만이므로 앱·서버 테스트와 브라우저·Kakao·CI 검증은 재실행하지 않았다.
+
+## B2 Draft PR·CI 기록 정정 (2026-11-10, Codex)
+
+- [PR #39](https://github.com/gerrmang/NurseFlow/pull/39)는 open·Draft, 대상 `dev`다. 구현 head `0f4ddd4344cd80eecd93ea11af471e87c70471fc`의 [Verify 42826773185](https://github.com/gerrmang/NurseFlow/actions/runs/42826773185)에서 Backend tests·Android debug build·Web checks 모두 성공을 GitHub API로 확인했다.
+- `git diff cd66358 0f4ddd4 --name-only -- web`는 검증 문서와 `src/api/schema.gen.ts`만 반환했다. 생성 타입은 `import type`으로 소비된다. 번들 크기만으로 런타임 동일성을 단정하던 표현을 이 diff 근거로 정정했다. 서버 변경·실제 Kakao 재검증 여부와 구분한다.
+- A5 `bdc96a6` 반영 완료. A 후속 진단·초대 계약 `be6d78c` 미반영에 따른 Draft·KOE010 재확인 대기를 유지한다. 미검증 브라우저·계정·코드 리뷰 항목도 그대로다.
+- 검증: GitHub PR·작업별 CI 결과, Git diff와 타입 참조 확인. 문서만 수정해 로컬 앱·서버·기기 검사는 재실행하지 않았다. 후속 문서 커밋의 CI는 푸시 뒤 최종 head 기준으로 확인한다.
+- 공유 인계: 같은 `C:\Users\jjang\IdeaProjects\NurseFlow`, `feat/web-foundation-session`에서 문서만 커밋·푸시한다. 사용자 DB를 보존하고 다른 기능 커밋·원격 병합·Draft 해제·배포는 하지 않는다.
+
+## B2 PR #39 A 리뷰 수정 (2026-11-11, Codex)
+
+- 기준 `00724e4`, A 리뷰 `5846276341`·`5852145291`을 코드와 대조했다. 병동 목록 병원명(P3), Web Locks 접속·브라우저 지원 조건(P3), BroadcastChannel 로그아웃 전파(P3), no-referrer(P4), 동시 로그인 재시도 안내(P4)를 반영했다. 서버·API·DB는 수정하지 않았다.
+- Windows typecheck·lint 성공. WSL의 분리 사본에서 npm ci·api:check·lint·typecheck·테스트 55/55·build 모두 성공. 즉시 탭 로그아웃과 늦은 refresh 폐기·알림 실패·채널 검증, 동명 병동/nullable 병원명 회귀가 포함된다.
+- audit: 개발 체인 moderate 10개 패키지, high/critical 0, omit=dev 0. 제안된 주 버전 하향·force 변경은 적용하지 않았고 호환 수정판 대기를 기록했다. 실제 브라우저·Kakao·실서버 검사는 이번 수정 후 재실행하지 않았다.
+- 공유 인계: `C:\Users\jjang\IdeaProjects\NurseFlow`, `feat/web-foundation-session`에서 B2만 커밋·푸시한다. DB·Windows node_modules를 보존한다. Draft와 A 후속 미병합 대기를 유지하며, 수정 후 CI·재리뷰를 별도로 확인한다. 리뷰 원문과 수정 상세는 web/B2-verification.md에 있다.
+
+## B3a Draft PR·CI 기록 정정 (2026-11-10, Codex)
+
+- [PR #38](https://github.com/gerrmang/NurseFlow/pull/38)는 open·Draft, 대상 `dev`다. 구현 head `878cc713ac98e6c6eab96d01386f1d08498951aa`의 [Verify 42826307031](https://github.com/gerrmang/NurseFlow/actions/runs/42826307031)에서 Backend tests·Android debug build 모두 성공을 GitHub API로 확인했다. B2 웹 코드는 이 브랜치에 없으므로 Web checks는 없다.
+- A5 `bdc96a6` 반영 완료. A 후속 진단·초대 계약 `be6d78c` 미반영에 따른 Draft·계약 재대조 대기를 유지한다. 실제 Kakao 통합 후 재검증·전체 코드 리뷰 등 기존 제한도 유지한다.
+- 검증: GitHub PR·작업별 CI 결과 확인과 문서 변경의 `git diff --check`. 문서만 수정해 로컬 앱·서버·기기 검사는 재실행하지 않았다. 후속 문서 커밋의 CI는 푸시 뒤 최종 head 기준으로 확인한다.
+- 공유 인계: 같은 `C:\Users\jjang\IdeaProjects\NurseFlow`, `feat/android-invite-join`에서 문서만 커밋·푸시한다. 사용자 DB와 미추적 `web/` 잔여물을 보존했다. B2 커밋을 섞지 않았고 병합·Draft 해제·배포는 하지 않는다. 두 브랜치 기록 정리 후 원래 B2 브랜치로 복귀한다.
+
+## B3a PR #38 A 리뷰 수정 (2026-11-11, Codex)
+
+- 기준 `155ec1c`, A 리뷰 `5846275956`·`5852145036`을 코드와 대조했다. nullable 병원명 DTO·병동 목록 표시(P3), 링크 설정 없는 빌드의 발급·재발급 사전 차단(P3)을 반영했다. 개발 스킴 가로채기·로그인 중 프로세스 종료 시 초대 유실(P4)은 알려진 제한으로 README에 명시했다. API·DB·서버 fixture 변경 없음.
+- 단위 검사 76개 통과(실패·오류·건너뜀 0), 앱·기기 테스트 APK 빌드 성공, Lint 오류 0·기존 경고 33개. JSON 테스트 설정 정리 후 단위·Lint 재실행 성공. `git diff --check` 통과.
+- 신규 기기 화면 테스트는 컴파일만 확인했다. 읽기 전용 Pixel_10을 두 번 시작했지만 ADB offline으로 기기 검사 실행은 시작하지 못했다. 이번 에뮬레이터 프로세스만 종료했다. 실제 Kakao·실서버 E2E·백엔드 검사는 이번 수정 뒤 재실행하지 않았다.
+- 공유 인계: `C:\Users\jjang\IdeaProjects\NurseFlow`, `feat/android-invite-join`에서 B3a만 커밋·푸시한 뒤 원래 B2 브랜치로 복귀한다. DB·Windows node_modules 잔여물을 보존한다. Draft·A 후속 미병합 대기를 유지하고 수정 후 CI·재리뷰는 별도로 확인한다.
+
+## B2 PR #39 최신 dev 통합·병합 준비 (2026-11-11, Codex)
+
+- B3a PR #38의 dev 병합 `e4ca9bf`를 확인하고 현재 B2 브랜치에 병합했다. 공유 현황 문서 충돌만 발생했으며 B2·B3a 검증·리뷰·인계 기록을 모두 보존했다. 기능 코드는 충돌 없이 반영됐다.
+- 이전 dev `bdc96a6`과 새 dev `e4ca9bf` 사이에 web·OpenAPI·서버 운영 코드·CI 변경은 없다. B2 A 리뷰 수정 `d47eb38`은 유지한다. PR #39는 조회 시 Ready였으므로 Draft로 되돌리지 않는다. A의 수정 재확인과 기존 APPROVED 리뷰도 확인했으며 새 head의 승인 강제 여부로 해석하지 않는다.
+- 통합 후 WSL에서 오프라인 npm ci·api:check·lint·typecheck·테스트 55/55·build 모두 성공. git diff --check 통과. 기기·실제 Kakao·실서버·audit은 이번에 재실행하지 않았고, 개발 서버도 시작하지 않았다. 최종 GitHub CI는 푸시 후 확인한다.
+- A 진단·초대 계약 후속 be6d78c는 여전히 미반영이며 별도 후속으로 유지한다. B3a는 이미 병합됐고 B2만 최신 dev 기준으로 갱신한다. 병합·자동 병합·배포는 하지 않는다.
+- 공유 인계: C:\Users\jjang\IdeaProjects\NurseFlow, feat/web-foundation-session에서 통합 커밋·푸시한다. 기존 nurseflow.mv.db와 사용자 로컬 설정·잔여물을 보존한다.

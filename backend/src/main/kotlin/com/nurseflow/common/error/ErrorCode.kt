@@ -65,6 +65,7 @@ enum class ErrorCode(val status: HttpStatus, val safeMessage: String) {
     SUBJECT_REQUIRED(HttpStatus.UNAUTHORIZED, "사용자 식별 정보가 없습니다."),
     TEAM_NAME_DUPLICATE(HttpStatus.CONFLICT, "같은 이름의 팀이 이미 있습니다."),
     TEAM_NOT_EMPTY(HttpStatus.CONFLICT, "소속 간호사를 다른 팀으로 옮긴 뒤 삭제해 주세요."),
+    TEAM_ORDER_STALE(HttpStatus.CONFLICT, "팀 구성이 바뀌었습니다. 목록을 다시 불러와 순서를 정해 주세요."),
     TEAM_NOT_FOUND(HttpStatus.NOT_FOUND, "팀을 찾을 수 없습니다."),
     TOO_MANY_SLOTS(HttpStatus.BAD_REQUEST, "생성할 근무 칸이 너무 많습니다."),
     UNFILLED_ACK_REQUIRED(HttpStatus.UNPROCESSABLE_CONTENT, "미충원 인원 수를 확인해 주세요."),

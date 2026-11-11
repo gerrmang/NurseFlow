@@ -11,9 +11,15 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.LocalViewModelStoreOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.nurseflow.app.AppContainer
+import com.nurseflow.app.BuildConfig
 import com.nurseflow.app.core.session.SessionState
 import com.nurseflow.app.feature.auth.LoginScreen
 import com.nurseflow.app.feature.auth.LoginViewModel
+import com.nurseflow.app.feature.invite.JoinInvitationScreen
+import com.nurseflow.app.feature.invite.JoinInvitationViewModel
+import com.nurseflow.app.feature.invite.PasteInviteDialog
+import com.nurseflow.app.feature.invite.admin.InvitationAdminScreen
+import com.nurseflow.app.feature.invite.admin.InvitationAdminViewModel
 import com.nurseflow.app.feature.roster.PublishedRosterScreen
 import com.nurseflow.app.feature.roster.PublishedRosterViewModel
 import com.nurseflow.app.feature.ward.WardListScreen
@@ -23,13 +29,17 @@ import com.nurseflow.app.feature.ward.WardsViewModel
 @Composable
 fun NurseFlowRoot(container: AppContainer) {
     val session by container.session.state.collectAsStateWithLifecycle()
+    val pendingInvite by container.invites.current.collectAsStateWithLifecycle()
+    val invalidInvite by container.invites.invalidLink.collectAsStateWithLifecycle()
     val sessionModels: SessionViewModelStore = viewModel()
     val owner = sessionModels.ownerFor(session)
     var demo by remember { mutableStateOf(false) }
     // Selection belongs to one signed-in session; a new session identity starts without one.
     val sessionKey = (session as? SessionState.SignedIn)?.let { "${it.userId}:${it.generation}" }
     var selectedWardId by rememberSaveable(sessionKey) { mutableStateOf<String?>(null) }
+    var adminWardId by rememberSaveable(sessionKey) { mutableStateOf<String?>(null) }
     var wardEntry by rememberSaveable(sessionKey) { mutableStateOf(0) }
+    var pasting by remember(sessionKey) { mutableStateOf(false) }
     Column(Modifier.fillMaxSize().safeDrawingPadding()) {
         if (demo) {
             BackHandler { demo = false }
@@ -41,7 +51,11 @@ fun NurseFlowRoot(container: AppContainer) {
                 Box(Modifier.weight(1f)) {
                     when (val current = session) {
                         SessionState.Restoring -> CircularProgressIndicator()
-                        SessionState.SignedOut -> LoginScreen(viewModel { LoginViewModel(container.session, container.kakao) })
+                        SessionState.SignedOut -> LoginScreen(
+                            viewModel { LoginViewModel(container.session, container.kakao) },
+                            invitationWaiting = pendingInvite != null,
+                            onCancelInvitation = { container.invites.clear() },
+                        )
                         SessionState.LogoutFailed -> Column(Modifier.padding(24.dp)) {
                             Text("저장된 로그인 정보를 지우지 못했어요. 로그아웃을 다시 시도해 주세요.")
                             Button(onClick = container::logout) { Text("로그아웃 재시도") }
@@ -54,20 +68,71 @@ fun NurseFlowRoot(container: AppContainer) {
                         is SessionState.SignedIn -> {
                             val wardsModel = viewModel { WardsViewModel(container.api) }
                             val wards by wardsModel.state.collectAsStateWithLifecycle()
-                            val ward = (wards as? WardsUiState.Loaded)?.wards?.firstOrNull { it.wardId == selectedWardId }
-                            if (ward == null) {
-                                WardListScreen(wardsModel, { selectedWardId = it.wardId; wardEntry += 1 }, container::logout)
-                            } else {
-                                BackHandler { selectedWardId = null }
-                                val roster = viewModel(key = "roster-${ward.wardId}") {
-                                    PublishedRosterViewModel(container.api, ward.wardId, ward.canViewWardCalendar)
+                            val loaded = (wards as? WardsUiState.Loaded)?.wards
+                            val ward = loaded?.firstOrNull { it.wardId == selectedWardId }
+                            val adminWard = loaded?.firstOrNull { it.wardId == adminWardId && it.isAdmin }
+                            // Created for the whole session so a newer link replaces, not duplicates, the flow.
+                            val join = viewModel(key = "join") {
+                                JoinInvitationViewModel(
+                                    container.invitationApi, container.api, container.invites,
+                                    onSessionInvalid = { container.logout() },
+                                )
+                            }
+                            when {
+                                // An invitation being handled takes precedence over the ward screens.
+                                pendingInvite != null -> {
+                                    BackHandler { join.close() }
+                                    JoinInvitationScreen(join) { wardId ->
+                                        wardsModel.reload()
+                                        adminWardId = null
+                                        selectedWardId = wardId
+                                        wardEntry += 1
+                                    }
                                 }
-                                PublishedRosterScreen(ward.wardName, wardEntry, roster) { selectedWardId = null }
+                                adminWard != null -> {
+                                    BackHandler { adminWardId = null }
+                                    val admin = viewModel(key = "invites-${adminWard.wardId}") {
+                                        InvitationAdminViewModel(
+                                            container.invitationApi, adminWard.wardId, BuildConfig.INVITE_LINK_BASE,
+                                            onSessionInvalid = { container.logout() },
+                                        )
+                                    }
+                                    InvitationAdminScreen(
+                                        adminWard.wardName, admin,
+                                        onBack = { adminWardId = null },
+                                        // The server no longer grants admin access: leave and refresh memberships.
+                                        onForbidden = { adminWardId = null; wardsModel.reload() },
+                                    )
+                                }
+                                ward == null -> WardListScreen(
+                                    wardsModel,
+                                    onSelect = { selectedWardId = it.wardId; wardEntry += 1 },
+                                    onManageInvitations = { adminWardId = it.wardId },
+                                    onPasteInvitation = { pasting = true },
+                                    onLogout = container::logout,
+                                )
+                                else -> {
+                                    BackHandler { selectedWardId = null }
+                                    val roster = viewModel(key = "roster-${ward.wardId}") {
+                                        PublishedRosterViewModel(container.api, ward.wardId, ward.canViewWardCalendar)
+                                    }
+                                    PublishedRosterScreen(ward.wardName, wardEntry, roster) { selectedWardId = null }
+                                }
+                            }
+                            if (pasting) PasteInviteDialog(onDismiss = { pasting = false }) {
+                                pasting = false
+                                container.invites.offer(it)
                             }
                         }
                     }
                 }
             }
+            if (invalidInvite) AlertDialog(
+                onDismissRequest = container.invites::dismissInvalidLink,
+                title = { Text("초대 링크 오류") },
+                text = { Text("올바른 초대 링크가 아니에요. 관리자에게 받은 링크를 다시 열어 주세요.") },
+                confirmButton = { TextButton(onClick = container.invites::dismissInvalidLink) { Text("확인") } },
+            )
             // Demo data is reachable only outside a signed-in session and never substitutes for server data.
             if (session !is SessionState.SignedIn) {
                 TextButton(onClick = { demo = true }) { Text("가상 근무표 시연 보기 (서버 미연동)") }
