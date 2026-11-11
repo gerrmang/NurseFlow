@@ -46,10 +46,11 @@ fun InvitationAdminScreen(
         TextButton(onClick = onBack) { Text("‹ 병동 목록") }
         Text("$wardName 초대 관리", style = MaterialTheme.typography.titleLarge)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Button(onClick = { issuing = true }, enabled = !state.busy && !state.loading) { Text("새 초대 발급") }
+            Button(onClick = { issuing = true }, enabled = state.canIssue && !state.busy && !state.loading) { Text("새 초대 발급") }
             TextButton(onClick = viewModel::reload, enabled = !state.loading) { Text("새로고침") }
         }
         Text("초대 링크는 1회용이며 발급 후 24시간 동안 유효해요. 링크는 발급 직후에만 볼 수 있어요.")
+        if (!state.canIssue) Text("이 빌드는 초대 링크 주소가 설정되지 않아 발급·재발급할 수 없어요. 기존 초대 조회·철회는 가능해요.")
         state.notice?.let { notice ->
             Card(Modifier.fillMaxWidth()) {
                 Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -81,7 +82,7 @@ fun InvitationAdminScreen(
                             Text(row.target)
                             Text("발급 ${formatInstant(row.invitation.createdAt)} · 만료 ${formatInstant(row.invitation.expiresAt)}")
                             if (row.status.manageable) Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                OutlinedButton(onClick = { confirm = Confirm.Reissue(row) }, enabled = !state.busy) { Text("재발급") }
+                                OutlinedButton(onClick = { confirm = Confirm.Reissue(row) }, enabled = state.canIssue && !state.busy) { Text("재발급") }
                                 OutlinedButton(onClick = { confirm = Confirm.Revoke(row) }, enabled = !state.busy) { Text("철회") }
                             }
                         }

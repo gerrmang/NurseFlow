@@ -73,12 +73,24 @@ class InvitationAdminViewModelTest {
         assertEquals("https://server.example/invite#token=$token", model.state.value.link!!.url)
     }
 
-    @Test fun missingLinkBaseNeverInventsALink() {
-        val model = loaded(linkBase = "")
+    @Test fun missingLinkBaseBlocksIssueAndReissueBeforeCreatingUnusablePendingInvitations() {
+        val model = loaded(inv("existing"), linkBase = "")
+        assertFalse(model.state.value.canIssue)
         model.create(InvitationRoles.MEMBER, null)
-        api.creates.single().second.complete(CreatedInvitationDto(inv("new"), token, null))
+        model.reissue("existing")
+        assertTrue(api.creates.isEmpty())
+        assertTrue(api.reissues.isEmpty())
         assertNull(model.state.value.link)
         assertNotNull(model.state.value.notice)
+        model.revoke("existing")
+        assertEquals(1, api.revokes.size) // existing links can still be revoked
+    }
+
+    @Test fun whitespaceLinkConfigurationAlsoBlocksIssuance() {
+        val model = loaded(linkBase = "  ")
+        model.create(InvitationRoles.ADMIN, null)
+        assertFalse(model.state.value.canIssue)
+        assertTrue(api.creates.isEmpty())
     }
 
     @Test fun lostWriteResponsesReloadWithoutResending() {

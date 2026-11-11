@@ -50,6 +50,7 @@ fun WardListScreen(
                     Card(onClick = { onSelect(ward) }, modifier = Modifier.fillMaxWidth()) {
                         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             Text(ward.wardName, style = MaterialTheme.typography.titleMedium)
+                            ward.hospitalName?.takeIf { it.isNotBlank() }?.let { Text(it) }
                             Text(ward.roles.joinToString(" · ") {
                                 when (it) { "WARD_ADMIN" -> "관리자"; "WARD_MEMBER" -> "간호사"; else -> "기타 역할" }
                             })

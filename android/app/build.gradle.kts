@@ -42,7 +42,7 @@ android {
         }
         release {
             buildConfigField("String", "API_BASE_URL", "\"$releaseApiBaseUrl\"")
-            // No production link format yet (HTTPS App Links are a follow-up): rely on the server's inviteUrl.
+            // No production link format yet (HTTPS App Links are a follow-up): issuance is disabled.
             buildConfigField("String", "INVITE_LINK_BASE", "\"\"")
         }
     }

@@ -45,6 +45,7 @@ class InviteDeepLinkDeviceTest {
     /** Error responses injected into the next join requests, in order; empty means success. */
     private val redeemErrors = java.util.concurrent.ConcurrentLinkedQueue<Pair<Int, String>>()
     private val tokenStore = TestTokenStore()
+    @Volatile private var wardsOverride: String? = null
     private val wardJson = """{"wardId":"fake-invite-ward","wardName":"가상 초대 병동","roles":["WARD_MEMBER"],"canViewWardCalendar":true}"""
 
     @Before fun serveFictionalBackend() {
@@ -55,7 +56,7 @@ class InviteDeepLinkDeviceTest {
                     "/api/v1/auth/kakao/session", "/api/v1/auth/session/refresh" -> json("""{"accessToken":"fake-invite-access","accessTokenExpiresAt":"2099-01-01T00:00:00Z","refreshToken":"fake-invite-refresh","refreshTokenExpiresAt":"2099-02-01T00:00:00Z","user":{"userId":"fake-invite-user","displayName":"가상 초대 사용자"}}""")
                     "/api/v1/auth/logout" -> MockResponse().setResponseCode(204)
                     "/api/v1/me" -> json("""{"userId":"fake-invite-user","displayName":"가상 초대 사용자","memberships":[]}""")
-                    "/api/v1/wards" -> json(if (joined.get()) """{"items":[$wardJson]}""" else """{"items":[]}""")
+                    "/api/v1/wards" -> json(wardsOverride ?: if (joined.get()) """{"items":[$wardJson]}""" else """{"items":[]}""")
                     "/api/v1/invitations/preview" -> {
                         val token = JSONObject(request.body.readUtf8()).getString("token")
                         previews += token
@@ -149,6 +150,21 @@ class InviteDeepLinkDeviceTest {
         assertNull(container.invites.current.value)
         assertFalse(hasText("병동 초대를 받았어요. 초대 내용을 확인하려면 먼저 로그인해 주세요."))
         assertTrue(redeems.isEmpty())
+    }
+
+    @Test fun wardListDistinguishesSameNamedWardsByHospitalAndKeepsLegacyWard() {
+        wardsOverride = """{"items":[
+            {"wardId":"a","wardName":"같은 이름 병동","hospitalName":"가상 병원 가","roles":["WARD_MEMBER"],"canViewWardCalendar":true},
+            {"wardId":"b","wardName":"같은 이름 병동","hospitalName":"가상 병원 나","roles":["WARD_MEMBER"],"canViewWardCalendar":true},
+            {"wardId":"c","wardName":"기존 병동","hospitalName":null,"roles":["WARD_MEMBER"],"canViewWardCalendar":true}
+        ]}"""
+        launchMain()
+        awaitText("카카오 로그인")
+        login()
+        awaitText("가상 병원 가")
+        awaitText("가상 병원 나")
+        awaitText("기존 병동")
+        assertFalse(hasText("null"))
     }
 
     @Test fun expiredAndMalformedLinksShowDistinctErrors() {

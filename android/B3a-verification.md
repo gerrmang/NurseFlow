@@ -321,7 +321,7 @@ adb -s emulator-5556 reverse --remove-all
 - 운영 API·DB 스키마·서버 설정 변경은 없다. Android가 기존 A1 계약을 소비한다.
 - Android BuildConfig에 `INVITE_LINK_BASE`를 추가했다.
   - debug는 `nurseflow://invite`이며, 서버가 `inviteUrl`을 주지 않을 때만 쓴다.
-  - release는 빈 값이다. 이때는 링크를 만들지 않고 안내만 한다.
+  - release는 빈 값이다. 2026-11-11 리뷰 수정 후에는 발급·재발급 버튼과 API 호출을 사전에 차단한다. 서버의 inviteUrl이 있는지 발급 전에는 알 수 없으므로 빌드 설정이 없으면 새 PENDING 초대를 만들지 않는다. 기존 초대 조회·철회는 유지한다.
 - 매니페스트: `MainActivity`의 `singleTop`과 초대 스킴 필터.
 - 테스트 전용 opt-in: `NURSEFLOW_INVITE_E2E`, `inviteE2e`. 픽스처 포트는 loopback 18085·18086이다.
 
@@ -366,3 +366,15 @@ Android 앱 업데이트만 필요하며 서버 배포나 데이터 이전은 �
 - GitHub API로 [Verify 42826307031](https://github.com/gerrmang/NurseFlow/actions/runs/42826307031)의 completed/success와 Backend tests·Android debug build 각각의 성공을 확인했다. 이 브랜치에는 B2 웹 작업이 없으므로 Web checks는 실행되지 않았다.
 - A5 PR #37의 `dev` 병합(`bdc96a6`)은 반영됐고 A 진단·초대 계약 후속 `be6d78c`는 미반영이다. Draft·계약 재대조 대기를 유지하며 다른 기능 변경을 섞지 않는다.
 - 이번 작업은 PR·CI 메타데이터와 문서 확인이다. 로컬 앱·서버·기기·실제 Kakao 검사는 재실행하지 않았고 전체 코드 리뷰나 독립 승인으로 주장하지 않는다. 문서 커밋·푸시 뒤 최종 head의 CI를 별도로 확인한다.
+
+## A 리뷰 수정·검증 (2026-11-11, Codex)
+
+- 대상: [A 리뷰 5846275956](https://github.com/gerrmang/NurseFlow/pull/38#pullrequestreview-5846275956), [보완 리뷰 5852145036](https://github.com/gerrmang/NurseFlow/pull/38#pullrequestreview-5852145036), 기준 head `155ec1c`.
+- P3 병원명: `MembershipDto.hospitalName: String? = null`을 추가하고 병동 목록에서 표시한다. 같은 이름의 서로 다른 병원 병동과 null·필드 생략인 기존 응답을 실제 앱 JSON 설정으로 역직렬화하는 회귀 검사를 추가했다. 기기 테스트에도 동명 병동·병원명·기존 병동 화면 검사를 추가했다.
+- P3 링크 미설정 발급: 링크 기반 주소가 비어 있거나 공백인 빌드는 발급·재발급을 화면과 ViewModel 양쪽에서 막고 설정 안내를 보여준다. 서버 요청이 나가지 않으므로 전달 불가능한 PENDING 초대가 생기지 않는다. release 기본값은 빈 문자열이며, 서버 주소만 설정한 release도 빌드 설정을 함께 마련할 때까지 발급하지 않는 보수적 방침이다. 기존 초대 조회·철회는 유지한다. 원문 토큰 복사나 입력 허용으로 fragment 계약을 바꾸지 않았다.
+- P4 개발 스킴: 사용자 정의 스킴 가로채기 가능성과 운영 HTTPS App Links 선행 조건을 README에 명시했다. 운영용 링크 지원은 추가하지 않았다.
+- P4 메모리 보관: Kakao 로그인 화면에서 앱 프로세스가 종료되면 초대를 잃고 링크를 다시 열어야 한다는 알려진 한계를 README에 명시했다. 영구 토큰 저장은 추가하지 않았다.
+- 최종 단위 검사: `:app:testDebugUnitTest` **76개 통과**, 실패·오류·건너뜀 0. `:app:assembleDebug`·`:app:assembleDebugAndroidTest` 성공. `:app:lintDebug` 성공, 오류 0·기존 경고 33개. 테스트 JSON 설정 정리 후 단위·Lint를 재실행해 성공했다. `git diff --check` 통과.
+- 신규 검사: 링크 미설정·공백일 때 create/reissue 요청 0회, 미설정에서도 revoke 가능, 같은 이름 병동의 병원명 구분과 null·누락 호환.
+- 기기 검증 제한: 별도 포트 5556의 읽기 전용·스냅샷 비저장 Pixel_10을 두 번 시작했지만 기본·소프트웨어 렌더링 모두 ADB offline에 머물러 이번 기기 검사 실행은 시작하지 못했다. 신규 화면 테스트는 APK 컴파일만 성공했으며 기기 통과로 표시하지 않는다. 이번에 시작한 프로세스만 종료했다. 사용자 AVD 데이터·DB·저장 세션은 사용하지 않았다.
+- 백엔드·가짜 OIDC E2E·실제 Kakao 검사는 이번 수정 뒤 재실행하지 않았다. 운영 서버·API·DB·기존 백엔드 fixture 변경 없음. 최종 CI와 수정 후 재리뷰는 푸시 뒤 확인한다.

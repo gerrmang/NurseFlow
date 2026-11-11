@@ -29,6 +29,8 @@ class IssuedLink(val url: String, val expiresAt: String) {
 }
 
 data class InvitationAdminState(
+    /** Do not create an unusable PENDING invitation when the build has no link configuration. */
+    val canIssue: Boolean = true,
     val loading: Boolean = true,
     val rows: List<InvitationRow> = emptyList(),
     val unlinked: List<UnlinkedNurse> = emptyList(),
@@ -57,7 +59,7 @@ class InvitationAdminViewModel(
     private val onSessionInvalid: () -> Unit = {},
 ) : ViewModel(scope) {
     private val scope = scope
-    private val mutable = MutableStateFlow(InvitationAdminState())
+    private val mutable = MutableStateFlow(InvitationAdminState(canIssue = linkBase.isNotBlank()))
     val state: StateFlow<InvitationAdminState> = mutable.asStateFlow()
     private var load: Job? = null
     private var ticket = 0
@@ -95,6 +97,7 @@ class InvitationAdminViewModel(
 
     /** WARD_ADMIN never carries a nurse record; a WARD_MEMBER may link an unlinked one. */
     fun create(role: String, nurseId: String?) {
+        if (!requireLinkConfiguration()) return
         val body = when (role) {
             InvitationRoles.ADMIN -> CreateInvitationBody(InvitationRoles.ADMIN)
             InvitationRoles.MEMBER -> CreateInvitationBody(InvitationRoles.MEMBER, nurseId)
@@ -106,6 +109,7 @@ class InvitationAdminViewModel(
     }
 
     fun reissue(invitationId: String) {
+        if (!requireLinkConfiguration()) return
         write(lostNotice = "재발급 결과를 확인하지 못했어요. 목록에서 새 초대를 확인하고, 링크를 받지 못했다면 그 초대를 다시 재발급해 주세요.") {
             issued(apiCall { api.reissue(wardId, invitationId) })
         }
@@ -123,6 +127,12 @@ class InvitationAdminViewModel(
 
     fun dismissLink() { mutable.value = mutable.value.copy(link = null) }
     fun dismissNotice() { mutable.value = mutable.value.copy(notice = null) }
+
+    private fun requireLinkConfiguration(): Boolean {
+        if (mutable.value.canIssue) return true
+        mutable.value = mutable.value.copy(notice = "이 빌드는 초대 링크 주소가 설정되지 않아 발급·재발급할 수 없어요.")
+        return false
+    }
 
     private fun issued(created: CreatedInvitationDto) {
         val url = inviteLinkFor(created, linkBase)
