@@ -298,12 +298,13 @@ class RosterService(
         val rosterId = repo.jobRosterId(jobId)
             ?: throw BusinessException(ErrorCode.GENERATION_JOB_NOT_FOUND)
         val roster = visibleToAdmin(rosterId, subject)
-        // Ward lock before the job row (same order as generation), then the admin check again.
-        if (!repo.lockWard(roster.wardId)) throw BusinessException(ErrorCode.WARD_NOT_FOUND)
-        requireAdmin(roster.wardId, subject)
         val action = "cancel-generation:$jobId"
         replay(idempotencyKey, action, jobId, GenerationJob::class.java)?.let { return it }
+        // Only the job row, never the ward lock: a running generation holds the ward lock until it saves its
+        // result, so cancelling must be able to record the signal meanwhile. The role is checked again after
+        // this lock so a revocation committed while waiting still stops a revoked admin.
         repo.lockGenerationJob(jobId)
+        requireAdmin(roster.wardId, subject)
         val job = readGenerationJob(jobId)
             ?: throw BusinessException(ErrorCode.GENERATION_JOB_NOT_FOUND)
         if (job.status !in setOf("QUEUED", "RUNNING")) {
