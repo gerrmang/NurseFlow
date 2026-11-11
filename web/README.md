@@ -25,6 +25,7 @@ React + TypeScript + Vite로 만든 SPA입니다. 현재 범위(B2)는 Kakao 로
   - refresh, 코드 교환, logout은 모두 Web Locks API의 `nurseflow-web-session` 락 안에서만 실행합니다. 이 API가 없는 브라우저에서는 탭 안의 대기열로 대신합니다.
   - 이 세 호출은 중간에 취소(abort)하지 않습니다. 취소된 fetch라도 브라우저가 `Set-Cookie`를 반영할 수 있고 서버는 요청을 처리하기 때문입니다.
   - refresh token은 회전되므로, 이미 회전된 쿠키를 다시 쓰면 세션 계열 전체가 폐기됩니다. 락이 탭 사이의 이런 경합을 막습니다.
+  - **웹 인증은 HTTPS 또는 이 PC의 `http://localhost:5173`에서만 사용합니다.** Web Locks가 없는 환경의 대체 대기열은 한 탭 안에서만 동작합니다. `http://<LAN IP>:5173` 같은 안전하지 않은 출처에서는 탭 간 회전을 보장하지 않으며 지원하는 로그인 접속 주소가 아닙니다. HTTPS여도 Web Locks 미지원 브라우저의 다중 탭 인증은 지원하지 않습니다.
 - **epoch**
   - 로그인, 로그아웃, 만료가 일어날 때마다 올립니다. 이전 epoch에서 시작한 응답은 버립니다.
   - 일반 API 요청(`/me`, `/wards`)만 `AbortController`로 취소합니다.
@@ -34,10 +35,14 @@ React + TypeScript + Vite로 만든 SPA입니다. 현재 범위(B2)는 Kakao 로
 - **Kakao 콜백**
   - 앱 시작 시 `/auth/kakao/callback?code&state`이면 복원 refresh를 보내지 않고 코드 교환만 합니다.
   - 주소창의 code와 state는 즉시 지웁니다.
+  - `index.html`의 `no-referrer` 정책으로 URL 정리 전에 요청되는 리소스에도 콜백 쿼리를 Referer로 보내지 않습니다. 최초 콜백 요청 URL 자체는 정적 호스트에 전달되므로 운영 프록시·호스트 접근 로그에서도 콜백 쿼리를 기록하지 않아야 합니다.
+  - 여러 탭에서 동시에 로그인을 시작하면 나중 로그인 시도가 앞선 로그인 쿠키를 바꿀 수 있습니다. `INVALID_LOGIN_STATE` 안내가 나오면 다른 로그인 창을 닫고 한 창에서 다시 시작합니다.
 - **로그아웃 순서**
   1. 메모리 토큰을 지우고 `SigningOut`("로그아웃하고 있어요…") 상태가 됩니다.
   2. 락을 기다립니다. 진행 중인 refresh가 끝나 최신 쿠키가 반영된 뒤 서버 logout을 보냅니다.
   3. 성공하면 로그인 화면으로 갑니다. 실패하면 `LogoutFailed` 화면에서 재시도할 수 있습니다.
+  - 시작 시 `BroadcastChannel`(`nurseflow-web-logout`)로 로그아웃 신호만 보내 다른 탭의 access token·화면과 진행 중 응답을 즉시 정리합니다. 다른 탭은 서버 logout을 중복 호출하지 않습니다. 사용자 ID나 토큰을 채널에 보내지 않습니다.
+  - BroadcastChannel 미지원·차단 환경에서는 다음 refresh 실패 전까지 다른 탭에 기존 access token과 화면이 남을 수 있습니다. 전파는 서버 logout 성공의 대체가 아니며, 서버 logout이 실패하면 해당 탭에서 재시도해야 합니다.
 
 ## 로컬 실행
 

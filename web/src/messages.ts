@@ -11,7 +11,7 @@ const notices: Record<string, string> = {
 export function errorMessage(code: string, status = 0): string {
   switch (code) {
     case 'INVALID_LOGIN_STATE':
-      return '로그인 시간이 지났거나 다른 창에서 시작된 로그인이에요. 다시 시도해 주세요.'
+      return '로그인 시간이 지났거나 다른 창에서 로그인을 시작했어요. 다른 로그인 창을 닫고 이 창에서 다시 시도해 주세요.'
     case 'INVALID_AUTHORIZATION_CODE':
     case 'INVALID_ID_TOKEN':
       return notices.loginFailed!

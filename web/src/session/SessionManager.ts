@@ -3,6 +3,7 @@ import { ApiError, ClientErrorCode, asApiError, send, type FetchLike } from '../
 import { createNurseFlowApi, type NurseFlowApi } from '../api/nurseflowApi'
 import type { WebSession } from '../api/types'
 import type { SessionLock } from './sessionLock'
+import type { LogoutChannel } from './logoutChannel'
 
 export const CALLBACK_PATH = '/auth/kakao/callback'
 
@@ -34,6 +35,7 @@ export interface SessionManagerDeps {
   origin: string
   /** Leaves the SPA for the Kakao authorization page. */
   redirect: (url: string) => void
+  logoutChannel?: LogoutChannel
   now?: () => number
 }
 
@@ -74,6 +76,12 @@ export class SessionManager {
     this.deps = deps
     this.now = deps.now ?? Date.now
     this.api = createNurseFlowApi((path, init) => this.authorizedFetch(path, init))
+    deps.logoutChannel?.subscribe(() => {
+      // Do not mask this tab's own logout progress or a server-logout retry prompt.
+      if (this.state.status === 'signingOut' || this.state.status === 'logoutFailed') return
+      this.beginEpoch()
+      this.setState({ status: 'signedOut', notice: 'loggedOut' })
+    })
   }
 
   getState = (): SessionState => this.state
@@ -192,6 +200,12 @@ export class SessionManager {
     this.beginEpoch()
     const epoch = this.epoch
     this.setState({ status: 'signingOut' })
+    try {
+      // Clear other tabs immediately, even while we wait for a refresh or server logout.
+      this.deps.logoutChannel?.publish()
+    } catch {
+      // Notification failure must never prevent the actual server logout.
+    }
     try {
       await this.deps.lock.run(() => this.deps.auth.logout())
       if (epoch === this.epoch) this.setState({ status: 'signedOut', notice: 'loggedOut' })

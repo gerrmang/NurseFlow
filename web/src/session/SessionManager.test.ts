@@ -2,6 +2,7 @@ import { ApiError } from '../api/http'
 import { FakeAuthServer, USER_A, USER_B, flush } from '../test/fakeAuthServer'
 import { CALLBACK_PATH, SessionManager } from './SessionManager'
 import { createInTabLock, createSessionLock, SESSION_LOCK_NAME, type SessionLock } from './sessionLock'
+import { createLogoutChannel } from './logoutChannel'
 
 const ORIGIN = 'http://localhost:5173'
 
@@ -225,6 +226,72 @@ describe('Kakao callback', () => {
 })
 
 describe('logout', () => {
+  it('clears another tab with a still-valid access token before server logout finishes, without echoing logout', async () => {
+    const server = new FakeAuthServer()
+    const lock = createInTabLock()
+    const listeners = new Set<() => void>()
+    const publish = vi.fn(() => { for (const listener of listeners) listener() })
+    const makeTab = () => new SessionManager({
+      auth: server.auth, lock, fetch: server.fetch, origin: ORIGIN, redirect: vi.fn(),
+      logoutChannel: { publish, subscribe: (listener) => { listeners.add(listener); return () => listeners.delete(listener) } },
+    })
+    const tabA = makeTab()
+    const tabB = makeTab()
+    await signedIn(server, tabA)
+    tabB.start('/wards', '')
+    await vi.waitFor(() => expect(tabB.getState().status).toBe('signedIn'))
+    expect((await tabB.api.getMe()).userId).toBe(USER_A.userId)
+    const release = server.hold('logout')
+
+    const logout = tabA.logout()
+    await flush()
+    expect(tabA.getState().status).toBe('signingOut')
+    expect(tabB.getState()).toEqual({ status: 'signedOut', notice: 'loggedOut' })
+    await expect(tabB.api.getMe()).rejects.toMatchObject({ code: 'SESSION_EXPIRED' })
+    expect(publish).toHaveBeenCalledTimes(1)
+    expect(server.calls.filter((op) => op === 'logout')).toHaveLength(1)
+    release()
+    await logout
+  })
+
+  it('discards a late refresh in a tab that receives logout and still serializes server revocation', async () => {
+    const server = new FakeAuthServer()
+    const lock = createInTabLock()
+    const listeners = new Set<() => void>()
+    const makeTab = () => new SessionManager({
+      auth: server.auth, lock, fetch: server.fetch, origin: ORIGIN, redirect: vi.fn(),
+      logoutChannel: {
+        publish: () => { for (const listener of listeners) listener() },
+        subscribe: (listener) => { listeners.add(listener); return () => listeners.delete(listener) },
+      },
+    })
+    const tabA = makeTab()
+    const tabB = makeTab()
+    await signedIn(server, tabA)
+    const release = server.hold('refresh')
+    tabB.start('/wards', '')
+    await flush()
+    const logout = tabA.logout()
+    expect(tabB.getState()).toEqual({ status: 'signedOut', notice: 'loggedOut' })
+    release()
+    await logout
+    expect(tabB.getState()).toEqual({ status: 'signedOut', notice: 'loggedOut' })
+    expect(server.cookie).toBeNull()
+    expect(server.completed.slice(-2)).toEqual(['refresh', 'logout'])
+  })
+
+  it('still calls server logout when cross-tab notification fails', async () => {
+    const server = new FakeAuthServer()
+    const manager = new SessionManager({
+      auth: server.auth, lock: createInTabLock(), fetch: server.fetch, origin: ORIGIN, redirect: vi.fn(),
+      logoutChannel: { publish: () => { throw new Error('channel unavailable') }, subscribe: () => () => undefined },
+    })
+    await signedIn(server, manager)
+    await manager.logout()
+    expect(server.cookie).toBeNull()
+    expect(manager.getState()).toEqual({ status: 'signedOut', notice: 'loggedOut' })
+  })
+
   it('waits for an in-flight refresh, does not abort it, then revokes the newest cookie', async () => {
     const server = new FakeAuthServer()
     const manager = managerFor(server)
@@ -319,6 +386,39 @@ describe('logout', () => {
     release()
     await logout
     expect(server.calls).toEqual(['refresh', 'logout'])
+  })
+})
+
+describe('logout broadcast transport', () => {
+  afterEach(() => vi.unstubAllGlobals())
+
+  it('sends only a logout marker and ignores unrelated payloads', () => {
+    const postMessage = vi.fn()
+    let receive!: (event: MessageEvent<unknown>) => void
+    const removeEventListener = vi.fn()
+    vi.stubGlobal('BroadcastChannel', class {
+      postMessage = postMessage
+      addEventListener(_type: string, listener: typeof receive) { receive = listener }
+      removeEventListener = removeEventListener
+    })
+    const channel = createLogoutChannel()!
+    const listener = vi.fn()
+    const unsubscribe = channel.subscribe(listener)
+    channel.publish()
+    expect(postMessage).toHaveBeenCalledExactlyOnceWith({ type: 'logout' })
+    for (const data of [null, 'logout', { type: 'login' }, { type: 'logout', token: 'fictional' }]) {
+      receive(new MessageEvent('message', { data }))
+    }
+    expect(listener).not.toHaveBeenCalled()
+    receive(new MessageEvent('message', { data: { type: 'logout' } }))
+    expect(listener).toHaveBeenCalledTimes(1)
+    unsubscribe()
+    expect(removeEventListener).toHaveBeenCalledWith('message', receive)
+  })
+
+  it('keeps the existing server-only logout behavior when messaging is unavailable', () => {
+    vi.stubGlobal('BroadcastChannel', undefined)
+    expect(createLogoutChannel()).toBeUndefined()
   })
 })
 

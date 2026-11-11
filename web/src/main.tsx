@@ -7,6 +7,7 @@ import { AppRoutes } from './App'
 import { SessionProvider } from './session/SessionContext'
 import { SessionManager } from './session/SessionManager'
 import { createSessionLock } from './session/sessionLock'
+import { createLogoutChannel } from './session/logoutChannel'
 import './styles.css'
 
 const manager = new SessionManager({
@@ -15,6 +16,7 @@ const manager = new SessionManager({
   fetch: browserFetch,
   origin: window.location.origin,
   redirect: (url) => window.location.assign(url),
+  logoutChannel: createLogoutChannel(),
 })
 // Decided before the first render so the callback page never races a restore refresh.
 manager.start(window.location.pathname, window.location.search)

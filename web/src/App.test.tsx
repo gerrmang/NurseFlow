@@ -1,4 +1,4 @@
-import { act, render, screen, waitFor } from '@testing-library/react'
+import { act, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { StrictMode } from 'react'
 import { MemoryRouter, useLocation } from 'react-router'
@@ -77,6 +77,30 @@ describe('routing and session guard', () => {
   it('explains what to do when the user has no ward yet', async () => {
     setup('/wards', (server) => server.signInAs(USER_A))
     expect(await screen.findByText('아직 소속된 병동이 없어요.')).toBeInTheDocument()
+  })
+
+  it('distinguishes same-named wards by hospital and accepts legacy null or missing hospitals', async () => {
+    setup('/wards', (server) => {
+      server.signInAs(USER_A)
+      const base = server.fetch
+      vi.spyOn(server, 'fetch').mockImplementation(async (input, init) => {
+        if (input.endsWith('/wards')) return json(200, { items: [
+          { wardId: 'a', wardName: '가상 병동', hospitalName: '가상 병원 가', roles: ['WARD_ADMIN'] },
+          { wardId: 'b', wardName: '가상 병동', hospitalName: '가상 병원 나', roles: ['WARD_MEMBER'] },
+          { wardId: 'c', wardName: '기존 병동', hospitalName: null, roles: ['WARD_MEMBER'] },
+          { wardId: 'd', wardName: '이전 병동', roles: ['WARD_MEMBER'] },
+        ] })
+        return base(input, init)
+      })
+    })
+    const list = await screen.findByRole('list', { name: '소속 병동' })
+    const wards = within(list).getAllByRole('listitem')
+    expect(wards).toHaveLength(4)
+    expect(wards[0]).toHaveTextContent('가상 병동가상 병원 가')
+    expect(wards[1]).toHaveTextContent('가상 병동가상 병원 나')
+    expect(wards[2]).toHaveTextContent('기존 병동')
+    expect(wards[3]).toHaveTextContent('이전 병동')
+    expect(list).not.toHaveTextContent(/null|undefined/)
   })
 
   it('shows a ward loading error with a working retry', async () => {
@@ -164,7 +188,7 @@ describe('Kakao callback page', () => {
 
   it('shows the login-state error when the exchange is rejected', async () => {
     setup('/auth/kakao/callback?code=stale&state=stale')
-    expect(await screen.findByText(/로그인 시간이 지났거나 다른 창에서 시작된 로그인이에요/)).toBeInTheDocument()
+    expect(await screen.findByText(/다른 로그인 창을 닫고 이 창에서 다시 시도해 주세요/)).toBeInTheDocument()
     expect(location()).toBe('/login')
   })
 

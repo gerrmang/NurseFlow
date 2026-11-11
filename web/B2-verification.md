@@ -351,3 +351,15 @@
 - GitHub API로 [Verify 42826773185](https://github.com/gerrmang/NurseFlow/actions/runs/42826773185)의 completed/success와 Backend tests·Android debug build·Web checks 각각의 성공을 확인했다. 이는 위 구현 head의 결과이며 후속 문서 커밋까지 포함한 검사로 표현하지 않는다.
 - A5 PR #37 병합 커밋 `bdc96a6`은 반영됐고, A 진단·초대 계약 후속 `be6d78c`는 별도 브랜치에 남아 있다. Draft 사유와 dev 기준 `KOE010` 재확인 대기를 유지한다.
 - 이번 작업은 diff·타입 참조·PR·CI 메타데이터 확인과 문서 정정이다. 앱·서버·브라우저 검사는 재실행하지 않았으며 전체 코드 리뷰나 독립 승인으로 주장하지 않는다. 문서 커밋·푸시 뒤 최종 head의 CI를 별도로 확인한다.
+
+## A 리뷰 수정·검증 (2026-11-11, Codex)
+
+- 대상: [A 리뷰 5846276341](https://github.com/gerrmang/NurseFlow/pull/39#pullrequestreview-5846276341), [보완 리뷰 5852145291](https://github.com/gerrmang/NurseFlow/pull/39#pullrequestreview-5852145291), 기준 head `00724e4`.
+- P3 병원명: 병동 목록에 nullable `hospitalName`을 표시한다. 같은 이름 병동 두 개를 병원명으로 구분하고 null·필드 생략인 기존 병동도 정상 표시하는 컴포넌트 검사를 추가했다.
+- P3 Web Locks: 지원 접속 주소를 HTTPS 또는 이 PC의 localhost로 명시했다. 미지원 환경의 대체 잠금은 단일 탭에만 적용되며 다중 탭 인증을 지원하지 않는다고 README에 기록했다.
+- P3 다른 탭 로그아웃: BroadcastChannel에는 `{type:'logout'}`만 전달한다. 수신 탭의 메모리 토큰과 화면을 바로 정리하고 epoch로 진행 중 응답을 폐기한다. 서버 logout은 원래 탭에서만 기존 공통 잠금 안에서 실행한다. 채널 오류·미지원은 서버 logout을 막지 않는다. 미지원 브라우저는 기존 다음 refresh 시 정리하는 제한이 남는다.
+- P4 Referer: 메타 정책을 `no-referrer`로 바꿨다. 최초 콜백 URL의 호스트 접근 로그는 별도 배포 설정으로 쿼리를 제외해야 한다고 README에 남겼다. 운영 호스트 설정·실제 브라우저 네트워크 검사는 이번에 실행하지 않았다.
+- P4 동시 로그인: 다른 로그인 창을 닫고 한 창에서 다시 시작하도록 `INVALID_LOGIN_STATE` 안내를 구체화하고 콜백 오류 화면 검사에 반영했다.
+- P4 개발 의존성: WSL에서 `npm audit --package-lock-only`를 다시 실행했다. moderate 10개 패키지(ESLint·typescript-eslint·minimatch 체인), high/critical 0이며 `--omit=dev`는 0건이다. 이전 moderate 1건은 당시 결과로 보존한다. 현재 audit이 제안하는 수정은 ESLint 9 등 주 버전 변경/하향이며 `npm outdated`에서 확인한 typescript-eslint 최신 `8.72.2`도 권고 영향 범위에 있다. `--force`·임의 override·무관한 의존성 업그레이드는 적용하지 않았고 호환 수정판 추적은 후속으로 유지한다.
+- 검증: Windows `typecheck`·`lint` 성공. 저장소 밖 WSL 사본 `~/nf-b2-review-20261111`에서 Linux Node v24.22.2로 `npm ci` → `api:check` → `lint` → `typecheck` → `test -- --run` → `build` 모두 성공. 테스트 **55/55**(기존 49+신규 6), 빌드 성공.
+- 신규 세션 검사: 유효 access token이 남은 다른 탭 즉시 로그아웃, 진행 중 refresh의 늦은 응답 폐기와 서버 폐기 순서, 알림 실패 시 서버 logout 성공, 채널의 단순 신호·잘못된 메시지 무시·미지원 처리. 실제 브라우저·Kakao·서버 검증은 이번 수정 후 재실행하지 않았다. API·DB·서버 코드 변경 없음. 최종 CI와 수정 후 재리뷰는 푸시 뒤 확인한다.

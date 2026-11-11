@@ -81,7 +81,10 @@ export function WardsPage({ user }: { user: SessionUser }) {
         <ul className="ward-list" aria-label="소속 병동">
           {load.wards.map((ward) => (
             <li key={ward.wardId} className="card">
-              <span className="ward-name">{ward.wardName}</span>
+              <div>
+                <span className="ward-name">{ward.wardName}</span>
+                {ward.hospitalName && <div className="notice">{ward.hospitalName}</div>}
+              </div>
               <span className="roles">
                 {ward.roles.map((role) => (
                   <span key={role} className="badge">
