@@ -29,7 +29,7 @@
 | A3 병원 검색 API | `feat/hospital-search` | #35 | `dev` 병합 완료 (2026-11-10, 스쿼시 병합 커밋 `23af850`) | 병합 전 `./gradlew test --offline` 134건 통과, CI 통과. 실제 2026.9. 파일 79,899곳 적재 0.7초, 검색 15~40ms | 없음 |
 | A4 병동 생성 | `feat/ward-self-create` | #36 | `dev` 병합 완료 (2026-11-10, 스쿼시 병합 커밋 `6a2cf29`) | 2026-11-10 `./gradlew test --offline` 138건 통과(건너뜀 4). 같은 키 동시 요청 테스트는 중복 키 처리 제거 변이 3/3 실패로 검출력 확인. 이전 스키마 H2에 schema.sql 두 번 적용 테스트 통과 | 없음 |
 | A5 경력·팀 내 순서 | `feat/staff-admin-career-adjust` | [#37](https://github.com/gerrmang/NurseFlow/pull/37) | `dev` 병합 완료. GitHub 메타데이터와 `origin/dev`에서 `bdc96a6` 확인 | 기존 검증 기록은 아래 보존. 이번 문서 갱신에서 A5 검사를 재실행하지 않음 | 없음 |
-| A6 구성원 관리 | `feat/membership-admin` (`/private/tmp/NurseFlow-a6`) | PR 개설(최신 dev `163e9ff` 반영) | 구현·Codex 리뷰 완료. 구성원 목록·관리자 지정/해제·비활성화·재활성화, 마지막 활성 관리자 보호(결정 4, 복구 절차 미구현), 비활성 구성원 즉시 접근 차단. dev 반영 후 두 가지 수정: 구성원 비활성화 시 연결 간호사의 팀 순번 정리(`7dae5c0`), 잠금 대기 중 권한 해제된 관리자의 변경 차단 `WardService.lockAsAdmin`과 초대 재발급·수락 잠금 순서 정정(`b1def48`) | 2026-11-11 `./gradlew test --offline` 193건 중 통과 188, 건너뜀 5, 실패 0. 순번 정리 제거 시 새 테스트 6건 실패, 잠금 뒤 재확인 제거 시 경합 테스트 2건 실패로 검출력 확인 | A8 병합 시 근무 유형 쓰기도 `lockAsAdmin` 사용 필요 |
+| A6 구성원 관리 | `feat/membership-admin` (`/private/tmp/NurseFlow-a6`) | PR 개설(최신 dev `163e9ff` 반영) | 구현·Codex 리뷰 완료. 구성원 목록·관리자 지정/해제·비활성화·재활성화, 마지막 활성 관리자 보호(결정 4, 복구 절차 미구현), 비활성 구성원 즉시 접근 차단. dev 반영 후 두 가지 수정: 구성원 비활성화 시 연결 간호사의 팀 순번 정리(`7dae5c0`), 잠금 대기 중 권한 해제된 관리자의 변경 차단 `WardService.lockAsAdmin`과 초대 재발급·수락 잠금 순서 정정(`b1def48`) | 2026-11-11 `./gradlew test --offline` 196건 중 통과 191, 건너뜀 5, 실패 0. PR #41 리뷰 P2(실행 중 자동배치 취소가 병동 잠금에 막힘) 수정 `4ca4e0d`, 재리뷰 P2·P3(취소와 결과 반영·조기 실패 경합, 테스트 동기화) 수정 `2b5640d`·이번 커밋. 순번 정리 제거 시 새 테스트 6건 실패, 잠금 뒤 재확인 제거 시 경합 테스트 2건 실패로 검출력 확인 | A8 병합 시 근무 유형 쓰기도 `lockAsAdmin` 사용 필요 |
 | A7 이후 | 해당 없음 | 미개설 | 미착수. A7은 A6 병합 대기. A8 `feat/shift-type-settings`는 구현·리뷰 완료, A6 다음에 PR | 해당 없음 | 없음 |
 
 ## 리뷰 상태
@@ -232,6 +232,9 @@ Claude와 Codex가 같은 진행 기록을 사용한다. PR 또는 정기 리뷰
 | `/private/tmp/NurseFlow-a6` | `feat/membership-admin` | `da361f61d44b0ce4efc6ca0d171aa483ebf267c0` | 미커밋 변경 없음 | 2026-11-10 | Claude | 위 P3 수정: 순서 강제 테스트, 변이 3/3 검출 |
 | `/private/tmp/NurseFlow-a6` | `feat/membership-admin` | `7dae5c07d56d03e93db3a3e2ab5d6836f60a8783` | 미커밋 변경 없음 | 2026-11-11 | Codex | dev(A5) 반영 후 순번 정리 수정 재리뷰. REQUEST CHANGES: P2 관리자 쓰기 경로가 병동 잠금 전에만 권한 확인(잠금 대기 중 권한 해제 시 변경 완료). 순번 정리·Bean 의존 순환·활성 필터는 문제없음 |
 | `/private/tmp/NurseFlow-a6` | `feat/membership-admin` | `b1def48214ea374fe51f0d59424b844a1e08a946` | 미커밋 변경 없음 | 2026-11-11 | Codex | 위 P2 수정 재리뷰. APPROVE, 지적 없음. 관리자 쓰기 경로 전수 확인, 초대 수락 잠금 순서·자동생성 실패 처리·경합 테스트 확인 |
+| GitHub PR #41 리뷰 | `feat/membership-admin` | `91557be936c4caf08a08527b8cc38d9e642f598b` | 해당 없음(PR diff 기준) | 2026-11-11 | hyen11 | CHANGES_REQUESTED. P2 회귀: `b1def48`에서 자동배치 취소가 병동 잠금을 먼저 잡아, 병동 잠금을 쥔 실행 중 생성을 취소하지 못함 |
+| `/private/tmp/NurseFlow-a6` | `feat/membership-admin` | `4ca4e0daec2906120794f0bc3fb6503c7af8e0e6` | 미커밋 변경 없음 | 2026-11-11 | Codex | 위 P2 수정 재리뷰. P2(dev에 있던 경합): 마지막 취소 확인 뒤 커밋된 취소가 RUNNING으로 응답되고 결과가 반영됨 |
+| `/private/tmp/NurseFlow-a6` | `feat/membership-admin` | `2b5640d97320b689c7d15464cd9718f9accb65be` | 미커밋 변경 없음 | 2026-11-11 | Codex | 결정 직전 작업 행 잠금 재리뷰. P1/P2 없음. P3 조기 실패 경로가 접수된 취소를 FAILED로 덮어씀, P3 테스트의 sleep 동기화 |
 
 이 문서는 Claude와 Codex가 각 기능 단위 작업 후 진행 결과를 함께 기록하는 단일 공유 현황이다.
 
