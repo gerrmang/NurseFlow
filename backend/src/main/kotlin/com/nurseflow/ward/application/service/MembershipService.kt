@@ -34,10 +34,7 @@ class MembershipService(
     @Transactional
     fun update(wardId: UUID, userId: UUID, command: UpdateMembershipCommand, actor: String): WardMemberResult {
         if (command.admin == null && command.active == null) throw BusinessException(ErrorCode.INVALID_REQUEST)
-        wards.requireAdmin(wardId, actor)
-        if (!repo.lockWard(wardId)) throw BusinessException(ErrorCode.WARD_NOT_FOUND)
-        // A change committed while this request waited for the lock may have removed the caller's own access.
-        wards.requireAdmin(wardId, actor)
+        wards.lockAsAdmin(wardId, actor)
 
         val subject = userId.toString()
         val rows = repo.memberRows(wardId, subject)

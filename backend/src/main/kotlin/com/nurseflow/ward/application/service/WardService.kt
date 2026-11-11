@@ -51,6 +51,18 @@ class WardService(
         if (WardRole.WARD_ADMIN.name !in roles) throw BusinessException(ErrorCode.WARD_ADMIN_REQUIRED)
     }
 
+    /**
+     * Entry point of every admin write: checks the role, takes the ward lock, then checks again. A membership
+     * change committed while this request waited for the lock (A6) must not let a revoked or deactivated admin
+     * finish. Lock order stays ward -> account -> target row.
+     */
+    @Transactional
+    fun lockAsAdmin(wardId: UUID, subject: String) {
+        requireAdmin(wardId, subject)
+        if (!repo.lockWard(wardId)) throw BusinessException(ErrorCode.WARD_NOT_FOUND)
+        requireAdmin(wardId, subject)
+    }
+
     @Transactional(readOnly = true)
     fun requireMember(wardId: UUID, subject: String) {
         if (repo.rolesIn(wardId, subject).isEmpty()) throw BusinessException(ErrorCode.WARD_NOT_FOUND)

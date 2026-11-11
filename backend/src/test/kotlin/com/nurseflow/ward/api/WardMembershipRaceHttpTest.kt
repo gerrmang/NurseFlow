@@ -106,4 +106,27 @@ class WardMembershipRaceHttpTest : ApiTestBase() {
         assertEquals(true, jdbc.queryForObject(
             "SELECT active FROM ward_memberships WHERE ward_id=? AND subject=?", Boolean::class.java, wardId, c.toString()))
     }
+
+    @Test
+    fun `an admin revoked while a staff change waits for the lock cannot finish it`() {
+        val wardId = insertWard("가상 병동")
+        val (a, aToken) = userToken("가상 관리자 A")
+        val (b, bToken) = userToken("가상 관리자 B")
+        grant(wardId, a, "WARD_ADMIN")
+        grant(wardId, b, "WARD_ADMIN")
+        grant(wardId, b, "WARD_MEMBER")
+        gate.arm()
+
+        val revokeB = patch(wardId, b, mapOf("admin" to false), aToken)
+        assertTrue(gate.firstLocked.await(10, TimeUnit.SECONDS), "A should hold the ward lock")
+        val bCreates = CompletableFuture.supplyAsync { http.post("/api/v1/wards/$wardId/teams", mapOf("name" to "가상 팀"), bToken) }
+        assertTrue(gate.secondArrived.await(10, TimeUnit.SECONDS), "B's staff change should reach the ward lock")
+        gate.release.countDown()
+
+        assertEquals(200, revokeB.get(10, TimeUnit.SECONDS).status)
+        val second = bCreates.get(10, TimeUnit.SECONDS)
+        assertEquals(403, second.status, second.body)
+        assertEquals("WARD_ADMIN_REQUIRED", second.code)
+        assertEquals(0, jdbc.queryForObject("SELECT COUNT(*) FROM ward_teams WHERE ward_id=?", Int::class.java, wardId))
+    }
 }

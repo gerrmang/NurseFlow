@@ -18,7 +18,6 @@ import com.nurseflow.staff.persistence.entity.DbStaff
 import com.nurseflow.staff.persistence.entity.DbTeam
 import com.nurseflow.staff.persistence.repository.StaffJdbcRepository
 import com.nurseflow.ward.application.service.WardService
-import com.nurseflow.ward.persistence.repository.WardJdbcRepository
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.time.Instant
@@ -34,7 +33,6 @@ import java.util.UUID
 class StaffService(
     private val repo: StaffJdbcRepository,
     private val wards: WardService,
-    private val wardRepo: WardJdbcRepository,
     private val audit: AuditLog,
 ) {
     // ── Teams ──
@@ -47,7 +45,7 @@ class StaffService(
 
     @Transactional
     fun createTeam(wardId: UUID, name: String, sortOrder: Int?, actor: String): TeamResult {
-        wards.requireAdmin(wardId, actor)
+        wards.lockAsAdmin(wardId, actor)
         val clean = name.trim()
         requireUniqueTeamName(wardId, clean, except = null)
         val team = DbTeam(UUID.randomUUID(), wardId, clean, sortOrder ?: repo.nextTeamOrder(wardId), true)
@@ -58,7 +56,7 @@ class StaffService(
 
     @Transactional
     fun updateTeam(wardId: UUID, teamId: UUID, name: String, sortOrder: Int?, actor: String): TeamResult {
-        wards.requireAdmin(wardId, actor)
+        wards.lockAsAdmin(wardId, actor)
         val team = repo.findTeam(wardId, teamId) ?: throw BusinessException(ErrorCode.TEAM_NOT_FOUND)
         val clean = name.trim()
         requireUniqueTeamName(wardId, clean, except = teamId)
@@ -70,9 +68,8 @@ class StaffService(
 
     @Transactional
     fun deleteTeam(wardId: UUID, teamId: UUID, actor: String) {
-        wards.requireAdmin(wardId, actor)
         // Same lock as moving a nurse into a team, so no one can join a team while it is being deleted.
-        lockWard(wardId)
+        wards.lockAsAdmin(wardId, actor)
         val team = repo.findTeam(wardId, teamId) ?: throw BusinessException(ErrorCode.TEAM_NOT_FOUND)
         if (repo.activeNursesInTeam(teamId) > 0) throw BusinessException(ErrorCode.TEAM_NOT_EMPTY)
         // Inactive members leave the team too; otherwise reactivating one later would yield an active nurse
@@ -96,7 +93,7 @@ class StaffService(
     /** Takes effect immediately: stages are computed from confirmed inputs and the current policy. */
     @Transactional
     fun updateCareerPolicy(wardId: UUID, thresholds: List<Int>, ranks: List<String>, actor: String): CareerPolicyResult {
-        wards.requireAdmin(wardId, actor)
+        wards.lockAsAdmin(wardId, actor)
         val cleanRanks = ranks.map { it.trim() }
         if (!CareerPolicy.isValid(thresholds, cleanRanks)) throw BusinessException(ErrorCode.INVALID_CAREER_POLICY)
         repo.saveCareerPolicy(wardId, thresholds, cleanRanks, actor, Instant.now())
@@ -129,10 +126,9 @@ class StaffService(
 
     @Transactional
     fun createStaff(wardId: UUID, command: StaffInputCommand, actor: String): StaffResult {
-        wards.requireAdmin(wardId, actor)
         // Team membership changes take the ward lock that team ordering holds, so a reorder never
         // validates against a member set that changes before it is saved.
-        lockWard(wardId)
+        wards.lockAsAdmin(wardId, actor)
         command.teamId?.let { repo.findTeam(wardId, it) ?: throw BusinessException(ErrorCode.TEAM_NOT_FOUND) }
         val id = UUID.randomUUID()
         repo.insertStaff(id, wardId, command.displayName.trim(), command.qualifications.distinct(), command.active, command.teamId)
@@ -142,10 +138,9 @@ class StaffService(
 
     @Transactional
     fun updateStaff(wardId: UUID, nurseId: UUID, command: StaffInputCommand, actor: String): StaffResult {
-        wards.requireAdmin(wardId, actor)
         // Always under the ward lock and read after it: deciding whether to lock from an unlocked read let a
         // concurrent activation + reorder slip between the read and this write (duplicate team positions).
-        lockWard(wardId)
+        wards.lockAsAdmin(wardId, actor)
         val current = requireStaff(wardId, nurseId)
         repo.updateStaff(nurseId, command.displayName.trim(), command.qualifications.distinct(), command.active)
         if (!current.active && command.active && current.teamId != null && repo.findTeam(wardId, current.teamId) == null) {
@@ -175,8 +170,7 @@ class StaffService(
     /** Only admins assign teams; nurses cannot move themselves. `null` removes the team. */
     @Transactional
     fun assignTeam(wardId: UUID, nurseId: UUID, teamId: UUID?, actor: String): StaffResult {
-        wards.requireAdmin(wardId, actor)
-        lockWard(wardId)
+        wards.lockAsAdmin(wardId, actor)
         val newTeam = teamId?.let { repo.findTeam(wardId, it) ?: throw BusinessException(ErrorCode.TEAM_NOT_FOUND) }
         val nurse = requireStaff(wardId, nurseId)
         val context = context(wardId)
@@ -202,9 +196,8 @@ class StaffService(
      */
     @Transactional
     fun reorderTeam(wardId: UUID, teamId: UUID, nurseIds: List<UUID>, actor: String): List<StaffResult> {
-        wards.requireAdmin(wardId, actor)
         if (nurseIds.toSet().size != nurseIds.size) throw BusinessException(ErrorCode.INVALID_REQUEST)
-        lockWard(wardId)
+        wards.lockAsAdmin(wardId, actor)
         // Checked after the lock: a team deleted meanwhile must not accept an (empty) order.
         repo.findTeam(wardId, teamId) ?: throw BusinessException(ErrorCode.TEAM_NOT_FOUND)
         val members = repo.activeTeamMembers(teamId).associateBy { it.id }
@@ -225,7 +218,7 @@ class StaffService(
     /** Senior eligibility is set by the admin only (decision 11); the stage override replaces the computed stage. */
     @Transactional
     fun updateRosterSettings(wardId: UUID, nurseId: UUID, input: RosterSettingsInput, actor: String): StaffResult {
-        wards.requireAdmin(wardId, actor)
+        wards.lockAsAdmin(wardId, actor)
         // Row lock: concurrent saves for one nurse must not both log the same before -> after change.
         val nurse = repo.lockStaff(wardId, nurseId) ?: throw BusinessException(ErrorCode.NURSE_NOT_FOUND)
         val context = context(wardId)
@@ -251,7 +244,7 @@ class StaffService(
     /** Confirms what the nurse submitted. Already-confirmed values are a no-op. */
     @Transactional
     fun confirmProfile(wardId: UUID, nurseId: UUID, actor: String): StaffResult {
-        wards.requireAdmin(wardId, actor)
+        wards.lockAsAdmin(wardId, actor)
         // Row lock: the previous values written to the history must be the ones this change replaces.
         val nurse = repo.lockStaff(wardId, nurseId) ?: throw BusinessException(ErrorCode.NURSE_NOT_FOUND)
         val start = nurse.careerStartedOn ?: throw BusinessException(ErrorCode.PROFILE_NOT_SUBMITTED)
@@ -270,7 +263,7 @@ class StaffService(
     /** Admin correction: the admin's own values are confirmed immediately. */
     @Transactional
     fun setProfileAsAdmin(wardId: UUID, nurseId: UUID, input: ProfileInput, actor: String): StaffResult {
-        wards.requireAdmin(wardId, actor)
+        wards.lockAsAdmin(wardId, actor)
         // Row lock: concurrent edits are recorded as O -> A -> B, and a same-value save becomes a no-op.
         val nurse = repo.lockStaff(wardId, nurseId) ?: throw BusinessException(ErrorCode.NURSE_NOT_FOUND)
         val context = context(wardId)
@@ -353,10 +346,6 @@ class StaffService(
         if (hospitalJoinedOn.isAfter(context.today) || hospitalJoinedOn.year < 1950) {
             throw BusinessException(ErrorCode.INVALID_HOSPITAL_JOIN_MONTH)
         }
-    }
-
-    private fun lockWard(wardId: UUID) {
-        if (!wardRepo.lockWard(wardId)) throw BusinessException(ErrorCode.WARD_NOT_FOUND)
     }
 
     /**

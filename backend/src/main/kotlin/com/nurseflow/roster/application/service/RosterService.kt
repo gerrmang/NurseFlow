@@ -56,6 +56,7 @@ class RosterService(
         parseMonth(request.month)
         requireAdmin(wardId, subject)
         if (!repo.lockWard(wardId)) throw BusinessException(ErrorCode.WARD_NOT_FOUND)
+        requireAdmin(wardId, subject)
         val action = "create-roster:$wardId"
         replay(idempotencyKey, action, request, RosterView::class.java)?.let { return it }
         if (repo.draftExistsForMonth(wardId, request.month)) {
@@ -296,7 +297,10 @@ class RosterService(
     fun cancelGeneration(jobId: UUID, idempotencyKey: UUID, subject: String): GenerationJob {
         val rosterId = repo.jobRosterId(jobId)
             ?: throw BusinessException(ErrorCode.GENERATION_JOB_NOT_FOUND)
-        visibleToAdmin(rosterId, subject)
+        val roster = visibleToAdmin(rosterId, subject)
+        // Ward lock before the job row (same order as generation), then the admin check again.
+        if (!repo.lockWard(roster.wardId)) throw BusinessException(ErrorCode.WARD_NOT_FOUND)
+        requireAdmin(roster.wardId, subject)
         val action = "cancel-generation:$jobId"
         replay(idempotencyKey, action, jobId, GenerationJob::class.java)?.let { return it }
         repo.lockGenerationJob(jobId)
@@ -539,6 +543,8 @@ class RosterService(
     private fun lockAuthorizedRoster(id: UUID, subject: String): DbRoster {
         val roster = visibleToAdmin(id, subject)
         if (!repo.lockWard(roster.wardId)) throw BusinessException(ErrorCode.WARD_NOT_FOUND)
+        // A membership change committed while this request waited must not let a revoked admin finish.
+        requireAdmin(roster.wardId, subject)
         repo.lockRoster(id)
         return repo.findRoster(id)!!
     }
