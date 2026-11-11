@@ -9,7 +9,6 @@ import com.nurseflow.roster.persistence.repository.RosterJdbcRepository
 import org.junit.jupiter.api.AfterEach
 import com.nurseflow.common.error.BusinessException
 import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -46,6 +45,8 @@ class GenerationCancelWhileRunningTest @Autowired constructor(
     class Gate {
         @Volatile var armed = false
         @Volatile var armedAtDecision = false
+        @Volatile var holding = false
+        @Volatile var cancelArrived = CountDownLatch(1)
         @Volatile var paused = CountDownLatch(1)
         @Volatile var release = CountDownLatch(1)
     }
@@ -63,11 +64,15 @@ class GenerationCancelWhileRunningTest @Autowired constructor(
 
         /** The generation's own lock before applying its result is the first call once armed. */
         override fun lockGenerationJob(jobId: UUID) {
+            // While the generation holds the row, the next caller is the cancel reaching the same lock.
+            if (gate.holding) gate.cancelArrived.countDown()
             super.lockGenerationJob(jobId)
             if (gate.armedAtDecision) {
                 gate.armedAtDecision = false
+                gate.holding = true
                 gate.paused.countDown()
                 gate.release.await(10, TimeUnit.SECONDS)
+                gate.holding = false
             }
         }
     }
@@ -98,6 +103,7 @@ class GenerationCancelWhileRunningTest @Autowired constructor(
     fun open() {
         gate.armed = false
         gate.armedAtDecision = false
+        gate.holding = false
         gate.release.countDown()
     }
 
@@ -136,6 +142,7 @@ class GenerationCancelWhileRunningTest @Autowired constructor(
         assertTrue(service.markGenerationRunning(job.jobId))
         gate.paused = CountDownLatch(1)
         gate.release = CountDownLatch(1)
+        gate.cancelArrived = CountDownLatch(1)
         gate.armedAtDecision = true
 
         val running = CompletableFuture.runAsync { service.processGeneration(job.jobId) }
@@ -143,8 +150,8 @@ class GenerationCancelWhileRunningTest @Autowired constructor(
         val cancel = CompletableFuture.supplyAsync {
             runCatching { service.cancelGeneration(job.jobId, UUID.randomUUID(), admin) }
         }
-        Thread.sleep(300)
-        assertFalse(cancel.isDone, "the cancel must wait for the generation's decision instead of reporting RUNNING")
+        assertTrue(gate.cancelArrived.await(10, TimeUnit.SECONDS), "the cancel should reach the job row lock")
+        // Released only now: had the cancel not waited for the generation's decision, it would have answered RUNNING.
         gate.release.countDown()
         running.get(10, TimeUnit.SECONDS)
 
@@ -153,6 +160,21 @@ class GenerationCancelWhileRunningTest @Autowired constructor(
         val finished = service.getGenerationJob(job.jobId, admin)
         assertTrue(finished.status in setOf("COMPLETED", "PARTIAL"), finished.status)
         assertEquals(draft.revision + 1, service.getRoster(draft.rosterId, admin).revision)
+    }
+
+    @Test
+    fun `a cancel accepted before an early failure ends the job as cancelled`() {
+        val draft = draft()
+        val job = service.startGeneration(draft.rosterId, tag(draft.rosterId, draft.revision), UUID.randomUUID(),
+            StartGenerationRequest(preserveLockedAssignments = true), admin)
+        assertTrue(service.markGenerationRunning(job.jobId))
+        assertEquals("RUNNING", service.cancelGeneration(job.jobId, UUID.randomUUID(), admin).status)
+        // The draft changed after the job started: the generation stops on the stale revision.
+        jdbc.update("UPDATE rosters SET revision=revision+1 WHERE roster_id=?", draft.rosterId)
+
+        service.processGeneration(job.jobId)
+
+        assertEquals("CANCELLED", service.getGenerationJob(job.jobId, admin).status)
     }
 
     private fun draft(): com.nurseflow.roster.application.model.RosterView {

@@ -329,9 +329,8 @@ class RosterService(
         val requestedBy = repo.generationRequestedBy(jobId)
         val roster = lockAuthorizedRoster(initial.rosterId, requestedBy)
         if (roster.status != "DRAFT" || roster.revision != initial.sourceRosterRevision) {
-            finishGeneration(
-                jobId, "FAILED", null, null,
-                listOf(RuleDiagnostic("STALE_ROSTER_REVISION", "HARD", "근무표가 변경되어 자동배치를 적용하지 않았습니다.")),
+            finishFailedUnlessCancelled(
+                jobId, listOf(RuleDiagnostic("STALE_ROSTER_REVISION", "HARD", "근무표가 변경되어 자동배치를 적용하지 않았습니다.")),
             )
             return
         }
@@ -353,7 +352,7 @@ class RosterService(
             }
         }
         if (preexistingViolations.isNotEmpty()) {
-            finishGeneration(jobId, "FAILED", null, null, preexistingViolations.distinctBy { it.code to it.affectedDate })
+            finishFailedUnlessCancelled(jobId, preexistingViolations.distinctBy { it.code to it.affectedDate })
             return
         }
         val counts = preserved.groupingBy { it.nurseId!! }.eachCount().toMutableMap()
@@ -386,11 +385,7 @@ class RosterService(
                 break
             }
         }
-        // Lock the job row before deciding: a cancel either commits before this (and wins) or waits until this
-        // transaction ends and then finds the job finished. Without the lock a cancel landing after the last
-        // unlocked check was answered RUNNING while the result was still applied.
-        repo.lockGenerationJob(jobId)
-        if (cancelled || repo.generationCancelled(jobId)) {
+        if (cancelRequestedUnderJobLock(jobId) || cancelled) {
             finishGeneration(jobId, "CANCELLED", null, null, emptyList())
             return
         }
@@ -586,6 +581,23 @@ class RosterService(
         diagnostics = job.diagnosticsJson?.let { mapper.readValue(it, diagnosticList) } ?: emptyList(),
         finishedAt = job.finishedAt,
     )
+
+    /**
+     * Every final decision of a generation is taken under the job row lock: a cancel either commits before it
+     * (and wins) or waits until this transaction ends and then finds the job finished. Without the lock a cancel
+     * landing after the last unlocked check was answered RUNNING while the job still ended another way.
+     */
+    private fun cancelRequestedUnderJobLock(jobId: UUID): Boolean {
+        repo.lockGenerationJob(jobId)
+        return repo.generationCancelled(jobId)
+    }
+
+    private fun finishFailedUnlessCancelled(jobId: UUID, diagnostics: List<RuleDiagnostic>) =
+        if (cancelRequestedUnderJobLock(jobId)) {
+            finishGeneration(jobId, "CANCELLED", null, null, emptyList())
+        } else {
+            finishGeneration(jobId, "FAILED", null, null, diagnostics)
+        }
 
     private fun finishGeneration(
         jobId: UUID, status: String, resultRevision: Int?,
