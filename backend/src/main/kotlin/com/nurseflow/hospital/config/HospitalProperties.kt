@@ -11,11 +11,15 @@ data class HospitalProperties(val hira: Hira = Hira(), val dataset: Dataset = Da
     /**
      * Local copy of 건강보험심사평가원 「전국 병의원 및 약국 현황」 (data.go.kr 15051059, updated quarterly).
      * `path` is the downloaded zip, or its `병원정보서비스` CSV; it is imported at startup when its content changed.
+     * Without `path`, `bundled` imports the copy shipped in the server (the `.csv.gz` file in resources
+     * `hospitals/`) unless a newer list is already imported, so a local or development server has the official
+     * list without any download.
      * `minRows` rejects a truncated file, and `maxDeactivationRatio` rejects a file that would deactivate more
      * than that share of the currently active list (real quarterly closures are about 1–2%).
      */
     data class Dataset(
         val path: String = "",
+        val bundled: Boolean = true,
         val minRows: Int = 10_000,
         val maxDeactivationRatio: Double = 0.1,
     )

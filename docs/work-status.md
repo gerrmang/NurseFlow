@@ -229,6 +229,7 @@ Claude와 Codex가 같은 진행 기록을 사용한다. PR 또는 정기 리뷰
 | `/private/tmp/NurseFlow-a5` | `feat/staff-admin-career-adjust` | `16258026d63b7a5921a50743772ebe4a22b4e006` | 미커밋 변경 없음 | 2026-11-10 | Claude | 무작위 불변 조건 테스트 추가, 이 테스트가 찾은 '삭제된 팀의 활성 간호사' 수정, 위 P3 수정, I4 계약 명시 |
 | `/private/tmp/NurseFlow-fix` | `fix/kakao-diagnostics-invite-contract` | `b2e8d04aa894c7d916f2927facba53616939cc5a` | 미커밋 변경 없음 | 2026-11-10 | Codex | B 후속 리뷰. Kakao 진단·초대 계약·README는 문제없음. P3(관측성) HIRA 클라이언트에도 401 본문 유실 가능성 |
 | `/private/tmp/NurseFlow-fix` | `fix/kakao-diagnostics-invite-contract` | `97f0bdd` | 미커밋 변경 없음 | 2026-11-10 | Claude | HIRA 클라이언트를 같은 HTTP 클라이언트로 맞추고 401·403 로그 고정 테스트 추가. **정정:** 커밋 `97f0bdd`의 메시지는 'HIRA 401 사유 코드가 비었다'고 적었으나 확인 결과 HIRA는 GET이라 원래 읽혔다(실제 결함 아님, 테스트는 이전 클라이언트에서도 통과). 본문 유실은 Kakao 토큰 교환 같은 POST의 401에서만 생긴다 |
+| `/private/tmp/NurseFlow-hospital` | `feat/hospital-bundled-list` | `163e9ff`(dev) 기반, 이 커밋 | 미커밋 변경 없음 | 2026-11-12 | Claude | 병원 목록 동봉(B 개발 환경 요청): 공식 파일에서 서버가 쓰는 5개 열만 gzip(2026.9., 79,899행, 약 2.5MB)으로 `src/main/resources/hospitals/`에 두고, 경로 미지정 시 시작할 때 같은·더 새 목록이 없으면 가져옴. 갱신 스크립트 `backend/scripts/extract_hospital_list.py`. `./gradlew test --offline` 179건 중 통과 174, 건너뜀 5, 실패 0. 더 새 목록 보호 조건 제거 시 테스트 실패 확인. PR #41 병합 뒤 PR 예정, Codex 리뷰 전 |
 
 이 문서는 Claude와 Codex가 각 기능 단위 작업 후 진행 결과를 함께 기록하는 단일 공유 현황이다.
 

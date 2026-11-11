@@ -5,6 +5,7 @@ import com.nurseflow.hospital.domain.HospitalSearchName
 import com.nurseflow.hospital.persistence.repository.HospitalJdbcRepository
 import com.nurseflow.hospital.persistence.repository.HospitalRow
 import org.slf4j.LoggerFactory
+import org.springframework.core.io.Resource
 import org.springframework.stereotype.Service
 import org.springframework.transaction.support.TransactionTemplate
 import java.io.BufferedReader
@@ -15,6 +16,7 @@ import java.nio.file.Path
 import java.security.MessageDigest
 import java.time.Instant
 import java.util.UUID
+import java.util.zip.GZIPInputStream
 import java.util.zip.ZipFile
 
 /** Outcome of one import. `imported` is false when the same file was already imported. */
@@ -58,6 +60,25 @@ class HospitalDatasetImporter(
         } else {
             Files.newInputStream(path).use { importCsv(it, versionOf(path.fileName.toString()), sha256) }
         }
+    }
+
+    /**
+     * Imports the list bundled with the server (the `.csv.gz` file in resources `hospitals/`, made by
+     * `backend/scripts/extract_hospital_list.py`) only when nothing newer is imported, so a restart without a
+     * dataset path never replaces a newer list from `path` with the older bundled one.
+     */
+    fun importBundledIfNewer(resource: Resource): HospitalImportResult {
+        val name = resource.filename ?: throw HospitalDatasetException("bundled hospital list has no file name")
+        val version = versionOf(name)
+        val bytes = resource.inputStream.use { it.readAllBytes() }
+        val sha256 = sha256(bytes)
+        // An import or a bundled file of unknown period never counts as older.
+        hospitals.latestImport(SOURCE)?.takeIf {
+            it.fileSha256 == sha256 || version == UNKNOWN_VERSION || it.version == UNKNOWN_VERSION || version <= it.version
+        }?.let {
+            return HospitalImportResult(imported = false, version = it.version)
+        }
+        return GZIPInputStream(bytes.inputStream()).use { importCsv(it, version, sha256) }
     }
 
     private fun importCsv(input: InputStream, version: String, sha256: String): HospitalImportResult {
@@ -126,11 +147,12 @@ class HospitalDatasetImporter(
         private val REQUIRED_COLUMNS = listOf(ID, NAME, CATEGORY_CODE, CATEGORY_NAME, ADDRESS)
         private val CP949: Charset = Charset.forName("MS949")
         private const val BATCH = 1_000
+        private const val UNKNOWN_VERSION = "unknown"
         private val VERSION = Regex("\\((\\d{4})\\.(\\d{1,2})\\.?\\)")
 
         /** "1.병원정보서비스(2026.9.).csv" → "2026-09"; files without a period are versioned "unknown". */
         internal fun versionOf(fileName: String): String =
-            VERSION.find(fileName)?.let { "${it.groupValues[1]}-${it.groupValues[2].padStart(2, '0')}" } ?: "unknown"
+            VERSION.find(fileName)?.let { "${it.groupValues[1]}-${it.groupValues[2].padStart(2, '0')}" } ?: UNKNOWN_VERSION
 
         private fun sha256(path: Path): String {
             val digest = MessageDigest.getInstance("SHA-256")
@@ -144,6 +166,9 @@ class HospitalDatasetImporter(
             }
             return digest.digest().joinToString("") { "%02x".format(it) }
         }
+
+        private fun sha256(bytes: ByteArray): String =
+            MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }
     }
 }
 
