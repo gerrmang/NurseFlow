@@ -5,13 +5,14 @@ import com.nurseflow.common.error.BusinessException
 import com.nurseflow.common.error.ErrorCode
 import org.slf4j.LoggerFactory
 import org.springframework.http.MediaType
-import org.springframework.http.client.SimpleClientHttpRequestFactory
+import org.springframework.http.client.JdkClientHttpRequestFactory
 import org.springframework.stereotype.Component
 import org.springframework.util.LinkedMultiValueMap
 import org.springframework.web.client.HttpClientErrorException
 import org.springframework.web.client.RestClient
 import org.springframework.web.client.RestClientException
 import tools.jackson.databind.json.JsonMapper
+import java.net.http.HttpClient
 
 /**
  * Exchanges a Kakao authorization code (web login) for tokens on the server, so the client
@@ -22,11 +23,14 @@ import tools.jackson.databind.json.JsonMapper
 class KakaoTokenClient(private val properties: AuthProperties, private val mapper: JsonMapper) {
     private val log = LoggerFactory.getLogger(javaClass)
 
+    /**
+     * java.net.http rather than HttpURLConnection: the latter drops the body of a 401, so Kakao's
+     * `invalid_client` / KOE010 (missing or wrong client secret) was logged as kakaoErrorCode=null.
+     */
     private val client: RestClient by lazy {
         val timeout = properties.kakao.tokenExchangeTimeout
         RestClient.builder()
-            .requestFactory(SimpleClientHttpRequestFactory().apply {
-                setConnectTimeout(timeout)
+            .requestFactory(JdkClientHttpRequestFactory(HttpClient.newBuilder().connectTimeout(timeout).build()).apply {
                 setReadTimeout(timeout)
             })
             .build()
@@ -62,8 +66,15 @@ class KakaoTokenClient(private val properties: AuthProperties, private val mappe
         return idToken ?: throw BusinessException(ErrorCode.IDENTITY_PROVIDER_NOT_CONFIGURED)
     }
 
-    /** Kakao's `error_code` (e.g. KOE320) helps diagnose setup; it contains no user data. */
+    /**
+     * Kakao's `error_code` (e.g. KOE010, KOE320) helps diagnose setup and contains no user data. Only a short
+     * code matching Kakao's format is logged; the response body itself never is.
+     */
     private fun kakaoErrorCode(ex: HttpClientErrorException): String? = runCatching {
         mapper.readTree(ex.responseBodyAsString).get("error_code")?.asString()
-    }.getOrNull()?.take(20)
+    }.getOrNull()?.takeIf { SAFE_ERROR_CODE.matches(it) }
+
+    private companion object {
+        val SAFE_ERROR_CODE = Regex("^[A-Z]{2,5}[0-9]{1,5}$")
+    }
 }

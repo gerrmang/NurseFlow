@@ -999,7 +999,7 @@ export interface components {
         InvitationTokenRequest: {
             token: string;
         };
-        /** @description WARD_MEMBER는 가입 시 이 병원에 입사한 년월(YYYY-MM)을 제출해야 한다. 실제 경력 시작일·직급·팀 내 경력 순서는 관리자가 정한다. WARD_ADMIN은 이 값을 받지 않는다. */
+        /** @description WARD_MEMBER는 가입 시 이 병원에 입사한 년월(YYYY-MM)을 제출해야 한다. 미래 월이나 1950년 이전은 400 INVALID_HOSPITAL_JOIN_MONTH. 실제 경력 시작일·직급·팀 내 경력 순서는 관리자가 정한다. WARD_ADMIN 초대는 이 값을 쓰지 않으며 보내도 무시한다(오류 아님). */
         RedeemInvitationRequest: {
             token: string;
             hospitalJoinedOn?: string;
@@ -2419,7 +2419,10 @@ export interface operations {
                     "application/json": components["schemas"]["WardMembership"];
                 };
             };
-            /** @description INVALID_REQUEST 또는 WARD_MEMBER 가입에 필요한 HOSPITAL_JOIN_MONTH_REQUIRED */
+            /**
+             * @description INVALID_REQUEST(형식 오류·알 수 없는 필드), WARD_MEMBER 가입에 필요한 HOSPITAL_JOIN_MONTH_REQUIRED,
+             *     INVALID_HOSPITAL_JOIN_MONTH(미래 월이나 1950년 이전의 병원 입사 년월)
+             */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -2428,7 +2431,15 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ApiProblem"];
                 };
             };
-            401: components["responses"]["Unauthorized"];
+            /** @description 유효한 access token이 없음, 또는 USER_NOT_FOUND(토큰의 사용자 기록이 없어 간호사 기록을 만들 수 없음. 다시 로그인) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
             /** @description INVITATION_NOT_FOUND */
             404: {
                 headers: {
