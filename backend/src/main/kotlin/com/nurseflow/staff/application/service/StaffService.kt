@@ -299,7 +299,7 @@ class StaffService(
 
     @Transactional
     fun submitMyProfile(wardId: UUID, hospitalJoinedOn: YearMonth, actor: String): StaffResult {
-        wards.requireMember(wardId, actor)
+        wards.lockAsMember(wardId, actor)
         val nurse = repo.findStaffBySubject(wardId, actor) ?: throw BusinessException(ErrorCode.NURSE_IDENTITY_REQUIRED)
         submitHospitalJoinMonth(nurse, hospitalJoinedOn)
         return requireStaff(wardId, nurse.id).toResult(context(wardId))

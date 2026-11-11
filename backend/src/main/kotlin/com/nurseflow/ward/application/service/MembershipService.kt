@@ -58,8 +58,8 @@ class MembershipService(
         val becomesActiveAdmin = wantsAdmin && wantsActive && !(isAdmin && before.active)
         if (becomesActiveAdmin && staff.hasActiveLinkedStaff(wardId, subject)) {
             // Admin accounts are excluded from rostering, like an admin invitation for an account with a nurse record.
-            // Checked on the resulting state, so granting while inactive and reactivating later is covered too.
-            // Deactivate the nurse record first.
+            // Checked on the resulting state, so granting while inactive and reactivating later is covered too, and a
+            // grant together with deactivation passes because the nurse record is deactivated with the membership.
             throw BusinessException(ErrorCode.ADMIN_NURSE_RECORD_CONFLICT)
         }
         if (wantsAdmin && !isAdmin) {

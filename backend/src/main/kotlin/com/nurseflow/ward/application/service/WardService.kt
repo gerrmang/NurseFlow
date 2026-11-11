@@ -78,6 +78,17 @@ class WardService(
     }
 
     /**
+     * Entry point of a member's own write, like [lockAsAdmin]: a deactivation committed while this request waited
+     * for the ward lock must not let the deactivated member finish.
+     */
+    @Transactional
+    fun lockAsMember(wardId: UUID, subject: String) {
+        requireMember(wardId, subject)
+        if (!repo.lockWard(wardId)) throw BusinessException(ErrorCode.WARD_NOT_FOUND)
+        requireMember(wardId, subject)
+    }
+
+    /**
      * Creates a ward for a hospital from the official list and makes the caller its only WARD_ADMIN.
      * No nurse record is created. Picking a hospital proves no employment and grants nothing on other
      * wards of the same hospital, so the same hospital and ward name may be used by several admins.
