@@ -25,6 +25,7 @@
 | B2 웹 기반 세션 | `feat/web-foundation-session` (`dev` `e4ca9bf` 반영) | [#39](https://github.com/gerrmang/NurseFlow/pull/39) (Ready) | 구현·주요 실제 Kakao 검증·A 리뷰 수정 완료. B3a 병합 후 최신 dev 통합 | 리뷰 수정 head `d47eb38`: 웹 55개 통과·빌드 성공, CI 3개 작업 성공. 통합 후 검증은 아래 2026-11-11 기록 | 개발 의존성 moderate 경고·기존 브라우저 검증 제한 유지. A 진단 후속은 별도 미반영 |
 | B9a Android 공개 근무표 조회 | `feat/android-published-roster` (`dev` `fa47a5a` 통합) | [#34](https://github.com/gerrmang/NurseFlow/pull/34) | `dev` 병합 완료 (2026-11-10, 스쿼시 병합 커밋 `d1b8729`). 구현·기기·실서버 검증과 PR P3 수정 완료, 병합 전 Backend tests·Android debug build 통과 | [B9a 검증 기록](../android/B9a-verification.md), 아래 최종 검증 참조 | 기존 P2 해결, P3 수정 후 재리뷰 대기 |
 | B3a Android 초대 관리·가입 | `feat/android-invite-join` | [#38](https://github.com/gerrmang/NurseFlow/pull/38) | `dev` 병합 완료 (2026-11-11, `e4ca9bf`). GitHub merged=true 확인 | 수정 head `691312c`: 단위 76개·빌드·Lint 성공, CI Backend·Android 성공. 기기 실행 제한은 기존 기록 유지 | 기존 알려진 제한은 android/B3a-verification.md 참조 |
+| B4a Android 병원 검색·병동 생성 | `feat/android-ward-create` (`dev` `0ed5b4c`에서 분기) | PR 미개설 | 구현·목업 검증·Codex 재리뷰 완료. P3 2건(이름 단계 스크롤, 422 안내) 코드상 해결 확인. 사용자 요청으로 작업 브랜치에 커밋·푸시 진행(PR 미개설 유지). **PR 병합 전 실서버 검색 → 생성 → 목록 갱신 확인 필요**(공식 병원 데이터 미적재라 현재 실서버 검색은 503 `HOSPITAL_SEARCH_NOT_CONFIGURED`만 가능) | 2026-11-11 `:app:testDebugUnitTest :app:assembleDebug :app:assembleDebugAndroidTest :app:lintDebug` 성공. P3 수정 후 단위 140개 통과(실패·오류·건너뜀 0), Lint 오류 0·경고 35개, 모든 작업 실제 실행(`--rerun-tasks`). Compose UI 테스트는 작성·APK 빌드만, 실행 안 함. 응답 유실 (a)·(b)는 MockWebServer fake로만 재현. 기기 미연결로 UI 테스트·기기 확인 없음. 상세는 [B4a 검증 기록](../android/B4a-verification.md) | 목업 검증은 실서버 검증이 아니다. 실서버·Kakao·기기·유실 (a)(b) 실서버 동작 미검증 |
 | 에이전트 지침 정합성 | `docs/agent-guidance-alignment` | #32 | `dev` 병합 완료 (2026-11-09, 일반 병합 커밋 `ab8347d`. 스쿼시 원칙에서 벗어남) | `git diff --check` 통과. GitHub Actions `Verify` PR 실행 성공, `dev` push 실행 성공 | 없음 |
 | A3 병원 검색 API | `feat/hospital-search` | #35 | `dev` 병합 완료 (2026-11-10, 스쿼시 병합 커밋 `23af850`) | 병합 전 `./gradlew test --offline` 134건 통과, CI 통과. 실제 2026.9. 파일 79,899곳 적재 0.7초, 검색 15~40ms | 없음 |
 | A4 병동 생성 | `feat/ward-self-create` | #36 | `dev` 병합 완료 (2026-11-10, 스쿼시 병합 커밋 `6a2cf29`) | 2026-11-10 `./gradlew test --offline` 138건 통과(건너뜀 4). 같은 키 동시 요청 테스트는 중복 키 처리 제거 변이 3/3 실패로 검출력 확인. 이전 스키마 H2에 schema.sql 두 번 적용 테스트 통과 | 없음 |
@@ -120,6 +121,40 @@
   3. 오류 상태 화면 캡처 (가상 데이터)
 - **실제 Kakao 검증 (2026-11-10 저녁):** 사용자 실제 계정 1개, 임시 에뮬레이터·임시 DB, 가상 병동·초대. 결과는 검증 기록의 같은 이름 절. 서버 로그 WARN·ERROR 0, 토큰 0회. logcat의 시드 토큰은 검증용 adb 명령(adbd)에만 있었다.
 - **미검증:** 두 실제 계정 전환, KakaoTalk 앱 로그인, 클립보드 복사·가림, 실제 메신저의 사용자 스킴 링크 표시, 물리 기기, 화면에서의 명시적 로그아웃 시 대기 초대 삭제(기기 테스트로만 확인).
+
+## B4a 인계 (2026-11-11, Claude)
+
+- **작업 공간:** 공유 worktree `C:\Users\jjang\IdeaProjects\NurseFlow`, 브랜치 `feat/android-ward-create`, HEAD `0ed5b4c`(= `origin/dev`). 커밋·푸시·PR은 하지 않았다.
+- **미커밋 상태:** `android/` 안의 수정 6개(`AppContainer`, `ApiFactory`, `LoginScreen`, `WardListScreen`, `WardsViewModel`, `NurseFlowRoot`)와 신규 `WardCreationApi.kt`, `feature/ward/create/`(조회 검증·실패 분류·생성 의도·ViewModel·화면), 테스트 5개 파일, `android/B4a-verification.md`, 이 문서의 변경이 작업 트리에 있다. `backend/**`와 `docs/openapi.yaml`은 변경하지 않았다(`git diff --stat origin/dev` 비어 있음).
+- **보존한 미추적 항목:** `nurseflow.mv.db`는 변경·커밋하지 않았다. `local.properties`도 건드리지 않았다.
+- **사용자 보완 반영:** 생성 화면 ViewModel은 고정 키 하나와 `reset()`으로 수명을 관리한다. 생성 직후 `WardsViewModel.onCreated`로 새 병동을 즉시 목록에 합쳐 이동 버튼이 목록 로드를 기다리지 않는다. 로그인 후 병동 만들기 의도는 순수 함수로 결정하며 초대가 우선하고 한 번 소비한다. 응답 유실은 (a) 처리 전 끊김과 (b) 생성 후 응답 유실을 분리해 MockWebServer fake로 재현했다.
+- **남은 일 (PR 병합 전 필수):** 공식 병원 데이터를 적재한 `dev` 백엔드로 실서버 검색 → 생성 → 목록 갱신 확인, 실제 Kakao 로그인 경로, 기기·회전 확인, 응답 유실 (a)(b)의 실서버 확인. 절차는 [B4a 검증 기록](../android/B4a-verification.md)의 "실서버 연동 절차"에 있다.
+- **계약 관찰:** 서버·계약 문제는 발견하지 못했다. 서버 중복 방지는 같은 계정·병원·이름이므로, 키를 잃은 뒤(프로세스 종료·재진입) 같은 내용으로 다시 제출하면 `WARD_ALREADY_CREATED`로 안내된다. 앱은 마지막 초안의 키만 기억한다.
+
+## B4a Codex 로컬 리뷰 (2026-11-11 19:08 KST)
+
+- 검토 범위: B4a 미커밋 Android 구현·신규 테스트·검증 문서. 키 재사용, reset 세대 차단, 생성 응답의 목록 병합, 세션·초대·화면 이동을 대조했다. 애플리케이션 코드는 수정하지 않았다.
+- P3(런타임/UI): `WardCreateScreen.kt`의 이름 입력 단계는 스크롤 없는 바깥 Column에 병원 정보·입력·유실 안내·오류·하단 버튼을 모두 놓는다. 작은 화면/가로 모드/키보드 표시/큰 글꼴에서 내용이 가용 높이를 넘으면 생성·재시도·목록 확인 버튼에 스크롤로 접근할 수 없다. 이름 단계에 스크롤과 키보드 인셋을 적용하고 짧은 화면에서 확인해야 한다. 기기에서 재현한 결과는 아니며 레이아웃 구조에 대한 정적 판정이다.
+- P3(런타임/UI): 생성 422 `HOSPITAL_NOT_FOUND`는 선택을 지우고 SEARCH로 이동하면서 `createError`에만 오류를 보관한다. SearchStep은 `createError`를 표시하지 않아 재검색 안내가 사라지고 기존 결과가 남는다. 검색 단계에 안내를 표시하고 새 검색/후보 선택 때 해제해야 한다.
+- 검증: `android/`에서 `.\gradlew.bat :app:testDebugUnitTest --offline --no-daemon` 성공. 기본 샌드박스의 Gradle 잠금 파일 접근 거절 후 승인된 실행에서 성공했으며, 모든 작업은 UP-TO-DATE로 테스트 본문은 재실행되지 않았다. 기존 XML 15개에서 tests=133, failures=0, errors=0, skipped=0을 직접 집계했다. `git diff --check` 통과(줄바꿈 안내만), backend/OpenAPI tracked diff 없음.
+- 검증 한계: 빌드·Lint·기기·실서버·실제 Kakao는 이번 리뷰에서 실행하지 않았다. `recompositionOrRotationKeepsStateBecauseTheSameModelSurvives`는 동일 인스턴스의 상태를 읽는 JVM 검사로 Activity 회전/Compose 연결을 검증하지 않는다. 새로 추가된 422 테스트도 상태만 확인하며 실제 오류 문구 노출은 검사하지 않는다. P1/P2는 검토 범위에서 발견하지 못했다.
+- 공유 인계: 같은 `C:\Users\jjang\IdeaProjects\NurseFlow`, `feat/android-ward-create`, HEAD `0ed5b4c2bb7443d719180433c3593ad9c3b579ba`. 기존 변경과 미추적 DB를 보존했다. 위 P3 수정·재리뷰와 공식 데이터 적재 후 실연동을 이어간다. 커밋·푸시·PR 게시·병합·배포 없음.
+- 리뷰 기준 해시: B4a 소스·테스트·검증 문서(공유 현황 문서·DB 제외)의 경로별 SHA256 목록을 경로 정렬·LF 연결한 UTF-8 바이트의 SHA256은 `835e066a515053af75a32a848bbbded0a01a4aa6b82339b63c2307fe1a194370`이다. 미추적 파일도 포함한다.
+
+## B4a Codex P3 수정 인계 (2026-11-11, Claude)
+
+- **수정:** (1) `SearchStep`·`NameStep`을 각각 하나의 스크롤 컨테이너로 바꿔 작은 화면·큰 글꼴·유실 안내에서도 생성·재시도·병동 목록 확인 버튼에 닿도록 했다. 검색 결과의 `LazyColumn` 중첩은 없앴다. 생성 중 잠금은 유지했다. (2) 422 `HOSPITAL_NOT_FOUND` 안내를 검색 단계에 표시하고, 거절된 병원은 `invalidHospitals`로 기록해 다시 고르지 못하게 했다. 안내는 새 검색이 시작되거나 다른 병원을 고를 때 해제된다.
+- **검증(2026-11-11, `--rerun-tasks`로 80개 작업 모두 실제 실행):** `:app:testDebugUnitTest :app:assembleDebug :app:assembleDebugAndroidTest :app:lintDebug` `BUILD SUCCESSFUL`. 단위 140개 통과(실패·오류·건너뜀 0, 신규 7), Lint 오류 0·경고 35개(+2는 테스트 의존성 버전 안내), `git diff --check` 통과, backend·`docs/openapi.yaml` diff 없음.
+- **미실행:** `WardCreateScreenUiTest`(Compose UI, 422 안내 노출·짧은 화면 스크롤·클릭)는 작성하고 APK로 컴파일만 했다. 기기가 없어 실행하지 못했으므로 UI에서는 미검증이다. 신규 단위 테스트는 상태만 확인한다. 기존 회전 테스트는 같은 ViewModel의 상태 유지 검사이며 실제 Activity 회전 검증이 아니다.
+- **작업 공간:** 같은 `C:\Users\jjang\IdeaProjects\NurseFlow`, `feat/android-ward-create`, HEAD `0ed5b4c`(미커밋). `nurseflow.mv.db`·`local.properties`는 건드리지 않았다. 커밋·푸시·PR은 하지 않았다.
+- **남은 일:** Codex 재리뷰. PR 병합 전: 기기에서 `WardCreateScreenUiTest` 실행과 키보드·회전 확인, 공식 데이터 적재 후 실서버 검색→생성→목록 갱신, 실제 Kakao, 응답 유실 (a)(b) 실서버 확인. 절차는 [B4a 검증 기록](../android/B4a-verification.md).
+
+## B4a P3 수정 Codex 재리뷰 (2026-11-11 19:35 KST)
+
+- 이전 P3 2건의 수정 범위(`WardCreateScreen`, `WardCreateViewModel`, 신규 상태 테스트 7개·Compose UI 테스트·테스트 의존성·검증 문서)를 정적으로 대조했다. 검색/이름 단계를 각각 높이가 제한된 단일 스크롤 영역으로 바꾸고, 검색 결과의 중첩 LazyColumn을 제거했다. 422 안내가 SEARCH에서 렌더링되고, 거절한 후보는 UI와 ViewModel 모두 재선택을 차단한다. 새 검색 시작/다른 후보 선택 시 안내 해제와 LIMIT_REACHED 보존도 확인했다. 이전 P3 2건은 코드상 해결됐으며 이번 수정 범위에서 추가 조치할 결함은 발견하지 못했다.
+- 검증: 기존 XML 직접 집계 tests=140, failures=0, errors=0, skipped=0. `git diff --check` 통과(줄바꿈 안내만). backend/OpenAPI tracked diff 없음. 이번 재리뷰에서 Gradle·빌드·Lint·기기·실서버 검사는 재실행하지 않았다. 140개는 기존 보고서 확인이며 이번 직접 실행 결과가 아니다.
+- 새 UI 테스트는 422 안내·다른 후보 선택과 320dp×180dp 영역의 하단 버튼 스크롤/클릭을 검사하도록 작성됐으나 실행 결과는 없다. 실제 IME·큰 글꼴·Activity 회전은 이 테스트만으로 검증되지 않는다. 기기 UI 검사와 공식 데이터 적재 후 실서버 검색→생성→목록 갱신 등 기존 미검증 항목은 그대로 남는다.
+- 인계: 같은 공유 worktree와 `feat/android-ward-create`, HEAD `0ed5b4c2bb7443d719180433c3593ad9c3b579ba`의 미커밋 변경을 유지한다. 앱 코드는 변경하지 않고 이 재리뷰 기록만 추가했다. 커밋·푸시·PR 게시·병합·배포 없음. 기준 SHA256: `WardCreateScreen.kt`=`923e99ba27d8ec8197f252696a5522e197aff03858b6580fa457b3ebe6a7c2f8`, `WardCreateViewModel.kt`=`075d6fb2d691ddf06b77f3228dfba9b6def89352ca2eb80d3907304e2ed68b8a`, `WardCreateScreenUiTest.kt`=`5c398e21494aded94d41628b2f3ef6c9e5891c1e08529cf0ba99a1f1a0159011`.
 
 ## 기타 브랜치
 
