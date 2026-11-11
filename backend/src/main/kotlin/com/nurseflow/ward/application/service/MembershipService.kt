@@ -3,6 +3,7 @@ package com.nurseflow.ward.application.service
 import com.nurseflow.common.audit.AuditLog
 import com.nurseflow.common.error.BusinessException
 import com.nurseflow.common.error.ErrorCode
+import com.nurseflow.staff.application.service.StaffService
 import com.nurseflow.ward.application.model.UpdateMembershipCommand
 import com.nurseflow.ward.application.model.WardMemberResult
 import com.nurseflow.ward.application.model.WardRole
@@ -20,6 +21,7 @@ import java.util.UUID
 class MembershipService(
     private val repo: WardJdbcRepository,
     private val wards: WardService,
+    private val staff: StaffService,
     private val audit: AuditLog,
 ) {
     @Transactional(readOnly = true)
@@ -65,7 +67,7 @@ class MembershipService(
         }
         if (wantsActive != before.active) {
             repo.setMembershipActive(wardId, subject, wantsActive)
-            if (!wantsActive) repo.deactivateLinkedNurse(wardId, subject)
+            if (!wantsActive) staff.deactivateLinkedStaff(wardId, subject, actor)
             audit.record(wardId, actor, if (wantsActive) "MEMBER_REACTIVATED" else "MEMBER_DEACTIVATED", subject)
         }
         return repo.memberRows(wardId, subject).toResult()

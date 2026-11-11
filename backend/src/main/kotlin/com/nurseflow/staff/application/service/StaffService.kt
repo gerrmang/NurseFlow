@@ -153,17 +153,23 @@ class StaffService(
             repo.assignTeam(nurseId, null)
             adjust(wardId, nurseId, "TEAM_ASSIGNED", context(wardId).teams[current.teamId]?.name, null, actor)
         }
-        if (current.active && !command.active && current.teamOrder != null) {
-            // An inactive nurse leaves the team order; on reactivation they are placed again like a new member,
-            // so they can never share a position with someone ordered meanwhile.
-            repo.clearTeamOrder(nurseId)
-            adjust(wardId, nurseId, "TEAM_ORDER", current.teamOrder.toString(), null, actor)
-            current.teamId?.let { closeOrderGaps(wardId, it, actor) }
-        }
+        if (current.active && !command.active) leaveTeamOrder(wardId, current, actor)
         if (current.active != command.active) {
             audit.record(wardId, actor, if (command.active) "STAFF_ACTIVATED" else "STAFF_DEACTIVATED", nurseId.toString())
         }
         return requireStaff(wardId, nurseId).toResult(context(wardId))
+    }
+
+    /**
+     * Membership deactivation takes the linked nurse off the roster the same way an admin deactivation does,
+     * including leaving the team order without a gap. The caller holds the ward lock.
+     */
+    @Transactional
+    fun deactivateLinkedStaff(wardId: UUID, subject: String, actor: String) {
+        val nurse = repo.findStaffBySubject(wardId, subject)?.takeIf { it.active } ?: return
+        repo.setStaffActive(nurse.id, false)
+        leaveTeamOrder(wardId, nurse, actor)
+        audit.record(wardId, actor, "STAFF_DEACTIVATED", nurse.id.toString())
     }
 
     /** Only admins assign teams; nurses cannot move themselves. `null` removes the team. */
@@ -351,6 +357,17 @@ class StaffService(
 
     private fun lockWard(wardId: UUID) {
         if (!wardRepo.lockWard(wardId)) throw BusinessException(ErrorCode.WARD_NOT_FOUND)
+    }
+
+    /**
+     * An inactive nurse leaves the team order; on reactivation they are placed again like a new member,
+     * so they can never share a position with someone ordered meanwhile.
+     */
+    private fun leaveTeamOrder(wardId: UUID, nurse: DbStaff, actor: String) {
+        if (nurse.teamOrder == null) return
+        repo.clearTeamOrder(nurse.id)
+        adjust(wardId, nurse.id, "TEAM_ORDER", nurse.teamOrder.toString(), null, actor)
+        nurse.teamId?.let { closeOrderGaps(wardId, it, actor) }
     }
 
     /** Renumbers the ordered active members of a team to 1..n after one left, keeping their relative order. */

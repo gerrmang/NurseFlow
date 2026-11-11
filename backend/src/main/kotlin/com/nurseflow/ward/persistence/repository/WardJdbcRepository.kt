@@ -100,10 +100,6 @@ class WardJdbcRepository(private val jdbc: JdbcTemplate) {
      * Excludes the account's linked nurse record from rostering when the member is deactivated.
      * Kept here, not in the staff package, as a single targeted update; reactivation never touches it.
      */
-    fun deactivateLinkedNurse(wardId: UUID, subject: String) {
-        jdbc.update("UPDATE nurses SET active=FALSE WHERE ward_id=? AND subject=?", wardId, subject)
-    }
-
     fun findWardLabel(wardId: UUID): DbWardLabel? = jdbc.query(
         "SELECT name, hospital_name FROM wards WHERE ward_id=?",
         { rs, _ -> DbWardLabel(rs.getString("name"), rs.getString("hospital_name")) }, wardId,

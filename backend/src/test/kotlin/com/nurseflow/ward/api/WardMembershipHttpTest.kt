@@ -163,6 +163,28 @@ class WardMembershipHttpTest : ApiTestBase() {
     }
 
     @Test
+    fun `deactivating a member takes its nurse out of the team order without leaving a gap`() {
+        val s = setup()
+        val staff = "/api/v1/wards/${s.ward}"
+        val team = http.post("$staff/teams", mapOf("name" to "가상 A팀"), s.admin.second).json!!.get("teamId").asString()
+        val first = insertNurse(s.ward, "가상 간호사 1")
+        val linked = insertNurse(s.ward, "가상 간호사 2", subject = s.member.first.toString())
+        val third = insertNurse(s.ward, "가상 간호사 3")
+        listOf(first, linked, third).forEach { http.put("$staff/staff/$it/team", mapOf("teamId" to team), s.admin.second) }
+        assertEquals(200, http.put("$staff/teams/$team/order", mapOf("nurseIds" to listOf(first, linked, third).map { it.toString() }), s.admin.second).status)
+
+        assertEquals(200, patch(s.ward, s.member.first, s.admin.second, mapOf("active" to false)).status)
+
+        val order = { id: UUID -> jdbc.queryForObject("SELECT team_order FROM nurses WHERE nurse_id=?", Int::class.javaObjectType, id) }
+        assertEquals(null, order(linked))
+        assertEquals(1, order(first))
+        assertEquals(2, order(third))
+        val history = http.get("$staff/staff/$third/adjustments", s.admin.second).json!!.get("items").toList()
+        assertEquals("3", history.first { it.get("kind").asString() == "TEAM_ORDER" }.get("before").asString())
+        assertEquals(1, jdbc.queryForObject("SELECT COUNT(*) FROM audit_events WHERE action='STAFF_DEACTIVATED'", Int::class.java))
+    }
+
+    @Test
     fun `a deactivated admin can no longer administer the ward`() {
         val s = setup()
         val other = userToken("가상 부관리자")
