@@ -386,6 +386,10 @@ class RosterService(
                 break
             }
         }
+        // Lock the job row before deciding: a cancel either commits before this (and wins) or waits until this
+        // transaction ends and then finds the job finished. Without the lock a cancel landing after the last
+        // unlocked check was answered RUNNING while the result was still applied.
+        repo.lockGenerationJob(jobId)
         if (cancelled || repo.generationCancelled(jobId)) {
             finishGeneration(jobId, "CANCELLED", null, null, emptyList())
             return

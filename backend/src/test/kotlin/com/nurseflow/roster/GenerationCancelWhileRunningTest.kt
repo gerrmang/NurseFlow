@@ -7,7 +7,9 @@ import com.nurseflow.roster.application.model.StartGenerationRequest
 import com.nurseflow.roster.application.service.RosterService
 import com.nurseflow.roster.persistence.repository.RosterJdbcRepository
 import org.junit.jupiter.api.AfterEach
+import com.nurseflow.common.error.BusinessException
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -43,6 +45,7 @@ class GenerationCancelWhileRunningTest @Autowired constructor(
 
     class Gate {
         @Volatile var armed = false
+        @Volatile var armedAtDecision = false
         @Volatile var paused = CountDownLatch(1)
         @Volatile var release = CountDownLatch(1)
     }
@@ -56,6 +59,16 @@ class GenerationCancelWhileRunningTest @Autowired constructor(
                 gate.release.await(10, TimeUnit.SECONDS)
             }
             return super.generationCancelled(jobId)
+        }
+
+        /** The generation's own lock before applying its result is the first call once armed. */
+        override fun lockGenerationJob(jobId: UUID) {
+            super.lockGenerationJob(jobId)
+            if (gate.armedAtDecision) {
+                gate.armedAtDecision = false
+                gate.paused.countDown()
+                gate.release.await(10, TimeUnit.SECONDS)
+            }
         }
     }
 
@@ -84,6 +97,7 @@ class GenerationCancelWhileRunningTest @Autowired constructor(
     @AfterEach
     fun open() {
         gate.armed = false
+        gate.armedAtDecision = false
         gate.release.countDown()
     }
 
@@ -112,6 +126,41 @@ class GenerationCancelWhileRunningTest @Autowired constructor(
 
         assertEquals("CANCELLED", service.getGenerationJob(job.jobId, admin).status)
         assertEquals(draft.revision, service.getRoster(draft.rosterId, admin).revision)
+    }
+
+    @Test
+    fun `a cancel arriving after the last loop check either wins or is refused, never answered RUNNING`() {
+        val draft = draft()
+        val job = service.startGeneration(draft.rosterId, tag(draft.rosterId, draft.revision), UUID.randomUUID(),
+            StartGenerationRequest(preserveLockedAssignments = true), admin)
+        assertTrue(service.markGenerationRunning(job.jobId))
+        gate.paused = CountDownLatch(1)
+        gate.release = CountDownLatch(1)
+        gate.armedAtDecision = true
+
+        val running = CompletableFuture.runAsync { service.processGeneration(job.jobId) }
+        assertTrue(gate.paused.await(10, TimeUnit.SECONDS), "generation should hold the job row before applying its result")
+        val cancel = CompletableFuture.supplyAsync {
+            runCatching { service.cancelGeneration(job.jobId, UUID.randomUUID(), admin) }
+        }
+        Thread.sleep(300)
+        assertFalse(cancel.isDone, "the cancel must wait for the generation's decision instead of reporting RUNNING")
+        gate.release.countDown()
+        running.get(10, TimeUnit.SECONDS)
+
+        val refused = cancel.get(10, TimeUnit.SECONDS).exceptionOrNull() as BusinessException
+        assertEquals("GENERATION_NOT_CANCELLABLE", refused.errorCode.name)
+        val finished = service.getGenerationJob(job.jobId, admin)
+        assertTrue(finished.status in setOf("COMPLETED", "PARTIAL"), finished.status)
+        assertEquals(draft.revision + 1, service.getRoster(draft.rosterId, admin).revision)
+    }
+
+    private fun draft(): com.nurseflow.roster.application.model.RosterView {
+        val created = service.createRoster(wardId, CreateRosterRequest("2026-11"), admin, UUID.randomUUID())
+        service.replaceRequirements(created.rosterId, tag(created.rosterId, created.revision), ReplaceRequirementsRequest(listOf(
+            StaffingRequirement(LocalDate.parse("2026-11-02"), dayTypeId, 1, emptyList()),
+        )), admin)
+        return service.getRoster(created.rosterId, admin)
     }
 
     private fun tag(rosterId: UUID, revision: Int) = "\"${service.etag(rosterId, revision)}\""
