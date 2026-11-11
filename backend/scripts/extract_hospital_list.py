@@ -10,6 +10,7 @@ bundled file. Public institution data only; there are no personal records in thi
 import csv
 import gzip
 import io
+import os
 import re
 import sys
 import zipfile
@@ -45,10 +46,14 @@ def main(source: str) -> None:
                 rows += 1
 
     TARGET.mkdir(parents=True, exist_ok=True)
-    for old in TARGET.glob("*.csv.gz"):
-        old.unlink()
     target = TARGET / f"hira-hospitals({period.group(1)}.{int(period.group(2))}.).csv.gz"
-    target.write_bytes(gzip.compress(out.getvalue().encode("cp949"), compresslevel=9, mtime=0))
+    # Write the new list completely before touching the old one, so a failure never leaves the server without a list.
+    partial = TARGET / (target.name + ".partial")
+    partial.write_bytes(gzip.compress(out.getvalue().encode("cp949"), compresslevel=9, mtime=0))
+    os.replace(partial, target)
+    for old in TARGET.glob("*.csv.gz"):
+        if old != target:
+            old.unlink()
     print(f"{target.name}: {rows} rows, {target.stat().st_size // 1024} KB")
 
 
