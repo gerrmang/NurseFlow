@@ -6,6 +6,8 @@ import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.params.provider.ValueSource
+import org.junit.jupiter.params.ParameterizedTest
 import tools.jackson.databind.JsonNode
 import java.time.Instant
 import java.util.UUID
@@ -86,6 +88,47 @@ class ShiftTypeHttpTest : ApiTestBase() {
     }
 
     private fun revision(): Int = http.get(base(), admin).json!!.get("policyRevision").asInt()
+
+    private fun confirmWith(rosterId: UUID, etag: String) = http.post("/api/v1/rosters/$rosterId/confirm", emptyMap<String, Any>(),
+        admin, mapOf("If-Match" to etag, "Idempotency-Key" to UUID.randomUUID().toString()))
+
+    @ParameterizedTest(name = "{0}")
+    @ValueSource(strings = ["kind", "inactive", "break", "recognized", "target credit", "hours", "delete"])
+    fun `every change that affects drafts rejects confirming from the view before it`(change: String) {
+        val id = create().get("shiftTypeId").asString()
+        val draft = roster("DRAFT", "2026-11", id)
+        val before = http.get("/api/v1/rosters/$draft", admin).header("ETag")!!
+
+        val response = when (change) {
+            "kind" -> http.put("${base()}/$id", body(kind = "EVENING"), admin)
+            "inactive" -> http.put("${base()}/$id", body(extra = mapOf("active" to false)), admin)
+            "break" -> http.put("${base()}/$id", body(extra = mapOf("breakMinutes" to 60)), admin)
+            "recognized" -> http.put("${base()}/$id", body(extra = mapOf("recognizedMinutes" to 400)), admin)
+            "target credit" -> http.put("${base()}/$id", body(extra = mapOf("targetCreditMinutes" to 300)), admin)
+            "hours" -> http.put("${base()}/$id", body(end = "08:00"), admin)
+            else -> http.delete("${base()}/$id", admin)
+        }
+        assertEquals(200, response.status, response.body)
+
+        val stale = confirmWith(draft, before)
+        assertEquals(412, stale.status, stale.body)
+        assertEquals("STALE_ROSTER_REVISION", stale.code)
+        assertTrue(needsRevalidation(draft))
+        // Reloading gives the current revision; the flag stays until a confirmation under the current policy.
+        assertTrue(http.get("/api/v1/rosters/$draft", admin).header("ETag") != before)
+    }
+
+    @Test
+    fun `a name-only change keeps the draft revision`() {
+        val id = create().get("shiftTypeId").asString()
+        val draft = roster("DRAFT", "2026-11", id)
+        val before = http.get("/api/v1/rosters/$draft", admin).header("ETag")!!
+
+        assertEquals(200, http.put("${base()}/$id", body(name = "야간"), admin).status)
+
+        assertEquals(before, http.get("/api/v1/rosters/$draft", admin).header("ETag"))
+        assertFalse(needsRevalidation(draft))
+    }
 
     @Test
     fun `permission table for every shift type operation`() {

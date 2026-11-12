@@ -64,13 +64,12 @@ class ShiftTypeJdbcRepository(private val jdbc: JdbcTemplate) {
         }
     }
 
-    /** Marks DRAFT rosters of the ward that already have slots of this shift type. Published rosters are untouched. */
     /**
      * Rewrites the start/end instants of the type's slots in DRAFT rosters from the new hours (slots store the
-     * times they were created with, and confirmation checks rules against them) and bumps those rosters'
-     * revision so a client holding the old view must reload before confirming. Returns the affected rosters.
+     * times they were created with, and confirmation checks rules against them). The revision is bumped by
+     * [markDraftsForRevalidation], which every such change also calls.
      */
-    fun recomputeDraftSlotTimes(wardId: UUID, shiftTypeId: UUID, start: LocalTime, end: LocalTime, spansMidnight: Boolean): Set<UUID> {
+    fun recomputeDraftSlotTimes(wardId: UUID, shiftTypeId: UUID, start: LocalTime, end: LocalTime, spansMidnight: Boolean) {
         val slots = jdbc.query(
             """SELECT s.slot_id, s.roster_id, s.shift_date, w.time_zone FROM roster_slots s
                JOIN rosters r ON r.roster_id=s.roster_id JOIN wards w ON w.ward_id=r.ward_id
@@ -88,16 +87,18 @@ class ShiftTypeJdbcRepository(private val jdbc: JdbcTemplate) {
             val endsAt = (if (spansMidnight) slot.date.plusDays(1) else slot.date).atTime(end).atZone(slot.zone).toInstant()
             jdbc.update("UPDATE roster_slots SET starts_at=?, ends_at=? WHERE slot_id=?", startsAt.toString(), endsAt.toString(), slot.id)
         }
-        val rosters = slots.map { it.rosterId }.toSet()
-        rosters.forEach { jdbc.update("UPDATE rosters SET revision=revision+1 WHERE roster_id=?", it) }
-        return rosters
     }
 
     private data class SlotDate(val id: UUID, val rosterId: UUID, val date: LocalDate, val zone: ZoneId)
 
+    /**
+     * Flags DRAFT rosters of the ward that have slots of this shift type and bumps their revision, so a client
+     * holding the view from before the change gets 412 on confirm and must reload under the current policy.
+     * Published rosters are untouched.
+     */
     fun markDraftsForRevalidation(wardId: UUID, shiftTypeId: UUID): Int = jdbc.update(
-        """UPDATE rosters SET needs_revalidation=TRUE
-            WHERE ward_id=? AND status='DRAFT' AND needs_revalidation=FALSE
+        """UPDATE rosters SET needs_revalidation=TRUE, revision=revision+1
+            WHERE ward_id=? AND status='DRAFT'
               AND roster_id IN (SELECT roster_id FROM roster_slots WHERE shift_type_id=?)""",
         wardId, shiftTypeId,
     )

@@ -260,6 +260,7 @@ Claude와 Codex가 같은 진행 기록을 사용한다. PR 또는 정기 리뷰
 | `/private/tmp/NurseFlow-a8` | `feat/shift-type-settings` | `a16d751` | 미커밋 변경 없음 | 2026-11-12 | Claude | dev(`b352759`, A6·병원 목록) 반영. 근무 유형 쓰기를 `WardService.lockAsAdmin`으로 바꾸고 자체 잠금 제거, 권한 해제 경합 테스트(재확인 제거 시 201로 실패), 웹 타입 재생성 |
 | `/private/tmp/NurseFlow-a8` | `feat/shift-type-settings` | `a16d751` | 미커밋 변경 없음 | 2026-11-12 | Codex | A8 전체 재리뷰(`67896e7` 수정 확인 포함). P2 근무 유형 생성의 멱등 재생이 잠금·권한 재확인 전에 반환됨. 같은 패턴 점검에서 `cancelGeneration` 재생도 잠금 전이라 같은 키 동시 재시도가 `DuplicateKeyException`(500)으로 실패함을 Claude가 재현. 다음 커밋에서 둘 다 수정 |
 | `/private/tmp/NurseFlow-a8` | `feat/shift-type-settings` | `6fbaa45` | 미커밋 변경 없음 | 2026-11-12 | Codex | 재생 순서 수정 재리뷰. APPROVE, 지적 없음. 취소 경로에 병동 잠금 추가 없음(교착 없음), 다른 서비스의 재생은 잠금·권한 확인 뒤이거나 관리자 쓰기가 아님(`createWard`) |
+| 외부 리뷰(사용자 전달, Codex) | `feat/shift-type-settings` | `f75d79c` | 해당 없음 | 2026-11-12 | 외부 | P2 시각 외 변경(종류·활성·휴게·인정·환산·비활성화)은 재검증 표시만 하고 초안 revision을 올리지 않아, 변경 전 화면의 ETag로 확정 가능. 다음 커밋에서 `markDraftsForRevalidation`이 revision도 올리도록 수정 |
 
 이 문서는 Claude와 Codex가 각 기능 단위 작업 후 진행 결과를 함께 기록하는 단일 공유 현황이다.
 
