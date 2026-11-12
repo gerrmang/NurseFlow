@@ -267,6 +267,7 @@ Claude와 Codex가 같은 진행 기록을 사용한다. PR 또는 정기 리뷰
 | GitHub PR #43 재리뷰 | `feat/shift-type-settings` | `70c9dbdb0d20f03593d8ae0a80e1d6a6f4321a7c` | 해당 없음(PR diff 기준) | 2026-11-12 | hyen11 | P3 다른 병동에서 같은 Idempotency-Key로 동시 생성 시 500, P4 재시작 후 공개 칸 스냅샷 보존 테스트 누락, P5 `targetCreditMinutes` 상한 계약 누락. 다음 커밋에서 수정 |
 | `/private/tmp/NurseFlow-a8` | `feat/shift-type-settings` | `70c9dbd` | 해당 없음 | 2026-11-12 | Claude | 설계 문서(requirements·mvp-scope·월간 규칙·정책 설정 명세) 대조. 어긋남: 근무표 응답이 칸 스냅샷 코드·종류를 내보내지 않음(공개본 불변·같은 공개 revision), 근무 유형 동시 편집 revision 검사 없음(mvp-scope 시연 인수 8), 저장 전 변경 영향 표시 없음(정책 설정 명세 9행). 사용자 결정: 미리보기 API 추가, 초안은 새 값 갱신+재검증 표시 유지, 유형 간 시간 겹침 허용 유지. 다음 커밋에서 반영. 후속: A5 직원·팀 수정도 동시 편집 revision 검사 없음, A17 수정 초안은 복사한 칸을 현재 유형 값으로 다시 계산해야 함 |
 | `/private/tmp/NurseFlow-a8` | `feat/shift-type-settings` | `30bbabc` | 미커밋 변경 없음 | 2026-11-12 | Codex | 설계 규칙 R1~R8 대조 리뷰. REQUEST CHANGES: P2 생성 재시도가 최초 결과에 현재 정책 ETag를 붙여 오래된 본문으로 덮어쓰기 가능, P2 목록·미리보기가 데이터 뒤에 revision을 읽어 옛 데이터에 새 ETag, P3 코드만 바꾸면 초안 칸은 바뀌는데 재검증 표시·revision 그대로. 다음 커밋에서 수정. If-Match 잠금 아래 검사, 재생 경합 409 매핑, 잠금 순서는 문제 없음 |
+| `/private/tmp/NurseFlow-a8` | `feat/shift-type-settings` | `ca570f1` | 미커밋 변경 없음 | 2026-11-12 | Codex | 위 3건 수정 재리뷰. P1·P3~P5 없음. P2(조건부) 재생 기록 형식이 `ShiftTypeResult`에서 `ShiftTypeWrite`로 바뀌어 배포 전 기록 재시도가 500일 수 있음 → `CREATE_SHIFT_TYPE` 재생은 이 브랜치에만 있고 dev·배포에 없어 해당 없음으로 판단, 코드 변경 없음(이 브랜치를 돌린 로컬 H2만 영향, 로컬 DB 재생성으로 해소) |
 
 이 문서는 Claude와 Codex가 각 기능 단위 작업 후 진행 결과를 함께 기록하는 단일 공유 현황이다.
 
