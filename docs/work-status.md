@@ -25,7 +25,7 @@
 | B2 웹 기반 세션 | `feat/web-foundation-session` (`dev` `e4ca9bf` 반영) | [#39](https://github.com/gerrmang/NurseFlow/pull/39) (Ready) | 구현·주요 실제 Kakao 검증·A 리뷰 수정 완료. B3a 병합 후 최신 dev 통합 | 리뷰 수정 head `d47eb38`: 웹 55개 통과·빌드 성공, CI 3개 작업 성공. 통합 후 검증은 아래 2026-11-11 기록 | 개발 의존성 moderate 경고·기존 브라우저 검증 제한 유지. A 진단 후속은 별도 미반영 |
 | B9a Android 공개 근무표 조회 | `feat/android-published-roster` (`dev` `fa47a5a` 통합) | [#34](https://github.com/gerrmang/NurseFlow/pull/34) | `dev` 병합 완료 (2026-11-10, 스쿼시 병합 커밋 `d1b8729`). 구현·기기·실서버 검증과 PR P3 수정 완료, 병합 전 Backend tests·Android debug build 통과 | [B9a 검증 기록](../android/B9a-verification.md), 아래 최종 검증 참조 | 기존 P2 해결, P3 수정 후 재리뷰 대기 |
 | B3a Android 초대 관리·가입 | `feat/android-invite-join` | [#38](https://github.com/gerrmang/NurseFlow/pull/38) | `dev` 병합 완료 (2026-11-11, `e4ca9bf`). GitHub merged=true 확인 | 수정 head `691312c`: 단위 76개·빌드·Lint 성공, CI Backend·Android 성공. 기기 실행 제한은 기존 기록 유지 | 기존 알려진 제한은 android/B3a-verification.md 참조 |
-| B4a Android 병원 검색·병동 생성 | `feat/android-ward-create` (`405a8e5`에 dev `b352759` 통합) | PR 미개설 유지 | 구현·목업·로컬 실서버 핵심 흐름 검증 완료. 기존 Android 17 콜드 부팅 후 실제 Kakao 로그인·검색·생성·목록·초대 관리 연결 확인. Espresso 3.7.0 명시 의존성으로 UI 테스트 오류 수정 | 2026-11-12 단위 140개(실패·오류·건너뜀 0, 재실행), Compose UI 2개 통과(직접 instrumentation), 테스트 APK·Lint 성공(오류 0·경고 35). 실제 서버 응답 유실 (a)·(b) 재시도·키 재생·각 병동 1개 확인. [B4a 검증 기록](../android/B4a-verification.md) | 상한·키 충돌·미적재/외부 장애·유실 뒤 입력 변경 등의 실서버 검사는 미실행. 운영·전체 기기 회귀·CI 미검증 |
+| B4a Android 병원 검색·병동 생성 | `feat/android-ward-create` (`405a8e5`에 dev `b352759` 통합) | [#44](https://github.com/gerrmang/NurseFlow/pull/44) (Ready) | 구현·목업·로컬 실서버 핵심 흐름 검증 완료. 기존 Android 17 콜드 부팅 후 실제 Kakao 로그인·검색·생성·목록·초대 관리 연결 확인. Espresso 3.7.0 명시 의존성으로 UI 테스트 오류 수정 | 2026-11-12 단위 140개(실패·오류·건너뜀 0, 재실행), Compose UI 2개 통과(직접 instrumentation), 테스트 APK·Lint 성공(오류 0·경고 35). 실제 서버 응답 유실 (a)·(b) 재시도·키 재생·각 병동 1개 확인. [B4a 검증 기록](../android/B4a-verification.md) | 상한·키 충돌·미적재/외부 장애·유실 뒤 입력 변경 등의 실서버 검사는 미실행. 운영·전체 기기 회귀·CI 미검증 |
 | 에이전트 지침 정합성 | `docs/agent-guidance-alignment` | #32 | `dev` 병합 완료 (2026-11-09, 일반 병합 커밋 `ab8347d`. 스쿼시 원칙에서 벗어남) | `git diff --check` 통과. GitHub Actions `Verify` PR 실행 성공, `dev` push 실행 성공 | 없음 |
 | A3 병원 검색 API | `feat/hospital-search` | #35 | `dev` 병합 완료 (2026-11-10, 스쿼시 병합 커밋 `23af850`) | 병합 전 `./gradlew test --offline` 134건 통과, CI 통과. 실제 2026.9. 파일 79,899곳 적재 0.7초, 검색 15~40ms | 없음 |
 | A4 병동 생성 | `feat/ward-self-create` | #36 | `dev` 병합 완료 (2026-11-10, 스쿼시 병합 커밋 `6a2cf29`) | 2026-11-10 `./gradlew test --offline` 138건 통과(건너뜀 4). 같은 키 동시 요청 테스트는 중복 키 처리 제거 변이 3/3 실패로 검출력 확인. 이전 스키마 H2에 schema.sql 두 번 적용 테스트 통과 | 없음 |
@@ -58,6 +58,13 @@
 - 사용자의 명시 허용 뒤 PC 루프백 임시 프록시로 실제 서버의 유실 (a: backend 전달 전 단절)·(b: 201 수신 뒤 앱 전달 전 단절)를 분리했다. 둘 다 자동 재전송 없음·결과 미확인 안내·같은 키 재시도 성공. (b)는 **같은 병동 ID·201 재생**까지 확인했다. 마지막 실제 `GET /api/v1/wards` 응답에서 기본·(a)·(b) 가상 병동이 **각각 1개**였다. DB 직접 조회는 하지 않았다. 토큰·키·응답 본문을 로그/파일에 기록하지 않았다.
 - 프록시는 원래 `null`, 회전은 원래 `free`로 원복하고 프록시 프로세스·임시 스크립트를 제거했다. 프록시 없는 재실행에서도 세 병동을 확인했다. `nurseflow.mv.db`·`local.properties` 보존. 서버/API/DB 스키마·운영 코드 변경·배포 영향 없음. 되돌리기는 Espresso 의존성 추가 제거(기존 Android 17 테스트 오류 재발).
 - 공유 인계: 같은 `C:\Users\jjang\IdeaProjects\NurseFlow`, `feat/android-ward-create`, HEAD `405a8e5`. 테스트 의존성·두 검증/현황 문서만 미커밋 변경. 기존 현황 기록은 보존했다. 커밋·푸시·PR 개설·병합·배포 없음. 에뮬레이터와 검증 backend(8080)는 실행 상태다. 메모리 DB라 backend 종료 시 검증 병동·서버 세션이 사라진다. 상한·키 충돌·유실 뒤 입력 변경·목록 미적재/외부 장애·초대 의도 경합의 실제 검증, 전체 기기·백엔드 테스트·CI는 이번에 실행하지 않았다.
+
+## B4a PR #44 게시 (2026-11-12, Codex)
+
+- 사용자 요청으로 Espresso 수정·실연동 검증 기록을 `b894cfe`에 커밋하고 `origin/feat/android-ward-create`에 푸시했다. `gh`로 [PR #44](https://github.com/gerrmang/NurseFlow/pull/44)를 생성했으며 `OPEN`, `isDraft=false`, 대상 `dev`, 게시 head `b894cfe41616a229b2c98a93b6cde32ef5f1b93c`를 확인했다.
+- PR 템플릿에 구현 결과·140개 단위/2개 UI 검사·실서버 응답 유실 검증·미실행 검사·API/DB 변경 없음·배포 영향·되돌리기를 기록했다. 기존 상세 검증을 유지하며 이번 게시 단계에서 로컬 앱·기기 검사는 재실행하지 않았다. `git diff --check` 통과.
+- 게시 직후 [Verify 43221647358](https://github.com/gerrmang/NurseFlow/actions/runs/43221647358)의 Backend tests·Android debug build·Web checks는 모두 실행 중이었다. CI 통과·GitHub 승인·브랜치 보호 강제를 주장하지 않는다. 이 게시 기록을 포함한 후속 문서 커밋의 CI는 해당 head로 별도 확인한다.
+- 공유 인계: 같은 worktree·`feat/android-ward-create`에서 이 게시 기록만 후속 커밋·푸시한다. 로컬 DB `nurseflow.mv.db`를 보존하고 PR 리뷰 대기로 넘긴다. 병합·자동 병합 설정·수동 배포 없음. 앞 절의 'PR 미개설 유지·커밋/푸시 없음'은 이전 검증 시점 기록이며 이 게시로 대체한다.
 
 ## 리뷰 상태
 
