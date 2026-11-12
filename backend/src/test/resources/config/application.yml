@@ -13,6 +13,8 @@ nurseflow:
       service-key: nurseflow+test/hira=key==
       timeout: 500ms
     dataset:
+      # Tests import their own fictional lists; the bundled list would slow every context and hide 503 paths.
+      bundled: false
       min-rows: 1
       max-deactivation-ratio: 0.5
   invitation:
