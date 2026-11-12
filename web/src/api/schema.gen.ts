@@ -403,6 +403,72 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/wards/{wardId}/members": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                wardId: components["parameters"]["WardId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * 병동 구성원 목록 (관리자)
+         * @description 병동에 소속 기록이 있는 계정을 표시 이름순으로 돌려준다. 비활성화된 구성원도 포함한다.
+         *     nurseId는 이 병동에서 그 계정에 연결된 간호사 기록이며 없으면 null이다.
+         *     응답은 Cache-Control: private, no-store.
+         */
+        get: operations["listWardMembers"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/wards/{wardId}/memberships/{userId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                wardId: components["parameters"]["WardId"];
+                userId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * 구성원 관리자 지정·해제, 비활성화·재활성화 (관리자)
+         * @description `admin`, `active` 중 하나 이상을 보낸다. 둘 다 없으면 400 INVALID_REQUEST. 이미 그 상태인 항목은 바뀌지 않고
+         *     감사 기록도 남지 않는다(멱등). 호출자 자신도 대상이 될 수 있다.
+         *
+         *     - `admin: true`는 WARD_ADMIN 역할을 추가하고 기존 WARD_MEMBER 역할은 유지한다. `admin: false`는 WARD_ADMIN 역할만 제거한다.
+         *       WARD_MEMBER 역할이 없는 계정(관리자 전용)의 관리자 해제는 접근 권한을 모두 잃게 되므로 409 MEMBER_ROLE_REQUIRED이며
+         *       비활성화를 사용해야 한다. 그 계정이 마지막 활성 관리자이면 비활성화도 409 LAST_WARD_ADMIN이므로 다른 관리자를 먼저 지정한다.
+         *     - 관리자 계정은 편성에서 제외된다. 충돌은 변경 결과가 활성 관리자일 때만 검사한다. 활성 간호사 기록이 연결된 구성원이
+         *       이 요청으로 활성 관리자가 되면(활성 구성원에게 `admin: true`, 또는 관리자 역할이 있는 비활성 구성원에게 `active: true`)
+         *       409 ADMIN_NURSE_RECORD_CONFLICT이며, 직원 관리에서 그 간호사 기록을 먼저 비활성화해야 한다.
+         *       `{"admin": true, "active": false}`처럼 결과가 비활성이면 충돌하지 않고, 관리자 역할 추가와 구성원·간호사 기록 비활성화가
+         *       함께 적용된다. 관리자 역할이 남은 계정에 연결된 간호사 기록은 직원 관리에서도 다시 활성화할 수 없다.
+         *     - `active: false`는 구성원을 즉시 비활성화한다. 비활성 구성원은 역할이 남아 있어도 병동 목록·`/me`·모든 병동 하위 API에서
+         *       소속이 아닌 사람처럼 404 WARD_NOT_FOUND로 거부된다. 연결된 간호사 기록이 있으면 함께 비활성화되어 편성 대상에서 빠진다. 직원 관리의 비활성화와 같이 팀 내 순서에서도 빠지고, 남은 팀원의 순서는 빈칸 없이 1부터 다시 매겨지며 `TEAM_ORDER` 이력이 남는다.
+         *     - `active: true`는 구성원 접근만 되살린다. 간호사 기록의 재활성화는 직원 관리에서 관리자가 따로 한다.
+         *     - 병동에는 활성 관리자가 항상 한 명 이상 있어야 한다. 마지막 활성 관리자의 해제·비활성화는 409 LAST_WARD_ADMIN이다.
+         *       병동 단위 잠금으로 직렬화되어 동시 요청으로도 관리자가 0명이 되지 않는다. 먼저 끝난 요청 때문에 호출자 권한이 사라진
+         *       뒤 들어온 요청은 403/404로 거부된다.
+         *     - 관리자 계정 상실 복구 절차는 이 범위에 없다.
+         *
+         *     변경은 감사 기록에 MEMBER_ADMIN_GRANTED, MEMBER_ADMIN_REVOKED, MEMBER_DEACTIVATED, MEMBER_REACTIVATED로 남는다.
+         */
+        patch: operations["updateWardMembership"];
+        trace?: never;
+    };
     "/wards/{wardId}/staff": {
         parameters: {
             query?: never;
@@ -936,7 +1002,7 @@ export interface components {
         InvitationTokenRequest: {
             token: string;
         };
-        /** @description WARD_MEMBER는 가입 시 이 병원에 입사한 년월(YYYY-MM)을 제출해야 한다. 실제 경력 시작일·직급·팀 내 경력 순서는 관리자가 정한다. WARD_ADMIN은 이 값을 받지 않는다. */
+        /** @description WARD_MEMBER는 가입 시 이 병원에 입사한 년월(YYYY-MM)을 제출해야 한다. 미래 월이나 1950년 이전은 400 INVALID_HOSPITAL_JOIN_MONTH. 실제 경력 시작일·직급·팀 내 경력 순서는 관리자가 정한다. WARD_ADMIN 초대는 이 값을 쓰지 않으며 보내도 무시한다(오류 아님). */
         RedeemInvitationRequest: {
             token: string;
             hospitalJoinedOn?: string;
@@ -1086,6 +1152,27 @@ export interface components {
              * @example 가상대학교병원
              */
             hospitalName?: string | null;
+        };
+        WardMember: {
+            /** Format: uuid */
+            userId: string;
+            /** @example 가상 간호사 */
+            displayName: string;
+            roles: ("WARD_ADMIN" | "WARD_MEMBER")[];
+            /** @description false이면 즉시 병동 접근이 거부된다 */
+            active: boolean;
+            canViewWardCalendar: boolean;
+            /**
+             * Format: uuid
+             * @description 이 병동에서 이 계정에 연결된 간호사 기록. 없으면 null
+             */
+            nurseId: string | null;
+        };
+        UpdateMembershipRequest: {
+            /** @description true면 WARD_ADMIN 추가, false면 WARD_ADMIN 제거 */
+            admin?: boolean;
+            /** @description false면 비활성화, true면 재활성화 */
+            active?: boolean;
         };
         StaffPage: {
             items: components["schemas"]["StaffMember"][];
@@ -2335,7 +2422,10 @@ export interface operations {
                     "application/json": components["schemas"]["WardMembership"];
                 };
             };
-            /** @description INVALID_REQUEST 또는 WARD_MEMBER 가입에 필요한 HOSPITAL_JOIN_MONTH_REQUIRED */
+            /**
+             * @description INVALID_REQUEST(형식 오류·알 수 없는 필드), WARD_MEMBER 가입에 필요한 HOSPITAL_JOIN_MONTH_REQUIRED,
+             *     INVALID_HOSPITAL_JOIN_MONTH(미래 월이나 1950년 이전의 병원 입사 년월)
+             */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -2344,7 +2434,15 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ApiProblem"];
                 };
             };
-            401: components["responses"]["Unauthorized"];
+            /** @description 유효한 access token이 없음, 또는 USER_NOT_FOUND(토큰의 사용자 기록이 없어 간호사 기록을 만들 수 없음. 다시 로그인) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
             /** @description INVITATION_NOT_FOUND */
             404: {
                 headers: {
@@ -2633,6 +2731,97 @@ export interface operations {
             };
         };
     };
+    listWardMembers: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                wardId: components["parameters"]["WardId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 구성원 목록 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["WardMember"][];
+                    };
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            /** @description WARD_ADMIN_REQUIRED */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+        };
+    };
+    updateWardMembership: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                wardId: components["parameters"]["WardId"];
+                userId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateMembershipRequest"];
+            };
+        };
+        responses: {
+            /** @description 변경 뒤 구성원 (Cache-Control private, no-store) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WardMember"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            /** @description WARD_ADMIN_REQUIRED */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description WARD_NOT_FOUND 또는 MEMBER_NOT_FOUND(이 병동에 소속 기록이 없는 userId) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description LAST_WARD_ADMIN, MEMBER_ROLE_REQUIRED 또는 ADMIN_NURSE_RECORD_CONFLICT */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+        };
+    };
     listWardStaff: {
         parameters: {
             query?: {
@@ -2752,6 +2941,18 @@ export interface operations {
             };
             /** @description NURSE_NOT_FOUND */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /**
+             * @description ADMIN_NURSE_RECORD_CONFLICT(관리자 계정에 연결된 간호사 기록은 다시 활성화할 수 없다. 관리자는 편성에서 제외된다) 또는
+             *     MEMBER_INACTIVE(비활성 구성원에 연결된 기록은 구성원을 먼저 재활성화해야 다시 활성화할 수 있다)
+             */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };

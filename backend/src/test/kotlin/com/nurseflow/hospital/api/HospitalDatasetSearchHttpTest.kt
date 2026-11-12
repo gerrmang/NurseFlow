@@ -2,6 +2,7 @@ package com.nurseflow.hospital.api
 
 import com.nurseflow.hospital.application.service.HospitalDatasetException
 import com.nurseflow.hospital.application.service.HospitalDatasetImporter
+import com.nurseflow.hospital.application.service.HospitalDatasetStartupImport
 import com.nurseflow.hospital.config.HospitalProperties
 import com.nurseflow.hospital.persistence.repository.HospitalJdbcRepository
 import com.nurseflow.support.ApiTestBase
@@ -13,11 +14,14 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 import org.junit.jupiter.api.io.TempDir
 import org.springframework.beans.factory.annotation.Autowired
+import org.springframework.core.io.ByteArrayResource
+import org.springframework.core.io.support.PathMatchingResourcePatternResolver
 import org.springframework.transaction.support.TransactionTemplate
 import java.net.URLEncoder
 import java.nio.charset.Charset
 import java.nio.file.Files
 import java.nio.file.Path
+import java.util.zip.GZIPOutputStream
 import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
 
@@ -56,6 +60,15 @@ class HospitalDatasetSearchHttpTest : ApiTestBase() {
 
     private fun csv(name: String, rows: List<String>): Path = dir.resolve(name).also {
         Files.write(it, (listOf(header) + rows).joinToString("\n").toByteArray(CP949))
+    }
+
+    /** Same shape as the bundled list: the five imported columns, CP949, gzip-compressed. */
+    private fun bundled(name: String, rows: List<String>): ByteArrayResource {
+        val csv = (listOf(header) + rows).joinToString("\r\n", postfix = "\r\n").toByteArray(CP949)
+        val gz = java.io.ByteArrayOutputStream().also { out -> GZIPOutputStream(out).use { it.write(csv) } }.toByteArray()
+        return object : ByteArrayResource(gz) {
+            override fun getFilename() = name
+        }
     }
 
     private fun search(query: String, extra: String = "") =
@@ -208,6 +221,72 @@ class HospitalDatasetSearchHttpTest : ApiTestBase() {
         importer.importIfChanged(zip("data.zip", september))
 
         assertEquals("INVALID_REQUEST", search("(가)").code)
+    }
+
+    @Test
+    fun `the bundled list is imported once and never replaces a newer imported list`() {
+        val bundledSeptember = bundled("hira-hospitals(2026.9.).csv.gz", september)
+
+        val first = importer.importBundledUnlessOlder(bundledSeptember)
+        assertTrue(first.imported)
+        assertEquals("2026-09", first.version)
+        assertEquals(listOf("가상병원"), names("가상병원").take(1))
+        assertFalse(importer.importBundledUnlessOlder(bundledSeptember).imported)
+
+        // An operator imported the December file from the dataset path; a later start without the path keeps it.
+        importer.importIfChanged(csv("1.병원정보서비스(2026.12.).csv", september.filterNot { it.startsWith("FAKE-004") }))
+        val restarted = importer.importBundledUnlessOlder(bundledSeptember)
+        assertFalse(restarted.imported)
+        assertEquals("2026-12", restarted.version)
+        assertFalse(names("가상병원").contains("새가상병원"))
+
+        // A newer bundled list (after a server update) replaces an older import.
+        val march = importer.importBundledUnlessOlder(bundled("hira-hospitals(2027.3.).csv.gz", september))
+        assertTrue(march.imported)
+        assertTrue(names("가상병원").contains("새가상병원"))
+    }
+
+    @Test
+    fun `a corrected bundled list of the same period is applied, like a changed path file`() {
+        // An operator imported the September zip from the dataset path, then removed the path.
+        importer.importIfChanged(zip("data.zip", september))
+        val corrected = bundled("hira-hospitals(2026.9.).csv.gz", september.map { it.replace("가상구 바다로 2", "가상구 바다로 22") })
+
+        val applied = importer.importBundledUnlessOlder(corrected)
+        assertTrue(applied.imported)
+        assertEquals("2026-09", applied.version)
+        assertEquals("부산광역시 가상구 바다로 22", search("가상병원").json!!.get("items")[0].get("address").asString())
+        assertFalse(importer.importBundledUnlessOlder(corrected).imported, "the next start skips it")
+    }
+
+    @Test
+    fun `an import of unknown period stops bundled updates until a dated file is imported`() {
+        importer.importIfChanged(csv("hospitals.csv", september))
+        val bundledMarch = bundled("hira-hospitals(2027.3.).csv.gz", september.take(3))
+
+        assertFalse(importer.importBundledUnlessOlder(bundledMarch).imported)
+        assertEquals(5, jdbc.queryForObject("SELECT COUNT(*) FROM hospitals WHERE active=TRUE", Int::class.java))
+
+        // Renaming the same CSV does not recover: content already imported is skipped whatever its name.
+        assertFalse(importer.importIfChanged(csv("2.병원정보서비스(2026.9.).csv", september)).imported)
+        assertFalse(importer.importBundledUnlessOlder(bundledMarch).imported)
+
+        // The documented recovery: import a dated file of different content from the dataset path once.
+        val dated = importer.importIfChanged(csv("1.병원정보서비스(2026.9.).csv", september.map { it.replace("바다로 2", "바다로 3") }))
+        assertEquals("2026-09", dated.version)
+        assertTrue(importer.importBundledUnlessOlder(bundledMarch).imported)
+        assertFalse(importer.importBundledUnlessOlder(bundled("hira-hospitals.csv.gz", september)).imported,
+            "a bundled file of unknown period never replaces an import")
+    }
+
+    @Test
+    fun `the list shipped in the server is one valid file of a known period`() {
+        val shipped = PathMatchingResourcePatternResolver().getResources(HospitalDatasetStartupImport.BUNDLED)
+        assertEquals(1, shipped.size, "exactly one bundled list")
+        assertTrue(Regex("""hira-hospitals\(\d{4}\.\d{1,2}\.\)\.csv\.gz""").matches(shipped[0].filename!!), shipped[0].filename)
+
+        val result = importer.importBundledUnlessOlder(shipped[0])
+        assertTrue(result.importedCount >= HospitalProperties.Dataset().minRows, "${result.importedCount} rows")
     }
 
     private companion object {
