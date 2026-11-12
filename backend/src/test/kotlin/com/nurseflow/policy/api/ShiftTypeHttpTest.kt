@@ -96,7 +96,7 @@ class ShiftTypeHttpTest : ApiTestBase() {
         admin, mapOf("If-Match" to etag, "Idempotency-Key" to UUID.randomUUID().toString()))
 
     @ParameterizedTest(name = "{0}")
-    @ValueSource(strings = ["kind", "inactive", "break", "recognized", "target credit", "hours", "delete"])
+    @ValueSource(strings = ["kind", "code", "inactive", "break", "recognized", "target credit", "hours", "delete"])
     fun `every change that affects drafts rejects confirming from the view before it`(change: String) {
         val id = create().get("shiftTypeId").asString()
         val draft = roster("DRAFT", "2026-11", id)
@@ -104,6 +104,7 @@ class ShiftTypeHttpTest : ApiTestBase() {
 
         val response = when (change) {
             "kind" -> http.put("${base()}/$id", body(kind = "EVENING"), admin, current())
+            "code" -> http.put("${base()}/$id", body(code = "N2"), admin, current())
             "inactive" -> http.put("${base()}/$id", body(extra = mapOf("active" to false)), admin, current())
             "break" -> http.put("${base()}/$id", body(extra = mapOf("breakMinutes" to 60)), admin, current())
             "recognized" -> http.put("${base()}/$id", body(extra = mapOf("recognizedMinutes" to 400)), admin, current())
@@ -192,6 +193,21 @@ class ShiftTypeHttpTest : ApiTestBase() {
         // Deactivating an already inactive type writes nothing, so even a stale view gets the no-op 200.
         assertEquals(200, http.delete("${base()}/$id", admin, current()).status)
         assertEquals(200, http.delete("${base()}/$id", admin, seen).status)
+    }
+
+    @Test
+    fun `a create retried after the type changed replays the first revision, so saving from it is refused`() {
+        val key = mapOf("Idempotency-Key" to UUID.randomUUID().toString())
+        val created = http.post(base(), body(), admin, key)
+        val id = created.json!!.get("shiftTypeId").asString()
+        assertEquals(200, http.put("${base()}/$id", body(name = "다른 관리자가 바꾼 이름"), admin, current()).status)
+
+        // The first response was lost; the retry replays it with the revision it was made at.
+        val retried = http.post(base(), body(), admin, key)
+        assertEquals(201, retried.status, retried.body)
+        assertEquals(created.header("ETag"), retried.header("ETag"))
+        assertEquals("STALE_POLICY_REVISION",
+            http.put("${base()}/$id", body(name = "재시도 화면에서 저장"), admin, mapOf("If-Match" to retried.header("ETag")!!)).code)
     }
 
     @Test

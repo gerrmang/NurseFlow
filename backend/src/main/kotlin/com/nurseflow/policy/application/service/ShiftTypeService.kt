@@ -36,32 +36,35 @@ class ShiftTypeService(
     private val audit: AuditLog,
     private val replays: MutationReplayRepository,
 ) {
+    /**
+     * The revision is read before the types: a change committed in between makes the ETag older than the data, so a
+     * save from it gets 412, never the reverse (old data with a newer ETag that would let a save overwrite).
+     */
     @Transactional(readOnly = true)
     fun list(wardId: UUID, includeInactive: Boolean, actor: String): ShiftTypeListResult {
         wards.requireMember(wardId, actor)
-        return ShiftTypeListResult(
-            repo.list(wardId, includeInactive).map { it.toResult() },
-            repo.policyRevision(wardId),
-        )
+        val revision = repo.policyRevision(wardId)
+        return ShiftTypeListResult(repo.list(wardId, includeInactive).map { it.toResult() }, revision)
     }
 
     /**
-     * Retrying with the same Idempotency-Key returns the first result instead of a duplicate-code 409. The replay
-     * is read only after the lock and admin re-check, so a revoked admin gets no replay either, and a same-key
-     * request that waited on the lock sees the committed first result.
+     * Retrying with the same Idempotency-Key returns the first result instead of a duplicate-code 409, with the
+     * policy revision of that first result: if the type changed since, a save from the replay gets 412 instead of
+     * overwriting the change. The replay is read only after the lock and admin re-check, so a revoked admin gets
+     * no replay either, and a same-key request that waited on the lock sees the committed first result.
      */
     @Transactional
     fun create(wardId: UUID, command: ShiftTypeCommand, idempotencyKey: UUID, actor: String): ShiftTypeWrite {
         wards.lockAsAdmin(wardId, actor)
         val resolved = resolve(command)
         val requestHash = replays.requestHash(listOf(actor, wardId, command))
-        replayed(idempotencyKey, requestHash)?.let { return written(wardId, it) }
+        replayed(idempotencyKey, requestHash)?.let { return it }
         if (repo.codeExists(wardId, command.code, except = null)) throw BusinessException(ErrorCode.SHIFT_TYPE_CODE_DUPLICATE)
         val row = resolved.toRow(UUID.randomUUID(), wardId, command.active ?: true)
         repo.insert(row)
         repo.bumpPolicyRevision(wardId, actor, Instant.now())
         audit.record(wardId, actor, "SHIFT_TYPE_CREATED", row.id.toString())
-        return written(wardId, row.toResult().also { replays.recordReplay(idempotencyKey, CREATE_OPERATION, requestHash, it) })
+        return written(wardId, row.toResult()).also { replays.recordReplay(idempotencyKey, CREATE_OPERATION, requestHash, it) }
     }
 
     /**
@@ -112,11 +115,14 @@ class ShiftTypeService(
     fun preview(wardId: UUID, shiftTypeId: UUID, command: ShiftTypeCommand, actor: String): ShiftTypeChangePreview {
         wards.requireAdmin(wardId, actor)
         val resolved = resolve(command)
+        // Read first, like the list: a change committed during the preview leaves this revision behind, so a save
+        // from the preview gets 412 and the admin previews again instead of saving what was not shown.
+        val revision = repo.policyRevision(wardId)
         val old = repo.find(wardId, shiftTypeId) ?: throw BusinessException(ErrorCode.SHIFT_TYPE_NOT_FOUND_IN_WARD)
         val change = plan(wardId, old, resolved.toRow(shiftTypeId, wardId, command.active ?: old.active))
         return ShiftTypeChangePreview(
             shiftType = change.row.toResult(),
-            policyRevision = repo.policyRevision(wardId),
+            policyRevision = revision,
             flagsDrafts = change.flagsDrafts,
             rewritesDraftSlotTimes = change.newSlotTimes != null,
             affectedDrafts = if (change.flagsDrafts) repo.draftUsage(wardId, shiftTypeId).map {
@@ -151,9 +157,11 @@ class ShiftTypeService(
         }
     }
 
-    /** Fields that change how existing slots of the type should look; name and code alone do not. */
-    private fun affectsSlots(old: ShiftTypeResult, new: ShiftTypeResult) =
-        old.copy(code = "", displayName = "") != new.copy(code = "", displayName = "")
+    /**
+     * Fields that change existing DRAFT slots of the type: everything but the display name, which slots do not store.
+     * The code is stored with each slot, so a code change rewrites drafts and is flagged like any other.
+     */
+    private fun affectsSlots(old: ShiftTypeResult, new: ShiftTypeResult) = old.copy(displayName = "") != new.copy(displayName = "")
 
     private class Resolved(val command: ShiftTypeCommand, val breakMinutes: Int, val recognized: Int, val credit: Int) {
         fun toRow(id: UUID, wardId: UUID, active: Boolean) = ShiftTypeRow(
@@ -162,8 +170,8 @@ class ShiftTypeService(
         )
     }
 
-    private fun replayed(key: UUID, requestHash: String): ShiftTypeResult? =
-        when (val found = replays.replay(key, CREATE_OPERATION, requestHash, ShiftTypeResult::class.java)) {
+    private fun replayed(key: UUID, requestHash: String): ShiftTypeWrite? =
+        when (val found = replays.replay(key, CREATE_OPERATION, requestHash, ShiftTypeWrite::class.java)) {
             ReplayLookup.Missing -> null
             ReplayLookup.Conflict -> throw BusinessException(ErrorCode.IDEMPOTENCY_KEY_REUSED)
             is ReplayLookup.Found -> found.value
