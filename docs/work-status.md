@@ -263,6 +263,7 @@ Claude와 Codex가 같은 진행 기록을 사용한다. PR 또는 정기 리뷰
 | 외부 리뷰(사용자 전달, Codex) | `feat/shift-type-settings` | `f75d79c` | 해당 없음 | 2026-11-12 | 외부 | P2 시각 외 변경(종류·활성·휴게·인정·환산·비활성화)은 재검증 표시만 하고 초안 revision을 올리지 않아, 변경 전 화면의 ETag로 확정 가능. 다음 커밋에서 `markDraftsForRevalidation`이 revision도 올리도록 수정 |
 | `/private/tmp/NurseFlow-a8` | `feat/shift-type-settings` | `2770d52` | 미커밋 변경 없음 | 2026-11-12 | Codex | 위 P2 수정 재리뷰. APPROVE, 지적 없음. 영향 변경마다 revision 한 번 증가, 이름·코드만 변경 시 유지, 실행 중 자동배치는 STALE로 끝남, 잠금 순서 역전 없음. 후속 참고: 경력 정책·팀·프로필이 확정 규칙에 쓰이게 되면 같은 무효화 대상인지 재검토 |
 | GitHub PR #43 리뷰 | `feat/shift-type-settings` | `f75d79c97be97207a60dfc5b66329e49f9f8bf46` | 해당 없음(PR diff 기준) | 2026-11-12 | hyen11 | P1 근무 유형 수정이 공개 근무표 칸의 종류·코드를 소급 변경(휴식 규칙 우회, 개인 근무표 코드 변경), P2 일광절약시간 전환일에 초안 칸 시각 재계산이 종료<시작 구간 저장. 다음 커밋에서 수정 |
+| `/private/tmp/NurseFlow-a8` | `feat/shift-type-settings` | `34c7132` | 미커밋 변경 없음 | 2026-11-12 | Codex | 위 P1·P2 수정 재리뷰. APPROVE, 지적 없음. 확정 검증·인접 월 휴식 규칙·자동배치·병동/개인 캘린더 모두 `slots()` 스냅샷 경유, 별도 슬롯 삽입 경로 없음, 백필 멱등, DST 거부 시 유형·정책 revision까지 롤백 |
 
 이 문서는 Claude와 Codex가 각 기능 단위 작업 후 진행 결과를 함께 기록하는 단일 공유 현황이다.
 
