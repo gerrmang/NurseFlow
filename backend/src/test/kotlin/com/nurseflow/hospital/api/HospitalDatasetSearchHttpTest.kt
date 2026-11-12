@@ -227,31 +227,52 @@ class HospitalDatasetSearchHttpTest : ApiTestBase() {
     fun `the bundled list is imported once and never replaces a newer imported list`() {
         val bundledSeptember = bundled("hira-hospitals(2026.9.).csv.gz", september)
 
-        val first = importer.importBundledIfNewer(bundledSeptember)
+        val first = importer.importBundledUnlessOlder(bundledSeptember)
         assertTrue(first.imported)
         assertEquals("2026-09", first.version)
         assertEquals(listOf("가상병원"), names("가상병원").take(1))
-        assertFalse(importer.importBundledIfNewer(bundledSeptember).imported)
+        assertFalse(importer.importBundledUnlessOlder(bundledSeptember).imported)
 
         // An operator imported the December file from the dataset path; a later start without the path keeps it.
         importer.importIfChanged(csv("1.병원정보서비스(2026.12.).csv", september.filterNot { it.startsWith("FAKE-004") }))
-        val restarted = importer.importBundledIfNewer(bundledSeptember)
+        val restarted = importer.importBundledUnlessOlder(bundledSeptember)
         assertFalse(restarted.imported)
         assertEquals("2026-12", restarted.version)
         assertFalse(names("가상병원").contains("새가상병원"))
 
         // A newer bundled list (after a server update) replaces an older import.
-        val march = importer.importBundledIfNewer(bundled("hira-hospitals(2027.3.).csv.gz", september))
+        val march = importer.importBundledUnlessOlder(bundled("hira-hospitals(2027.3.).csv.gz", september))
         assertTrue(march.imported)
         assertTrue(names("가상병원").contains("새가상병원"))
     }
 
     @Test
-    fun `a bundled list of unknown period never replaces an import`() {
+    fun `a corrected bundled list of the same period is applied, like a changed path file`() {
+        // An operator imported the September zip from the dataset path, then removed the path.
         importer.importIfChanged(zip("data.zip", september))
+        val corrected = bundled("hira-hospitals(2026.9.).csv.gz", september.map { it.replace("가상구 바다로 2", "가상구 바다로 22") })
 
-        assertFalse(importer.importBundledIfNewer(bundled("hira-hospitals.csv.gz", september.take(1))).imported)
+        val applied = importer.importBundledUnlessOlder(corrected)
+        assertTrue(applied.imported)
+        assertEquals("2026-09", applied.version)
+        assertEquals("부산광역시 가상구 바다로 22", search("가상병원").json!!.get("items")[0].get("address").asString())
+        assertFalse(importer.importBundledUnlessOlder(corrected).imported, "the next start skips it")
+    }
+
+    @Test
+    fun `an import of unknown period stops bundled updates until a dated file is imported`() {
+        importer.importIfChanged(csv("hospitals.csv", september))
+        val bundledMarch = bundled("hira-hospitals(2027.3.).csv.gz", september.take(3))
+
+        assertFalse(importer.importBundledUnlessOlder(bundledMarch).imported)
         assertEquals(5, jdbc.queryForObject("SELECT COUNT(*) FROM hospitals WHERE active=TRUE", Int::class.java))
+
+        // The documented recovery: import a dated file from the dataset path once.
+        val dated = importer.importIfChanged(csv("1.병원정보서비스(2026.9.).csv", september.map { it.replace("바다로 2", "바다로 3") }))
+        assertEquals("2026-09", dated.version)
+        assertTrue(importer.importBundledUnlessOlder(bundledMarch).imported)
+        assertFalse(importer.importBundledUnlessOlder(bundled("hira-hospitals.csv.gz", september)).imported,
+            "a bundled file of unknown period never replaces an import")
     }
 
     @Test
@@ -260,7 +281,7 @@ class HospitalDatasetSearchHttpTest : ApiTestBase() {
         assertEquals(1, shipped.size, "exactly one bundled list")
         assertTrue(Regex("""hira-hospitals\(\d{4}\.\d{1,2}\.\)\.csv\.gz""").matches(shipped[0].filename!!), shipped[0].filename)
 
-        val result = importer.importBundledIfNewer(shipped[0])
+        val result = importer.importBundledUnlessOlder(shipped[0])
         assertTrue(result.importedCount >= HospitalProperties.Dataset().minRows, "${result.importedCount} rows")
     }
 

@@ -24,7 +24,7 @@ class HospitalDatasetStartupImport(
         val path = properties.dataset.path.trim().takeIf { it.isNotEmpty() }
         if (path == null && !properties.dataset.bundled) return
         try {
-            val result = if (path != null) importer.importIfChanged(Path.of(path)) else importer.importBundledIfNewer(bundled())
+            val result = if (path != null) importer.importIfChanged(Path.of(path)) else importer.importBundledUnlessOlder(bundled())
             if (!result.imported) log.info("Hospital dataset {} unchanged; import skipped", result.version)
         } catch (ex: Exception) {
             log.error("Hospital dataset import failed; keeping the previous list: {}", ex.message)

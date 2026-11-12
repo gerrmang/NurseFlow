@@ -64,17 +64,18 @@ class HospitalDatasetImporter(
 
     /**
      * Imports the list bundled with the server (the `.csv.gz` file in resources `hospitals/`, made by
-     * `backend/scripts/extract_hospital_list.py`) only when nothing newer is imported, so a restart without a
-     * dataset path never replaces a newer list from `path` with the older bundled one.
+     * `backend/scripts/extract_hospital_list.py`) when it differs from the latest import, like a changed `path` file,
+     * so a corrected list of the same period is applied. It is skipped when it is older than the latest import, so
+     * a restart without a dataset path never replaces a newer list from `path`, and when either period is unknown,
+     * since then neither can be shown to be newer; importing a dated file from `path` resumes bundled updates.
      */
-    fun importBundledIfNewer(resource: Resource): HospitalImportResult {
+    fun importBundledUnlessOlder(resource: Resource): HospitalImportResult {
         val name = resource.filename ?: throw HospitalDatasetException("bundled hospital list has no file name")
         val version = versionOf(name)
         val bytes = resource.inputStream.use { it.readAllBytes() }
         val sha256 = sha256(bytes)
-        // An import or a bundled file of unknown period never counts as older.
         hospitals.latestImport(SOURCE)?.takeIf {
-            it.fileSha256 == sha256 || version == UNKNOWN_VERSION || it.version == UNKNOWN_VERSION || version <= it.version
+            it.fileSha256 == sha256 || version == UNKNOWN_VERSION || it.version == UNKNOWN_VERSION || version < it.version
         }?.let {
             return HospitalImportResult(imported = false, version = it.version)
         }

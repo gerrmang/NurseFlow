@@ -17,6 +17,8 @@ import zipfile
 from pathlib import Path
 
 COLUMNS = ["암호화요양기호", "요양기관명", "종별코드", "종별코드명", "주소"]
+# Same floor as nurseflow.hospital.dataset.min-rows: the real list has about 80,000 hospitals.
+MIN_ROWS = 10_000
 TARGET = Path(__file__).resolve().parent.parent / "src/main/resources/hospitals"
 
 
@@ -45,6 +47,9 @@ def main(source: str) -> None:
                 writer.writerow([record[i] if i < len(record) else "" for i in index])
                 rows += 1
 
+    # A truncated download must fail here, before the current bundled list is touched.
+    if rows < MIN_ROWS:
+        sys.exit(f"only {rows} rows; expected at least {MIN_ROWS}. The bundled list was left unchanged.")
     TARGET.mkdir(parents=True, exist_ok=True)
     target = TARGET / f"hira-hospitals({period.group(1)}.{int(period.group(2))}.).csv.gz"
     # Write the new list completely before touching the old one, so a failure never leaves the server without a list.
