@@ -66,6 +66,7 @@ enum class ErrorCode(val status: HttpStatus, val safeMessage: String) {
     SHIFT_TYPE_NOT_FOUND_IN_WARD(HttpStatus.NOT_FOUND, "병동의 근무 유형을 찾을 수 없습니다."),
     SLOT_NOT_FOUND(HttpStatus.NOT_FOUND, "근무 칸을 찾을 수 없습니다."),
     STALE_ROSTER_REVISION(HttpStatus.PRECONDITION_FAILED, "근무표가 변경되었습니다. 다시 불러와 주세요."),
+    STALE_POLICY_REVISION(HttpStatus.PRECONDITION_FAILED, "근무 정책이 다른 변경으로 바뀌었습니다. 다시 불러와 주세요."),
     SUBJECT_REQUIRED(HttpStatus.UNAUTHORIZED, "사용자 식별 정보가 없습니다."),
     TEAM_NAME_DUPLICATE(HttpStatus.CONFLICT, "같은 이름의 팀이 이미 있습니다."),
     TEAM_NOT_EMPTY(HttpStatus.CONFLICT, "소속 간호사를 다른 팀으로 옮긴 뒤 삭제해 주세요."),

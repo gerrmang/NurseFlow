@@ -13,6 +13,9 @@ data class SlotView(
     val slotId: UUID,
     val date: LocalDate,
     val shiftTypeId: UUID,
+    /** Code and kind stored with the slot: a published slot keeps them even after the type is edited. */
+    val shiftCode: String,
+    val shiftKind: String,
     val startAt: Instant,
     val endAt: Instant,
     val status: String,

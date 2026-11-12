@@ -1,5 +1,6 @@
 package com.nurseflow.common.error
 
+import com.nurseflow.common.idempotency.IdempotencyKeyRaceException
 import org.springframework.http.MediaType
 import org.springframework.http.ResponseEntity
 import org.springframework.http.converter.HttpMessageNotReadableException
@@ -22,6 +23,10 @@ class GlobalExceptionHandler {
         currentRevision = ex.currentRevision,
         ruleViolations = ex.ruleViolations,
     )
+
+    /** The transaction rolled back; the key belongs to a request that committed first elsewhere. */
+    @ExceptionHandler(IdempotencyKeyRaceException::class)
+    fun idempotencyRace(ex: IdempotencyKeyRaceException): ResponseEntity<ApiProblem> = problem(ErrorCode.IDEMPOTENCY_KEY_REUSED)
 
     @ExceptionHandler(HttpMessageNotReadableException::class)
     fun unreadableBody(ex: HttpMessageNotReadableException): ResponseEntity<ApiProblem> {

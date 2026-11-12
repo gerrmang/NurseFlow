@@ -65,36 +65,56 @@ class ShiftTypeJdbcRepository(private val jdbc: JdbcTemplate) {
     }
 
     /**
-     * Rewrites the start/end instants of the type's slots in DRAFT rosters from the new hours (slots store the
-     * times they were created with, and confirmation checks rules against them). Every slot is computed first:
-     * if any would end before it starts in the ward's time zone (a daylight-saving gap or overlap moves one end),
-     * nothing is written and false is returned. The revision is bumped by [markDraftsForRevalidation], which every
-     * such change also calls.
+     * The start/end instants the type's slots in DRAFT rosters get from new hours, in each ward's time zone, or null
+     * if any would end before it starts (a daylight-saving gap or overlap moves one end). Nothing is written.
      */
-    fun recomputeDraftSlotTimes(wardId: UUID, shiftTypeId: UUID, start: LocalTime, end: LocalTime, spansMidnight: Boolean): Boolean {
-        val slots = jdbc.query(
-            """SELECT s.slot_id, s.roster_id, s.shift_date, w.time_zone FROM roster_slots s
+    fun draftSlotTimes(wardId: UUID, shiftTypeId: UUID, start: LocalTime, end: LocalTime, spansMidnight: Boolean): List<SlotTimes>? {
+        val times = jdbc.query(
+            """SELECT s.slot_id, s.shift_date, w.time_zone FROM roster_slots s
                JOIN rosters r ON r.roster_id=s.roster_id JOIN wards w ON w.ward_id=r.ward_id
                WHERE r.ward_id=? AND r.status='DRAFT' AND s.shift_type_id=?""",
             { rs, _ ->
-                SlotDate(
-                    UUID.fromString(rs.getString("slot_id")), UUID.fromString(rs.getString("roster_id")),
-                    rs.getObject("shift_date", LocalDate::class.java), ZoneId.of(rs.getString("time_zone")),
+                val date = rs.getObject("shift_date", LocalDate::class.java)
+                val zone = ZoneId.of(rs.getString("time_zone"))
+                SlotTimes(
+                    UUID.fromString(rs.getString("slot_id")),
+                    date.atTime(start).atZone(zone).toInstant(),
+                    (if (spansMidnight) date.plusDays(1) else date).atTime(end).atZone(zone).toInstant(),
                 )
             },
             wardId, shiftTypeId,
         )
-        val times = slots.map { slot ->
-            val startsAt = slot.date.atTime(start).atZone(slot.zone).toInstant()
-            val endsAt = (if (spansMidnight) slot.date.plusDays(1) else slot.date).atTime(end).atZone(slot.zone).toInstant()
-            Triple(slot.id, startsAt, endsAt)
-        }
-        if (times.any { (_, startsAt, endsAt) -> !startsAt.isBefore(endsAt) }) return false
-        times.forEach { (id, startsAt, endsAt) ->
-            jdbc.update("UPDATE roster_slots SET starts_at=?, ends_at=? WHERE slot_id=?", startsAt.toString(), endsAt.toString(), id)
-        }
-        return true
+        return times.takeIf { all -> all.all { it.startsAt.isBefore(it.endsAt) } }
     }
+
+    /**
+     * Rewrites the start/end instants of the type's slots in DRAFT rosters (slots store the times they were created
+     * with, and confirmation checks rules against them) from [draftSlotTimes]. The revision is bumped by
+     * [markDraftsForRevalidation], which every such change also calls.
+     */
+    fun rewriteDraftSlotTimes(times: List<SlotTimes>) {
+        times.forEach { jdbc.update("UPDATE roster_slots SET starts_at=?, ends_at=? WHERE slot_id=?", it.startsAt.toString(), it.endsAt.toString(), it.id) }
+    }
+
+    /** DRAFT rosters with slots of this type: what a change of the type would flag for revalidation. */
+    fun draftUsage(wardId: UUID, shiftTypeId: UUID): List<DraftUsage> = jdbc.query(
+        """SELECT r.roster_id, r.roster_month, r.revision, COUNT(*) AS slots, COUNT(s.nurse_id) AS assigned
+            FROM rosters r JOIN roster_slots s ON s.roster_id=r.roster_id
+            WHERE r.ward_id=? AND r.status='DRAFT' AND s.shift_type_id=?
+            GROUP BY r.roster_id, r.roster_month, r.revision ORDER BY r.roster_month""",
+        { rs, _ ->
+            DraftUsage(UUID.fromString(rs.getString("roster_id")), rs.getString("roster_month"), rs.getInt("revision"),
+                rs.getInt("slots"), rs.getInt("assigned"))
+        },
+        wardId, shiftTypeId,
+    )
+
+    /** Published rosters (current or replaced) with slots of this type. They keep their values whatever changes. */
+    fun publishedRosterCount(wardId: UUID, shiftTypeId: UUID): Int = jdbc.queryForObject(
+        """SELECT COUNT(DISTINCT r.roster_id) FROM rosters r JOIN roster_slots s ON s.roster_id=r.roster_id
+            WHERE r.ward_id=? AND r.status='PUBLISHED' AND s.shift_type_id=?""",
+        Int::class.java, wardId, shiftTypeId,
+    ) ?: 0
 
     /** DRAFT slots follow the type's code and kind; published slots keep the values they were published with. */
     fun syncDraftSlotCodeAndKind(wardId: UUID, shiftTypeId: UUID, code: String, kind: ShiftKind) {
@@ -105,7 +125,6 @@ class ShiftTypeJdbcRepository(private val jdbc: JdbcTemplate) {
         )
     }
 
-    private data class SlotDate(val id: UUID, val rosterId: UUID, val date: LocalDate, val zone: ZoneId)
 
     /**
      * Flags DRAFT rosters of the ward that have slots of this shift type and bumps their revision, so a client
@@ -134,3 +153,7 @@ class ShiftTypeJdbcRepository(private val jdbc: JdbcTemplate) {
         targetCreditMinutes = rs.getObject("target_credit_minutes") as Int?,
     )
 }
+
+data class SlotTimes(val id: UUID, val startsAt: Instant, val endsAt: Instant)
+
+data class DraftUsage(val rosterId: UUID, val month: String, val revision: Int, val slots: Int, val assigned: Int)

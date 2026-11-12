@@ -18,3 +18,14 @@ data class ShiftTypeResponse(
 )
 
 data class ShiftTypeItems(val items: List<ShiftTypeResponse>, val policyRevision: Int)
+
+data class AffectedDraftResponse(val rosterId: UUID, val month: String, val revision: Int, val slots: Int, val assignedSlots: Int)
+
+data class ShiftTypeChangePreviewResponse(
+    val shiftType: ShiftTypeResponse,
+    val policyRevision: Int,
+    val flagsDrafts: Boolean,
+    val rewritesDraftSlotTimes: Boolean,
+    val affectedDrafts: List<AffectedDraftResponse>,
+    val publishedRostersUsingType: Int,
+)

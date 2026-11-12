@@ -516,7 +516,7 @@ class RosterService(
             StaffingSummary(all.size, all.count { it.nurseId != null }, all.count { it.nurseId == null }),
             all.map {
                 SlotView(
-                    it.id, it.date, it.shiftTypeId, it.startsAt, it.endsAt,
+                    it.id, it.date, it.shiftTypeId, it.shiftCode, it.kind.name, it.startsAt, it.endsAt,
                     if (it.nurseId == null) "UNFILLED" else "FILLED",
                     it.nurseId?.let { nurseId -> AssignmentView(nurseId, it.nurseName ?: "", it.locked) },
                 )

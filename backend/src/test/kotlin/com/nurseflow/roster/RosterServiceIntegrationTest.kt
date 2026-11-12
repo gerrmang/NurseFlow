@@ -85,7 +85,8 @@ class RosterServiceIntegrationTest @Autowired constructor(
 
         // The published night type is turned into a day type with another code.
         shiftTypes.update(wardId, nightTypeId, ShiftTypeCommand("N2", "데이로 바뀐 유형", ShiftKind.DAY,
-            java.time.LocalTime.of(7, 0), java.time.LocalTime.of(15, 0), false, null, null, null, null), admin)
+            java.time.LocalTime.of(7, 0), java.time.LocalTime.of(15, 0), false, null, null, null, null),
+            ShiftTypeService.policyEtag(0), admin)
 
         val published = service.publishedMine(wardId, "2026-10", "test-nurse").assignments.single()
         assertEquals("NIGHT", published.shiftType)

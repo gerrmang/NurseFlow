@@ -77,7 +77,7 @@ class ShiftTypeHttpTest : ApiTestBase() {
         fun rosterRevision(rosterId: UUID) = jdbc.queryForObject("SELECT revision FROM rosters WHERE roster_id=?", Int::class.java, rosterId)
         val publishedBefore = slotTimes(published)
 
-        val updated = http.put("${base()}/$id", body(code = "N", kind = "NIGHT", start = "21:00", end = "06:00", spans = true), admin)
+        val updated = http.put("${base()}/$id", body(code = "N", kind = "NIGHT", start = "21:00", end = "06:00", spans = true), admin, current())
 
         assertEquals(200, updated.status, updated.body)
         // 2026-11-05 21:00 Asia/Seoul = 12:00Z, ends next day 06:00 KST = 21:00Z.
@@ -88,6 +88,9 @@ class ShiftTypeHttpTest : ApiTestBase() {
     }
 
     private fun revision(): Int = http.get(base(), admin).json!!.get("policyRevision").asInt()
+
+    /** If-Match with the ward policy ETag as of now, as a client that just reloaded the list would send. */
+    private fun current() = mapOf("If-Match" to http.get(base(), admin).header("ETag")!!)
 
     private fun confirmWith(rosterId: UUID, etag: String) = http.post("/api/v1/rosters/$rosterId/confirm", emptyMap<String, Any>(),
         admin, mapOf("If-Match" to etag, "Idempotency-Key" to UUID.randomUUID().toString()))
@@ -100,13 +103,13 @@ class ShiftTypeHttpTest : ApiTestBase() {
         val before = http.get("/api/v1/rosters/$draft", admin).header("ETag")!!
 
         val response = when (change) {
-            "kind" -> http.put("${base()}/$id", body(kind = "EVENING"), admin)
-            "inactive" -> http.put("${base()}/$id", body(extra = mapOf("active" to false)), admin)
-            "break" -> http.put("${base()}/$id", body(extra = mapOf("breakMinutes" to 60)), admin)
-            "recognized" -> http.put("${base()}/$id", body(extra = mapOf("recognizedMinutes" to 400)), admin)
-            "target credit" -> http.put("${base()}/$id", body(extra = mapOf("targetCreditMinutes" to 300)), admin)
-            "hours" -> http.put("${base()}/$id", body(end = "08:00"), admin)
-            else -> http.delete("${base()}/$id", admin)
+            "kind" -> http.put("${base()}/$id", body(kind = "EVENING"), admin, current())
+            "inactive" -> http.put("${base()}/$id", body(extra = mapOf("active" to false)), admin, current())
+            "break" -> http.put("${base()}/$id", body(extra = mapOf("breakMinutes" to 60)), admin, current())
+            "recognized" -> http.put("${base()}/$id", body(extra = mapOf("recognizedMinutes" to 400)), admin, current())
+            "target credit" -> http.put("${base()}/$id", body(extra = mapOf("targetCreditMinutes" to 300)), admin, current())
+            "hours" -> http.put("${base()}/$id", body(end = "08:00"), admin, current())
+            else -> http.delete("${base()}/$id", admin, current())
         }
         assertEquals(200, response.status, response.body)
 
@@ -126,7 +129,7 @@ class ShiftTypeHttpTest : ApiTestBase() {
         fun codeAndKind(rosterId: UUID) = jdbc.queryForMap("SELECT shift_code, shift_kind FROM roster_slots WHERE roster_id=?", rosterId)
             .mapKeys { it.key.lowercase() }
 
-        assertEquals(200, http.put("${base()}/$id", body(code = "E", kind = "EVENING"), admin).status)
+        assertEquals(200, http.put("${base()}/$id", body(code = "E", kind = "EVENING"), admin, current()).status)
 
         assertEquals(mapOf("shift_code" to "E", "shift_kind" to "EVENING"), codeAndKind(draft))
         assertEquals(mapOf("shift_code" to "N", "shift_kind" to "NIGHT"), codeAndKind(published))
@@ -144,7 +147,7 @@ class ShiftTypeHttpTest : ApiTestBase() {
         val policyBefore = revision()
 
         // 02:30 does not exist that night (clocks jump 02:00 -> 03:00), so the start moves to 03:30, after the 03:00 end.
-        val response = http.put("${base()}/$id", body("D", "데이", "DAY", "02:30", "03:00", false), admin)
+        val response = http.put("${base()}/$id", body("D", "데이", "DAY", "02:30", "03:00", false), admin, current())
 
         assertEquals(422, response.status, response.body)
         assertEquals("INVALID_SHIFT_INTERVAL", response.code)
@@ -157,12 +160,94 @@ class ShiftTypeHttpTest : ApiTestBase() {
     }
 
     @Test
+    fun `roster responses carry the code and kind stored with each slot`() {
+        val id = create().get("shiftTypeId").asString()
+        val draft = roster("DRAFT", "2026-11", id)
+        val published = roster("PUBLISHED", "2026-10", id)
+
+        assertEquals(200, http.put("${base()}/$id", body(code = "E", kind = "EVENING"), admin, current()).status)
+
+        fun slot(json: JsonNode) = json.get("slots")[0].let { it.get("shiftCode").asString() to it.get("shiftKind").asString() }
+        assertEquals("N" to "NIGHT", slot(http.get("/api/v1/rosters/$published", admin).json!!))
+        assertEquals("N" to "NIGHT", slot(http.get("/api/v1/wards/$wardId/published-rosters?month=2026-10", member).json!!))
+        assertEquals("E" to "EVENING", slot(http.get("/api/v1/rosters/$draft", admin).json!!))
+    }
+
+    @Test
+    fun `a change from a stale policy revision is refused instead of overwriting another admin's change`() {
+        val id = create().get("shiftTypeId").asString()
+        val seen = current()
+        // Another admin saves first.
+        val first = http.put("${base()}/$id", body(name = "야간 A"), admin, seen)
+        assertEquals(200, first.status, first.body)
+        assertEquals(http.get(base(), admin).header("ETag"), first.header("ETag"))
+
+        val stale = http.put("${base()}/$id", body(name = "야간 B"), admin, seen)
+        assertEquals(412, stale.status, stale.body)
+        assertEquals("STALE_POLICY_REVISION", stale.code)
+        assertEquals("STALE_POLICY_REVISION", http.delete("${base()}/$id", admin, seen).code)
+        assertEquals("INVALID_REQUEST", http.put("${base()}/$id", body(name = "야간 C"), admin).code)
+        assertEquals("야간 A", http.get(base(), admin).json!!.get("items")[0].get("displayName").asString())
+
+        // Deactivating an already inactive type writes nothing, so even a stale view gets the no-op 200.
+        assertEquals(200, http.delete("${base()}/$id", admin, current()).status)
+        assertEquals(200, http.delete("${base()}/$id", admin, seen).status)
+    }
+
+    @Test
+    fun `preview reports the drafts a change would flag without writing anything`() {
+        val id = create().get("shiftTypeId").asString()
+        val draft = roster("DRAFT", "2026-11", id)
+        roster("PUBLISHED", "2026-10", id)
+        val etagBefore = http.get("/api/v1/rosters/$draft", admin).header("ETag")
+        val policyBefore = revision()
+
+        val preview = http.post("${base()}/$id/preview", body(kind = "EVENING", end = "08:00"), admin)
+
+        assertEquals(200, preview.status, preview.body)
+        val json = preview.json!!
+        assertTrue(json.get("flagsDrafts").asBoolean())
+        assertTrue(json.get("rewritesDraftSlotTimes").asBoolean())
+        assertEquals("EVENING", json.get("shiftType").get("kind").asString())
+        assertEquals(policyBefore, json.get("policyRevision").asInt())
+        val affected = json.get("affectedDrafts")
+        assertEquals(1, affected.size())
+        assertEquals(draft.toString(), affected[0].get("rosterId").asString())
+        assertEquals(1, affected[0].get("slots").asInt())
+        assertEquals(0, affected[0].get("assignedSlots").asInt())
+        assertEquals(1, json.get("publishedRostersUsingType").asInt())
+        // Nothing was saved.
+        assertEquals(policyBefore, revision())
+        assertEquals(etagBefore, http.get("/api/v1/rosters/$draft", admin).header("ETag"))
+        assertEquals("NIGHT", http.get(base(), admin).json!!.get("items")[0].get("kind").asString())
+
+        val nameOnly = http.post("${base()}/$id/preview", body(name = "야간"), admin).json!!
+        assertFalse(nameOnly.get("flagsDrafts").asBoolean())
+        assertEquals(0, nameOnly.get("affectedDrafts").size())
+        assertEquals(403, http.post("${base()}/$id/preview", body(name = "야간"), member).status)
+    }
+
+    @Test
+    fun `preview refuses what the save would refuse, including a daylight-saving day`() {
+        jdbc.update("UPDATE wards SET time_zone='America/New_York' WHERE ward_id=?", wardId)
+        val id = create(body("D", "데이", "DAY", "01:00", "02:00", false)).get("shiftTypeId").asString()
+        val draft = UUID.randomUUID()
+        jdbc.update("INSERT INTO rosters(roster_id,ward_id,roster_month,status,active,revision) VALUES(?,?,'2026-03','DRAFT',FALSE,1)", draft, wardId)
+        jdbc.update("""INSERT INTO roster_slots(slot_id,roster_id,shift_date,shift_type_id,shift_code,shift_kind,starts_at,ends_at)
+            VALUES(?,?,'2026-03-08',?,'D','DAY','2026-03-08T06:00:00Z','2026-03-08T07:00:00Z')""", UUID.randomUUID(), draft, UUID.fromString(id))
+
+        assertEquals("INVALID_SHIFT_INTERVAL", http.post("${base()}/$id/preview", body("D", "데이", "DAY", "02:30", "03:00", false), admin).code)
+        create(body("E", "이브닝", "EVENING", "15:00", "23:00", false))
+        assertEquals("SHIFT_TYPE_CODE_DUPLICATE", http.post("${base()}/$id/preview", body("E", "데이", "DAY", "01:00", "02:00", false), admin).code)
+    }
+
+    @Test
     fun `a name-only change keeps the draft revision`() {
         val id = create().get("shiftTypeId").asString()
         val draft = roster("DRAFT", "2026-11", id)
         val before = http.get("/api/v1/rosters/$draft", admin).header("ETag")!!
 
-        assertEquals(200, http.put("${base()}/$id", body(name = "야간"), admin).status)
+        assertEquals(200, http.put("${base()}/$id", body(name = "야간"), admin, current()).status)
 
         assertEquals(before, http.get("/api/v1/rosters/$draft", admin).header("ETag"))
         assertFalse(needsRevalidation(draft))
@@ -180,10 +265,10 @@ class ShiftTypeHttpTest : ApiTestBase() {
             Case("anonymous", null, 401, 401, 401),
         ).forEach { c ->
             assertEquals(c.list, http.get(base(), c.token).status, "list ${c.who}")
-            assertEquals(c.write, http.put("${base()}/$id", put, c.token).status, "put ${c.who}")
+            assertEquals(c.write, http.put("${base()}/$id", put, c.token, current()).status, "put ${c.who}")
             val created = postType(body(code = "X_${c.who.take(3).uppercase()}"), c.token).status
             assertEquals(if (c.who == "admin") 201 else c.write, created, "post ${c.who}")
-            assertEquals(c.missing, http.delete("${base()}/$id", c.token).status, "delete ${c.who}")
+            assertEquals(c.missing, http.delete("${base()}/$id", c.token, current()).status, "delete ${c.who}")
         }
     }
 
@@ -199,7 +284,7 @@ class ShiftTypeHttpTest : ApiTestBase() {
         val id = day.get("shiftTypeId").asString()
 
         val updated = http.put("${base()}/$id", body("D", "데이 근무", "DAY", "07:00", "16:00", false,
-            mapOf("breakMinutes" to 60, "recognizedMinutes" to 480, "targetCreditMinutes" to 456)), admin)
+            mapOf("breakMinutes" to 60, "recognizedMinutes" to 480, "targetCreditMinutes" to 456)), admin, current())
         assertEquals(200, updated.status, updated.body)
         assertEquals(540, updated.json!!.get("durationMinutes").asInt())
         assertEquals(480, updated.json!!.get("recognizedMinutes").asInt())
@@ -209,17 +294,17 @@ class ShiftTypeHttpTest : ApiTestBase() {
         val listed = http.get(base(), member).json!!
         assertEquals("데이 근무", listed.get("items").get(0).get("displayName").asString())
 
-        val off = http.delete("${base()}/$id", admin)
+        val off = http.delete("${base()}/$id", admin, current())
         assertEquals(200, off.status)
         assertFalse(off.json!!.get("active").asBoolean())
         assertEquals(0, http.get(base(), member).json!!.get("items").size())
         assertEquals(1, http.get("${base()}?includeInactive=true", member).json!!.get("items").size())
         // Deactivating again is a no-op and does not bump the revision.
         val before = revision()
-        assertEquals(200, http.delete("${base()}/$id", admin).status)
+        assertEquals(200, http.delete("${base()}/$id", admin, current()).status)
         assertEquals(before, revision())
 
-        val back = http.put("${base()}/$id", body("D", "데이 근무", "DAY", "07:00", "15:00", false, mapOf("active" to true)), admin)
+        val back = http.put("${base()}/$id", body("D", "데이 근무", "DAY", "07:00", "15:00", false, mapOf("active" to true)), admin, current())
         assertTrue(back.json!!.get("active").asBoolean())
         assertEquals(1, http.get(base(), member).json!!.get("items").size())
         val actions = jdbc.queryForList("SELECT action FROM audit_events WHERE ward_id=? ORDER BY created_at", String::class.java, wardId)
@@ -274,10 +359,10 @@ class ShiftTypeHttpTest : ApiTestBase() {
         assertEquals(201, postType(body("D2", "중간", "DAY", "08:00", "16:00", false), admin).status)
 
         val other = create(body("E", "이브닝", "EVENING", "15:00", "23:00", false)).get("shiftTypeId").asString()
-        val clash = http.put("${base()}/$other", body("D", "이브닝", "EVENING", "15:00", "23:00", false), admin)
+        val clash = http.put("${base()}/$other", body("D", "이브닝", "EVENING", "15:00", "23:00", false), admin, current())
         assertEquals("SHIFT_TYPE_CODE_DUPLICATE", clash.code)
-        assertEquals(200, http.put("${base()}/$other", body("E", "이브닝2", "EVENING", "15:00", "23:00", false), admin).status)
-        assertEquals("SHIFT_TYPE_NOT_FOUND_IN_WARD", http.put("${base()}/${UUID.randomUUID()}", body(), admin).code)
+        assertEquals(200, http.put("${base()}/$other", body("E", "이브닝2", "EVENING", "15:00", "23:00", false), admin, current()).status)
+        assertEquals("SHIFT_TYPE_NOT_FOUND_IN_WARD", http.put("${base()}/${UUID.randomUUID()}", body(), admin, current()).code)
     }
 
     @Test
@@ -286,8 +371,8 @@ class ShiftTypeHttpTest : ApiTestBase() {
         val foreign = UUID.randomUUID()
         jdbc.update("""INSERT INTO shift_types(shift_type_id,ward_id,code,display_name,kind,start_time,end_time,spans_midnight)
             VALUES(?,?,'D','데이','DAY','07:00:00','15:00:00',FALSE)""", foreign, otherWard)
-        assertEquals(404, http.put("${base()}/$foreign", body(), admin).status)
-        assertEquals(404, http.delete("${base()}/$foreign", admin).status)
+        assertEquals(404, http.put("${base()}/$foreign", body(), admin, current()).status)
+        assertEquals(404, http.delete("${base()}/$foreign", admin, current()).status)
         assertEquals(0, http.get(base(), admin).json!!.get("items").size())
     }
 
@@ -296,9 +381,9 @@ class ShiftTypeHttpTest : ApiTestBase() {
         assertEquals(0, revision())
         val id = create().get("shiftTypeId").asString()
         assertEquals(1, revision())
-        http.put("${base()}/$id", body(name = "나이트2"), admin)
+        http.put("${base()}/$id", body(name = "나이트2"), admin, current())
         assertEquals(2, revision())
-        http.delete("${base()}/$id", admin)
+        http.delete("${base()}/$id", admin, current())
         assertEquals(3, revision())
         postType(body(start = "7:00"), admin)
         postType(body(code = "D", kind = "DAY", start = "07:00", end = "15:00", spans = false), admin)
@@ -331,10 +416,10 @@ class ShiftTypeHttpTest : ApiTestBase() {
         assertFalse(needsRevalidation(draft))
 
         // Name only: no flag.
-        assertEquals(200, http.put("${base()}/$id", body(name = "야간"), admin).status)
+        assertEquals(200, http.put("${base()}/$id", body(name = "야간"), admin, current()).status)
         assertFalse(needsRevalidation(draft))
 
-        assertEquals(200, http.put("${base()}/$id", body(name = "야간", end = "08:00"), admin).status)
+        assertEquals(200, http.put("${base()}/$id", body(name = "야간", end = "08:00"), admin, current()).status)
         assertTrue(needsRevalidation(draft))
         assertFalse(needsRevalidation(otherDraft))
         assertFalse(needsRevalidation(published))
@@ -347,7 +432,7 @@ class ShiftTypeHttpTest : ApiTestBase() {
         val id = create().get("shiftTypeId").asString()
         val draft = roster("DRAFT", "2026-11", id)
         val published = roster("PUBLISHED", "2026-10", id)
-        assertEquals(200, http.delete("${base()}/$id", admin).status)
+        assertEquals(200, http.delete("${base()}/$id", admin, current()).status)
         assertTrue(needsRevalidation(draft))
         assertFalse(needsRevalidation(published))
         val slots = http.get("/api/v1/rosters/$draft", admin).json!!.get("slots")

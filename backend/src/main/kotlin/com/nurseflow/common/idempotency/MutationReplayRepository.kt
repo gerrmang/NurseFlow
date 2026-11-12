@@ -1,5 +1,6 @@
 package com.nurseflow.common.idempotency
 
+import org.springframework.dao.DuplicateKeyException
 import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.stereotype.Repository
 import tools.jackson.databind.json.JsonMapper
@@ -24,12 +25,21 @@ class MutationReplayRepository(private val jdbc: JdbcTemplate, private val mappe
         return ReplayLookup.Found(mapper.readValue(saved.third, type))
     }
 
-    /** Must run in the mutation's transaction; a concurrent duplicate fails on the primary key. */
+    /**
+     * Must run in the mutation's transaction; a concurrent duplicate fails on the primary key with
+     * [IdempotencyKeyRaceException]. Mutations that lock their scope re-read the replay after the lock, so a
+     * duplicate reaching here used the key for another scope or request (another ward or roster) and is answered
+     * 409 IDEMPOTENCY_KEY_REUSED unless the caller recovers a same-request replay itself.
+     */
     fun recordReplay(key: UUID, operation: String, requestHash: String, response: Any) {
-        jdbc.update(
-            "INSERT INTO mutation_replays(idempotency_key,operation,request_hash,response_json) VALUES(?,?,?,?)",
-            key, operation, requestHash, mapper.writeValueAsString(response),
-        )
+        try {
+            jdbc.update(
+                "INSERT INTO mutation_replays(idempotency_key,operation,request_hash,response_json) VALUES(?,?,?,?)",
+                key, operation, requestHash, mapper.writeValueAsString(response),
+            )
+        } catch (ex: DuplicateKeyException) {
+            throw IdempotencyKeyRaceException(ex)
+        }
     }
 
     /** SHA-256 of the JSON form of [payload]. */
@@ -37,3 +47,7 @@ class MutationReplayRepository(private val jdbc: JdbcTemplate, private val mappe
         .digest(mapper.writeValueAsBytes(payload))
         .joinToString("") { "%02x".format(it) }
 }
+
+/** Another transaction recorded the same key first. Still a [DuplicateKeyException] for callers that recover. */
+class IdempotencyKeyRaceException(cause: DuplicateKeyException) :
+    DuplicateKeyException("idempotency key recorded concurrently", cause)

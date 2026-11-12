@@ -58,13 +58,15 @@ class ShiftTypeSchemaUpgradeTest {
         val dataSource = DriverManagerDataSource(url, "sa", "")
         val jdbc = JdbcTemplate(dataSource)
         ResourceDatabasePopulator(ClassPathResource("schema.sql")).execute(dataSource)
+        // An admin edits the type between restarts; the next start must not copy the new values into existing slots.
+        jdbc.update("UPDATE shift_types SET code='D', kind='DAY' WHERE shift_type_id=?", shift)
         ResourceDatabasePopulator(ClassPathResource("schema.sql")).execute(dataSource)
 
         val type = jdbc.queryForMap(
             "SELECT code,display_name,kind,spans_midnight,active,break_minutes,recognized_minutes,target_credit_minutes FROM shift_types WHERE shift_type_id=?",
             shift,
         ).mapKeys { it.key.lowercase() }
-        assertEquals("N", type["code"])
+        assertEquals("D", type["code"])
         assertEquals("나이트", type["display_name"])
         assertEquals(true, type["spans_midnight"])
         assertEquals(true, type["active"])

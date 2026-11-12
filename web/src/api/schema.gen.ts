@@ -677,7 +677,7 @@ export interface paths {
          * @description 병동 구성원(관리자·간호사)이 조회한다. 기본은 활성 근무 유형만 반환하며
          *     `includeInactive=true`이면 비활성 유형도 포함한다. 정렬은 `startTime`, `code` 순이다.
          *     `policyRevision`은 이 병동의 근무 유형이 바뀔 때마다 1씩 늘어나는 병동 정책 revision이다
-         *     (근무 유형이 한 번도 바뀌지 않았으면 0).
+         *     (근무 유형이 한 번도 바뀌지 않았으면 0). 응답 `ETag`는 이 revision이며 수정·비활성화의 `If-Match`로 보낸다.
          */
         get: operations["listShiftTypes"];
         put?: never;
@@ -686,7 +686,8 @@ export interface paths {
          * @description 관리자만 호출할 수 있다. 같은 병동에서 `code`는 비활성 유형을 포함해 유일하다
          *     (`SHIFT_TYPE_CODE_DUPLICATE`). 서로 다른 유형의 시간대가 겹치는 것은 허용한다.
          *     같은 `Idempotency-Key`로 재시도하면(응답 유실 등) 처음 만든 유형을 그대로 돌려준다. 다른 본문이나 다른 사용자가
-         *     같은 키를 쓰면 409 `IDEMPOTENCY_KEY_REUSED`. 병동 단위로 직렬화되므로 같은 `code`를 새 키로 동시에 만들면 하나만 201이다.
+         *     같은 키를 쓰면 409 `IDEMPOTENCY_KEY_REUSED`이며, 다른 병동에서 같은 키로 동시에 만들어도 먼저 커밋한 쪽만 성공하고 나머지는 409다.
+         *     병동 단위로 직렬화되므로 같은 `code`를 새 키로 동시에 만들면 하나만 201이다.
          *     `kind`는 DAY·EVENING·NIGHT만 받는다. OTHER(특수 근무)는 휴식 규칙이 정해지지 않아 결정 23 전까지 입력할 수 없다.
          */
         post: operations["createShiftType"];
@@ -719,17 +720,47 @@ export interface paths {
          *     다음 달 근무의 휴식 규칙도 그 값으로 검사한다. 새 시각을 병동 시간대로 바꿨을 때 일광절약시간 전환일의 DRAFT 칸 중 하나라도
          *     종료가 시작보다 앞서면 422 INVALID_SHIFT_INTERVAL이며 변경 전체가 적용되지 않는다.
          *     `kind`는 생성과 같이 DAY·EVENING·NIGHT만 받는다.
+         *     `If-Match`에는 마지막으로 받은 정책 `ETag`(목록·생성·수정·비활성화 응답)를 보낸다. 그 사이 다른 관리자가 근무 유형을 바꿨으면
+         *     412 STALE_POLICY_REVISION(`currentRevision`에 현재 정책 revision)이며 아무것도 바뀌지 않는다. 다시 조회한 뒤 저장한다.
+         *     저장 전 영향은 `POST .../preview`로 확인한다. 서로 다른 유형의 시간대가 겹치는 것은 허용한다(실제 근무 겹침은 배치 규칙이 검사한다).
          */
         put: operations["updateShiftType"];
         post?: never;
         /**
          * 근무 유형 비활성화
          * @description 관리자만 호출할 수 있다. 행을 지우지 않고 `active=false`로 바꾼다(근무 칸이 참조하므로 삭제하지 않는다).
-         *     이미 비활성이어도 200이며 변경 없이 현재 값을 반환한다(정책 revision도 늘지 않는다).
+         *     이미 비활성이어도 200이며 변경 없이 현재 값을 반환한다(정책 revision도 늘지 않고, 쓰는 것이 없으므로 `If-Match`도 비교하지 않는다).
+         *     활성 유형을 비활성화할 때 `If-Match`가 현재 정책 ETag와 다르면 412 STALE_POLICY_REVISION.
          *     비활성 유형은 새 필요 인원 입력에 쓸 수 없지만(`SHIFT_TYPE_NOT_FOUND`), 기존 근무 칸과 근무표 조회는 그대로다.
          *     이 유형을 쓰는 DRAFT 근무표는 `needsRevalidation=true`가 되고 revision이 올라, 변경 전 ETag로는 확정할 수 없다.
          */
         delete: operations["deactivateShiftType"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/wards/{wardId}/shift-types/{shiftTypeId}/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                wardId: components["parameters"]["WardId"];
+                shiftTypeId: components["parameters"]["ShiftTypeId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 근무 유형 변경 영향 미리보기
+         * @description 관리자만 호출할 수 있다. 본문은 PUT과 같고(`active: false`이면 비활성화 미리보기), 아무것도 저장하지 않는다.
+         *     PUT과 같은 검증·오류를 돌려준다(일광절약시간 전환일의 DRAFT 칸 검사 포함). 저장 시 영향을 보여준다:
+         *     재검증 표시·revision 증가 대상 DRAFT 근무표(`affectedDrafts`), DRAFT 칸 시각 재계산 여부, 공개 당시 값을 유지하는
+         *     PUBLISHED 근무표 수. `policyRevision`은 미리보기 시점의 정책 revision이며, 이후 저장은 `If-Match`로 이 값을 다시 확인한다.
+         */
+        post: operations["previewShiftTypeChange"];
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -1346,6 +1377,29 @@ export interface components {
             /** Format: date-time */
             at: string;
         };
+        ShiftTypeChangePreview: {
+            shiftType: components["schemas"]["ShiftType"];
+            /** @description 미리보기 시점의 병동 정책 revision. */
+            policyRevision: number;
+            /** @description 저장하면 이 유형을 쓰는 DRAFT 근무표에 재검증 표시를 켜고 revision을 올리는지. 이름·코드만 바꾸면 false. */
+            flagsDrafts: boolean;
+            /** @description 저장하면 DRAFT 칸의 시각을 새 시간으로 다시 계산하는지. */
+            rewritesDraftSlotTimes: boolean;
+            /** @description 재검증 대상이 될 DRAFT 근무표. `flagsDrafts`가 false이면 빈 배열. */
+            affectedDrafts: {
+                /** Format: uuid */
+                rosterId: string;
+                month: string;
+                /** @description 현재 revision. 저장하면 1 오른다. */
+                revision: number;
+                /** @description 이 유형의 칸 수. */
+                slots: number;
+                /** @description 그중 간호사가 배정된 칸 수. */
+                assignedSlots: number;
+            }[];
+            /** @description 이 유형을 쓰는 PUBLISHED 근무표 수. 저장해도 공개 당시 값을 유지하며 재확정 전까지 바뀌지 않는다. */
+            publishedRostersUsingType: number;
+        };
         ShiftType: {
             /** Format: uuid */
             shiftTypeId: string;
@@ -1456,6 +1510,13 @@ export interface components {
             date: string;
             /** Format: uuid */
             shiftTypeId: string;
+            /** @description 칸에 저장된 근무 코드. PUBLISHED 칸은 이후 근무 유형을 고쳐도 공개 당시 값을 유지하고, DRAFT 칸은 유형 변경을 따른다. */
+            shiftCode: string;
+            /**
+             * @description 칸에 저장된 근무 종류. 휴식 규칙은 이 값으로 검사한다.
+             * @enum {string}
+             */
+            shiftKind: "DAY" | "EVENING" | "NIGHT" | "OTHER";
             /** Format: date-time */
             startAt: string;
             /** Format: date-time */
@@ -1728,6 +1789,11 @@ export interface components {
         SlotId: string;
         JobId: string;
         /**
+         * @description 마지막으로 받은 병동 근무 유형 정책 ETag.
+         * @example "policy-3"
+         */
+        PolicyIfMatch: string;
+        /**
          * @description Strong ETag of the roster revision loaded by the client.
          * @example "roster-70c0e496-r12"
          */
@@ -1741,6 +1807,11 @@ export interface components {
     headers: {
         /** @description Strong revision ETag for subsequent If-Match writes. */
         RosterETag: string;
+        /**
+         * @description 병동 근무 유형 정책 revision의 ETag. 근무 유형 수정·비활성화의 If-Match로 보낸다.
+         * @example "policy-3"
+         */
+        PolicyETag: string;
     };
     pathItems: never;
 }
@@ -3433,6 +3504,7 @@ export interface operations {
             /** @description 근무 유형 목록과 병동 정책 revision */
             200: {
                 headers: {
+                    ETag: components["headers"]["PolicyETag"];
                     [name: string]: unknown;
                 };
                 content: {
@@ -3476,6 +3548,7 @@ export interface operations {
             /** @description 생성됨 */
             201: {
                 headers: {
+                    ETag: components["headers"]["PolicyETag"];
                     [name: string]: unknown;
                 };
                 content: {
@@ -3520,7 +3593,13 @@ export interface operations {
     updateShiftType: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /**
+                 * @description 마지막으로 받은 병동 근무 유형 정책 ETag.
+                 * @example "policy-3"
+                 */
+                "If-Match": components["parameters"]["PolicyIfMatch"];
+            };
             path: {
                 wardId: components["parameters"]["WardId"];
                 shiftTypeId: components["parameters"]["ShiftTypeId"];
@@ -3536,6 +3615,7 @@ export interface operations {
             /** @description 근무 유형 갱신됨 */
             200: {
                 headers: {
+                    ETag: components["headers"]["PolicyETag"];
                     [name: string]: unknown;
                 };
                 content: {
@@ -3563,6 +3643,15 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ApiProblem"];
                 };
             };
+            /** @description STALE_POLICY_REVISION */
+            412: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
             /** @description INVALID_SHIFT_INTERVAL, SHIFT_SPANS_MIDNIGHT_MISMATCH, INVALID_SHIFT_MINUTES */
             422: {
                 headers: {
@@ -3577,7 +3666,13 @@ export interface operations {
     deactivateShiftType: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /**
+                 * @description 마지막으로 받은 병동 근무 유형 정책 ETag.
+                 * @example "policy-3"
+                 */
+                "If-Match": components["parameters"]["PolicyIfMatch"];
+            };
             path: {
                 wardId: components["parameters"]["WardId"];
                 shiftTypeId: components["parameters"]["ShiftTypeId"];
@@ -3589,6 +3684,7 @@ export interface operations {
             /** @description 비활성화된 근무 유형 */
             200: {
                 headers: {
+                    ETag: components["headers"]["PolicyETag"];
                     [name: string]: unknown;
                 };
                 content: {
@@ -3599,6 +3695,72 @@ export interface operations {
             403: components["responses"]["Forbidden"];
             /** @description WARD_NOT_FOUND 또는 SHIFT_TYPE_NOT_FOUND_IN_WARD */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description STALE_POLICY_REVISION */
+            412: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+        };
+    };
+    previewShiftTypeChange: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                wardId: components["parameters"]["WardId"];
+                shiftTypeId: components["parameters"]["ShiftTypeId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ShiftTypeInput"];
+            };
+        };
+        responses: {
+            /** @description 저장하면 생길 변경 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ShiftTypeChangePreview"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            /** @description WARD_NOT_FOUND 또는 SHIFT_TYPE_NOT_FOUND_IN_WARD */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description SHIFT_TYPE_CODE_DUPLICATE */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description INVALID_SHIFT_INTERVAL, SHIFT_SPANS_MIDNIGHT_MISMATCH, INVALID_SHIFT_MINUTES */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };

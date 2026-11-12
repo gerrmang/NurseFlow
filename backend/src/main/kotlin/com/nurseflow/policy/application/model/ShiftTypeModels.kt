@@ -49,3 +49,17 @@ data class ShiftTypeResult(
 )
 
 data class ShiftTypeListResult(val items: List<ShiftTypeResult>, val policyRevision: Int)
+
+data class AffectedDraft(val rosterId: UUID, val month: String, val revision: Int, val slots: Int, val assignedSlots: Int)
+
+data class ShiftTypeChangePreview(
+    val shiftType: ShiftTypeResult,
+    val policyRevision: Int,
+    val flagsDrafts: Boolean,
+    val rewritesDraftSlotTimes: Boolean,
+    val affectedDrafts: List<AffectedDraft>,
+    val publishedRostersUsingType: Int,
+)
+
+/** A written type with the ward policy revision after the write, sent back as the ETag for the next change. */
+data class ShiftTypeWrite(val shiftType: ShiftTypeResult, val policyRevision: Int)
