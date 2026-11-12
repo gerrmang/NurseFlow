@@ -25,7 +25,7 @@
 | B2 웹 기반 세션 | `feat/web-foundation-session` (`dev` `e4ca9bf` 반영) | [#39](https://github.com/gerrmang/NurseFlow/pull/39) (Ready) | 구현·주요 실제 Kakao 검증·A 리뷰 수정 완료. B3a 병합 후 최신 dev 통합 | 리뷰 수정 head `d47eb38`: 웹 55개 통과·빌드 성공, CI 3개 작업 성공. 통합 후 검증은 아래 2026-11-11 기록 | 개발 의존성 moderate 경고·기존 브라우저 검증 제한 유지. A 진단 후속은 별도 미반영 |
 | B9a Android 공개 근무표 조회 | `feat/android-published-roster` (`dev` `fa47a5a` 통합) | [#34](https://github.com/gerrmang/NurseFlow/pull/34) | `dev` 병합 완료 (2026-11-10, 스쿼시 병합 커밋 `d1b8729`). 구현·기기·실서버 검증과 PR P3 수정 완료, 병합 전 Backend tests·Android debug build 통과 | [B9a 검증 기록](../android/B9a-verification.md), 아래 최종 검증 참조 | 기존 P2 해결, P3 수정 후 재리뷰 대기 |
 | B3a Android 초대 관리·가입 | `feat/android-invite-join` | [#38](https://github.com/gerrmang/NurseFlow/pull/38) | `dev` 병합 완료 (2026-11-11, `e4ca9bf`). GitHub merged=true 확인 | 수정 head `691312c`: 단위 76개·빌드·Lint 성공, CI Backend·Android 성공. 기기 실행 제한은 기존 기록 유지 | 기존 알려진 제한은 android/B3a-verification.md 참조 |
-| B3b 웹 초대 관리·가입 | `feat/web-invite-join` (`b352759` 기반 구현 `ff63354`) | Draft PR 준비 | 구현·코드 재리뷰 완료. 실제 Kakao 1계정 로그인, 가상 OIDC 3사용자+실제 backend의 발급·재발급·철회·간호사/관리자 가입을 브라우저에서 확인. 실제 Kakao 2계정 완료 조건은 미충족 | 2026-11-12 Windows 계약·Lint·타입·테스트 8파일 241개·빌드 성공. 실제 복사→붙여넣기·URL 정리·390×844 화면 확인. 개발용 재현 도구 추가. [B3b 검증 기록](../web/B3b-verification.md) | 두 번째 실제 Kakao 계정 없음. 실제 2계정 가입·저장소 값/Referer·실제 만료/응답 유실 등과 최종 CI는 미검증 |
+| B3b 웹 초대 관리·가입 | `feat/web-invite-join` (`b352759` 기반 구현 `ff63354`) | [#45](https://github.com/gerrmang/NurseFlow/pull/45) (Draft) | 구현·코드 재리뷰 완료. 실제 Kakao 1계정 로그인, 가상 OIDC 3사용자+실제 backend의 발급·재발급·철회·간호사/관리자 가입을 브라우저에서 확인. 실제 Kakao 2계정 완료 조건은 미충족 | 2026-11-12 Windows 계약·Lint·타입·테스트 8파일 241개·빌드 성공. 실제 복사→붙여넣기·URL 정리·390×844 화면 확인. 개발용 재현 도구 추가. [B3b 검증 기록](../web/B3b-verification.md) | 두 번째 실제 Kakao 계정 없음. 실제 2계정 가입·저장소 값/Referer·실제 만료/응답 유실 등과 최종 CI는 미검증 |
 | 에이전트 지침 정합성 | `docs/agent-guidance-alignment` | #32 | `dev` 병합 완료 (2026-11-09, 일반 병합 커밋 `ab8347d`. 스쿼시 원칙에서 벗어남) | `git diff --check` 통과. GitHub Actions `Verify` PR 실행 성공, `dev` push 실행 성공 | 없음 |
 | A3 병원 검색 API | `feat/hospital-search` | #35 | `dev` 병합 완료 (2026-11-10, 스쿼시 병합 커밋 `23af850`) | 병합 전 `./gradlew test --offline` 134건 통과, CI 통과. 실제 2026.9. 파일 79,899곳 적재 0.7초, 검색 15~40ms | 없음 |
 | A4 병동 생성 | `feat/ward-self-create` | #36 | `dev` 병합 완료 (2026-11-10, 스쿼시 병합 커밋 `6a2cf29`) | 2026-11-10 `./gradlew test --offline` 138건 통과(건너뜀 4). 같은 키 동시 요청 테스트는 중복 키 처리 제거 변이 3/3 실패로 검출력 확인. 이전 스키마 H2에 schema.sql 두 번 적용 테스트 통과 | 없음 |
@@ -45,6 +45,12 @@
 - 임시 공급자를 `web/scripts/b3b-browser-fixture.mjs`로 보존했다(모듈 import 정리, 검증 로직 동일). 개발 전용·루프백·가상 계정/키이며 앱 번들에 포함되지 않는다. 실제 API로 시드하는 재현 명령과 실제/가상 구분은 `web/B3b-verification.md`에 있다. 신규 앱 결함은 발견하지 않았으며 운영 앱·서버 코드·API/DB 스키마는 수정하지 않았다.
 - 남은 조건: 실제 Kakao 2계정 가입은 두 번째 계정 부재로 미실행. 저장소 값 직접 읽기·Referer·전체 히스토리·권한 차단·실제 만료/응답 유실·연결 없는 간호사 가입 등은 이번 브라우저 검증에서 확인하지 않았다. 목업 테스트를 실제 외부 계정 검증으로 대신 기록하지 않는다. Draft PR에 이 조건을 명시한다.
 - 공유 인계: 같은 `C:\Users\jjang\IdeaProjects\NurseFlow`, `feat/web-invite-join`에서 개발용 재현 도구·두 검증/현황 문서만 추가 커밋·푸시하고 Draft PR을 게시한다. backend·OpenAPI diff 없음, `git diff --check` 통과. 서버 8081/18091·웹 5173/5174·가상 공급자 18090과 각각의 브라우저 탭은 검증 후 실행 상태다. 메모리 DB라 종료 시 시연 데이터가 사라진다. 사용자 DB·local.properties·Ubuntu 키 파일 보존, 병합·배포 없음.
+
+## B3b Draft PR #45 게시 (2026-11-12, Codex)
+
+- 검증 기록·개발용 가상 OIDC 도구를 `2ee90bb`에 커밋·푸시하고 [PR #45](https://github.com/gerrmang/NurseFlow/pull/45)를 `gh`로 생성했다. `OPEN`, `isDraft=true`, 대상 `dev`, 게시 head `2ee90bbb6af0a7651b3573cf3c6206531d290c45`를 확인했다. 실제 Kakao 2계정 인수 검증 미완료를 Draft 사유로 명시했다.
+- 게시 직후 [Verify 43225192104](https://github.com/gerrmang/NurseFlow/actions/runs/43225192104)의 Backend tests·Android debug build·Web checks는 실행 중이었다. 최종 문서 커밋의 CI는 해당 head로 별도 확인한다. CI 통과·독립 승인·병합 준비 완료를 주장하지 않는다.
+- 같은 공유 worktree·`feat/web-invite-join`에서 이 게시 기록만 후속 커밋·푸시한다. 기존 검증 후 앱 코드는 바뀌지 않아 자동 검사·브라우저 검사를 재실행하지 않았다. `git diff --check` 통과, 미추적 사용자 DB 보존. 실제 2계정이 준비되면 본문 5절의 외부 계정 인수 검증을 이어가며 병합·배포는 하지 않는다.
 
 ## 리뷰 상태
 
