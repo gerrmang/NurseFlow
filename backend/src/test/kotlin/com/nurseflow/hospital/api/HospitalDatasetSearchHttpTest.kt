@@ -267,7 +267,11 @@ class HospitalDatasetSearchHttpTest : ApiTestBase() {
         assertFalse(importer.importBundledUnlessOlder(bundledMarch).imported)
         assertEquals(5, jdbc.queryForObject("SELECT COUNT(*) FROM hospitals WHERE active=TRUE", Int::class.java))
 
-        // The documented recovery: import a dated file from the dataset path once.
+        // Renaming the same CSV does not recover: content already imported is skipped whatever its name.
+        assertFalse(importer.importIfChanged(csv("2.병원정보서비스(2026.9.).csv", september)).imported)
+        assertFalse(importer.importBundledUnlessOlder(bundledMarch).imported)
+
+        // The documented recovery: import a dated file of different content from the dataset path once.
         val dated = importer.importIfChanged(csv("1.병원정보서비스(2026.9.).csv", september.map { it.replace("바다로 2", "바다로 3") }))
         assertEquals("2026-09", dated.version)
         assertTrue(importer.importBundledUnlessOlder(bundledMarch).imported)

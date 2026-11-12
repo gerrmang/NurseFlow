@@ -252,6 +252,7 @@ Claude와 Codex가 같은 진행 기록을 사용한다. PR 또는 정기 리뷰
 | `/private/tmp/NurseFlow-hospital` | `feat/hospital-bundled-list` | `4b5e60c` | 미커밋 변경 없음 | 2026-11-12 | Codex | P1~P3 없음, P4 2건(README 표 사이 문단으로 초대 링크 행이 표 밖에 렌더링, 갱신 스크립트가 기존 파일을 먼저 지움). 다음 커밋에서 수정. bootJar 실행 확인 권고에 따라 패키징된 jar를 별도 DB로 두 번 실행: 첫 실행 79,899행 가져옴, 두 번째 건너뜀 |
 | GitHub PR #42 리뷰·외부 리뷰 | `feat/hospital-bundled-list` | `365088a900f53eb9d7eaf318251babbfeb6f82de` | 해당 없음(PR diff 기준) | 2026-11-12 | hyen11·외부 | P3 같은 기간 정정본 동봉 목록이 반영되지 않음(경로 방식과 동작 불일치), P4 추출 스크립트가 행 수 확인 전에 기존 목록 교체, P5 기간 미상 목록이 자동 갱신을 막는 조건 문서 누락. 다음 커밋에서 수정 |
 | `/private/tmp/NurseFlow-hospital` | `feat/hospital-bundled-list` | `061d1d9` | 미커밋 변경 없음 | 2026-11-12 | Codex | 리뷰 수정 재리뷰. 규칙·테스트·스크립트 문제 없음. P3(문서) `HospitalDatasetStartupImport` KDoc만 이전 조건으로 남음, 다음 커밋에서 수정. 같은 기간 동봉 목록의 비활성화 비율 가드 전용 테스트는 선택 보강(같은 `importCsv` 경로라 기존 가드 테스트가 적용) |
+| 외부 리뷰(사용자 전달) | `feat/hospital-bundled-list` | `98acc41` | 해당 없음 | 2026-11-12 | 외부 | P5 날짜 없는 CSV의 파일명만 바꿔 다시 넣으면 내용이 같아 건너뛰므로 복구되지 않는 조건이 문서에 없음. 다음 커밋에서 README 안내와 테스트 고정 |
 
 이 문서는 Claude와 Codex가 각 기능 단위 작업 후 진행 결과를 함께 기록하는 단일 공유 현황이다.
 
