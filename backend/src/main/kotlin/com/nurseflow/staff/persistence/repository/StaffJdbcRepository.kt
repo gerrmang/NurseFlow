@@ -103,6 +103,10 @@ class StaffJdbcRepository(private val jdbc: JdbcTemplate, private val mapper: Js
             displayName, mapper.writeValueAsString(qualifications), active, nurseId)
     }
 
+    fun setStaffActive(nurseId: UUID, active: Boolean) {
+        jdbc.update("UPDATE nurses SET active=? WHERE nurse_id=?", active, nurseId)
+    }
+
     /** A team change clears the position; the admin places the nurse in the new team's order. */
     fun assignTeam(nurseId: UUID, teamId: UUID?) {
         jdbc.update("UPDATE nurses SET team_id=?, team_order=NULL WHERE nurse_id=?", teamId, nurseId)

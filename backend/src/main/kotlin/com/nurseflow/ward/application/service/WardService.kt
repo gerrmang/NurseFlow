@@ -51,9 +51,41 @@ class WardService(
         if (WardRole.WARD_ADMIN.name !in roles) throw BusinessException(ErrorCode.WARD_ADMIN_REQUIRED)
     }
 
+    /** Active WARD_MEMBER of the ward: the only accounts whose linked nurse record may be rostered. */
+    fun isActiveMember(wardId: UUID, subject: String): Boolean = WardRole.WARD_MEMBER.name in repo.rolesIn(wardId, subject)
+
+    /**
+     * Holds the WARD_ADMIN role, even on a deactivated membership (it comes back on reactivation). Admin accounts
+     * are never rostered, so they must not hold an active nurse record.
+     */
+    fun holdsAdminRole(wardId: UUID, subject: String): Boolean = repo.holdsRole(wardId, subject, WardRole.WARD_ADMIN.name)
+
+    /**
+     * Entry point of every admin write: checks the role, takes the ward lock, then checks again. A membership
+     * change committed while this request waited for the lock (A6) must not let a revoked or deactivated admin
+     * finish. Lock order stays ward -> account -> target row.
+     */
+    @Transactional
+    fun lockAsAdmin(wardId: UUID, subject: String) {
+        requireAdmin(wardId, subject)
+        if (!repo.lockWard(wardId)) throw BusinessException(ErrorCode.WARD_NOT_FOUND)
+        requireAdmin(wardId, subject)
+    }
+
     @Transactional(readOnly = true)
     fun requireMember(wardId: UUID, subject: String) {
         if (repo.rolesIn(wardId, subject).isEmpty()) throw BusinessException(ErrorCode.WARD_NOT_FOUND)
+    }
+
+    /**
+     * Entry point of a member's own write, like [lockAsAdmin]: a deactivation committed while this request waited
+     * for the ward lock must not let the deactivated member finish.
+     */
+    @Transactional
+    fun lockAsMember(wardId: UUID, subject: String) {
+        requireMember(wardId, subject)
+        if (!repo.lockWard(wardId)) throw BusinessException(ErrorCode.WARD_NOT_FOUND)
+        requireMember(wardId, subject)
     }
 
     /**
