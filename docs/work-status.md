@@ -25,7 +25,7 @@
 | B2 웹 기반 세션 | `feat/web-foundation-session` (`dev` `e4ca9bf` 반영) | [#39](https://github.com/gerrmang/NurseFlow/pull/39) (Ready) | 구현·주요 실제 Kakao 검증·A 리뷰 수정 완료. B3a 병합 후 최신 dev 통합 | 리뷰 수정 head `d47eb38`: 웹 55개 통과·빌드 성공, CI 3개 작업 성공. 통합 후 검증은 아래 2026-11-11 기록 | 개발 의존성 moderate 경고·기존 브라우저 검증 제한 유지. A 진단 후속은 별도 미반영 |
 | B9a Android 공개 근무표 조회 | `feat/android-published-roster` (`dev` `fa47a5a` 통합) | [#34](https://github.com/gerrmang/NurseFlow/pull/34) | `dev` 병합 완료 (2026-11-10, 스쿼시 병합 커밋 `d1b8729`). 구현·기기·실서버 검증과 PR P3 수정 완료, 병합 전 Backend tests·Android debug build 통과 | [B9a 검증 기록](../android/B9a-verification.md), 아래 최종 검증 참조 | 기존 P2 해결, P3 수정 후 재리뷰 대기 |
 | B3a Android 초대 관리·가입 | `feat/android-invite-join` | [#38](https://github.com/gerrmang/NurseFlow/pull/38) | `dev` 병합 완료 (2026-11-11, `e4ca9bf`). GitHub merged=true 확인 | 수정 head `691312c`: 단위 76개·빌드·Lint 성공, CI Backend·Android 성공. 기기 실행 제한은 기존 기록 유지 | 기존 알려진 제한은 android/B3a-verification.md 참조 |
-| B4a Android 병원 검색·병동 생성 | `feat/android-ward-create` (`dev` `0ed5b4c`에서 분기) | PR 미개설 | 구현·목업 검증·Codex 재리뷰 완료. P3 2건(이름 단계 스크롤, 422 안내) 코드상 해결 확인. 사용자 요청으로 작업 브랜치에 커밋·푸시 진행(PR 미개설 유지). **PR 병합 전 실서버 검색 → 생성 → 목록 갱신 확인 필요**(공식 병원 데이터 미적재라 현재 실서버 검색은 503 `HOSPITAL_SEARCH_NOT_CONFIGURED`만 가능) | 2026-11-11 `:app:testDebugUnitTest :app:assembleDebug :app:assembleDebugAndroidTest :app:lintDebug` 성공. P3 수정 후 단위 140개 통과(실패·오류·건너뜀 0), Lint 오류 0·경고 35개, 모든 작업 실제 실행(`--rerun-tasks`). Compose UI 테스트는 작성·APK 빌드만, 실행 안 함. 응답 유실 (a)·(b)는 MockWebServer fake로만 재현. 기기 미연결로 UI 테스트·기기 확인 없음. 상세는 [B4a 검증 기록](../android/B4a-verification.md) | 목업 검증은 실서버 검증이 아니다. 실서버·Kakao·기기·유실 (a)(b) 실서버 동작 미검증 |
+| B4a Android 병원 검색·병동 생성 | `feat/android-ward-create` (`405a8e5`에 dev `b352759` 통합) | PR 미개설 유지 | 구현·목업·로컬 실서버 핵심 흐름 검증 완료. 기존 Android 17 콜드 부팅 후 실제 Kakao 로그인·검색·생성·목록·초대 관리 연결 확인. Espresso 3.7.0 명시 의존성으로 UI 테스트 오류 수정 | 2026-11-12 단위 140개(실패·오류·건너뜀 0, 재실행), Compose UI 2개 통과(직접 instrumentation), 테스트 APK·Lint 성공(오류 0·경고 35). 실제 서버 응답 유실 (a)·(b) 재시도·키 재생·각 병동 1개 확인. [B4a 검증 기록](../android/B4a-verification.md) | 상한·키 충돌·미적재/외부 장애·유실 뒤 입력 변경 등의 실서버 검사는 미실행. 운영·전체 기기 회귀·CI 미검증 |
 | 에이전트 지침 정합성 | `docs/agent-guidance-alignment` | #32 | `dev` 병합 완료 (2026-11-09, 일반 병합 커밋 `ab8347d`. 스쿼시 원칙에서 벗어남) | `git diff --check` 통과. GitHub Actions `Verify` PR 실행 성공, `dev` push 실행 성공 | 없음 |
 | A3 병원 검색 API | `feat/hospital-search` | #35 | `dev` 병합 완료 (2026-11-10, 스쿼시 병합 커밋 `23af850`) | 병합 전 `./gradlew test --offline` 134건 통과, CI 통과. 실제 2026.9. 파일 79,899곳 적재 0.7초, 검색 15~40ms | 없음 |
 | A4 병동 생성 | `feat/ward-self-create` | #36 | `dev` 병합 완료 (2026-11-10, 스쿼시 병합 커밋 `6a2cf29`) | 2026-11-10 `./gradlew test --offline` 138건 통과(건너뜀 4). 같은 키 동시 요청 테스트는 중복 키 처리 제거 변이 3/3 실패로 검출력 확인. 이전 스키마 H2에 schema.sql 두 번 적용 테스트 통과 | 없음 |
@@ -41,6 +41,23 @@
 - 병원 목록은 이제 서버에 동봉되어 별도 CSV 전달 없이 실연동을 준비할 수 있다. 위 B4a 행의 과거 '데이터 미적재라 검색 불가' 설명은 이 통합으로 대체한다. 실제 검색·생성·Kakao·기기 확인은 아직 하지 않았다. `android/B4a-verification.md`의 준비 절차를 현행화했다.
 - `android`에서 `.\gradlew.bat :app:testDebugUnitTest :app:assembleDebug :app:assembleDebugAndroidTest :app:lintDebug --no-daemon`: **BUILD SUCCESSFUL**, 80개 작업 중 8개 실행·72개 UP-TO-DATE. 단위 테스트 작업은 UP-TO-DATE이므로 새로 140개를 실행했다고 주장하지 않는다. `git diff --cached --check` 통과. 백엔드 테스트·기기 UI·실서버·CI는 실행하지 않았다.
 - B3b 미커밋 변경은 작업 파일만 임시 보관해 B4a에 섞지 않았고, 통합 후 B3b 브랜치로 복원한다. 사용자 DB·local.properties는 변경하지 않는다. 이 통합은 로컬 작업 브랜치의 dev 반영이며 dev/main 병합·배포·원격 푸시는 하지 않는다.
+
+## B4a 에뮬레이터 검증 진행 (2026-11-12, Codex)
+
+- 사용자 요청으로 `feat/android-ward-create`(`405a8e5`)에서 연결된 `emulator-5554`(Pixel_10, Android 17/API 37.2) 검증을 시작했다. 최신 debug APK 설치 성공. UI 트리와 화면에서 로그인 및 '로그인하고 병동 만들기' 의도 안내를 확인했다.
+- 기존 `WardCreateScreenUiTest` 2건은 실제 실행했으나 **2건 실패**: Espresso 입력 장치 초기화의 `NoSuchMethodException: android.hardware.input.InputManager.getInstance`로 화면 검증 전 실패했다. 첫 명령은 PowerShell 인수 전달 오류로 테스트 시작 전 실패했고, `-P...` 인수를 인용해 바로잡은 실행에서 위 2건 실패를 확인했다. 자동 UI 검증 통과로 기록하지 않는다.
+- 로컬 설정의 Kakao audience를 값 출력 없이 적용하고, 임시 세션 비밀값·`jdbc:h2:mem:b4a_device_verification`으로 실제 backend `bootRun`(8080)을 실행했다. 동봉 병원 목록 **79,899건 적재** 로그 확인. 사용자 파일 DB·local.properties는 변경하지 않았다.
+- 실제 Kakao 진입 시 기본 브라우저 Chrome이 `android.credentials.CredentialManager`의 NullPointerException으로 종료돼 로그인·검색·생성 실연동까지 진행하지 못했다. 설치된 AVD/시스템 이미지는 Android 17 한 개뿐이며 SDK command-line tools는 설치돼 있지 않다. Android Studio의 Add Device에서 Medium Phone / API 35 Android 15 / Google Play x86_64(다운로드 1.6GB)를 선택해 설치 직전까지 준비했다. Windows UI 소프트웨어 설치 확인 정책에 따라 Finish는 누르지 않고 사용자 확인 대기 중이다. 기존 AVD는 변경하지 않았고, 검증용 backend는 8080에서 실행 중이다. 운영 코드 수정·커밋·푸시는 하지 않았다.
+
+## B4a Android 17 재검증 완료 (2026-11-12, Codex)
+
+- 사용자가 기존 환경 재시도를 요청해 Pixel_10(Android 17/API 37.2)을 데이터 초기화 없이 `-no-snapshot-load`로 부팅했다. Chrome 로그인 화면 진입 성공, 사용자가 직접 Kakao 로그인 완료 후 생성 화면으로 자동 이동했다. 이전 Chrome 충돌은 이번에 재현되지 않았고 원인 확정·Chrome 수정은 하지 않았다. Android 15 설치는 진행하지 않았다. 앞 절의 설치 대기·로그인 차단 상태는 이 결과로 대체한다.
+- UI 2건의 `InputManager.getInstance` 실패는 재현됐다. `dependencyInsight`에서 Compose 테스트의 간접 Espresso 3.5.0을 확인하고, 공식 수정이 포함된 3.7.0을 `androidTestImplementation`에 명시했다. 수정된 테스트 APK만 설치해 직접 `am instrument`로 실행한 결과 **OK (2 tests)**, 두 메서드 모두 status code 0. 기존 Gradle connected HTML/XML의 실패 기록과 구분한다.
+- JDK 21로 `:app:assembleDebugAndroidTest :app:testDebugUnitTest :app:lintDebug --no-daemon` 성공(단위 작업 UP-TO-DATE). 이어 `:app:testDebugUnitTest --rerun-tasks --no-daemon` 성공, 24개 작업 모두 실행·XML **140개**, 실패/오류/건너뜀 **0**. Lint 오류 **0**, 경고 **35**, Information **1**. 첫 JBR 25 재시도는 Gradle `25.0.3` 오류로 기기 실행 전에 실패해 JDK 21로 바로잡았다.
+- 실제 backend `bootRun`(8080), 임시 세션 비밀값·메모리 DB, 동봉 병원 **79,899건**으로 검색→가상 병동 생성→관리자 설정 안내→초대 관리→목록의 병원명을 확인했다. 같은 병원·이름 재생성은 실제 **409**와 중복 안내가 나왔다. 가로 회전 후 선택·입력 유지, Enter 검색의 빈 결과와 출처 `2026.9. 기준`도 확인했다.
+- 사용자의 명시 허용 뒤 PC 루프백 임시 프록시로 실제 서버의 유실 (a: backend 전달 전 단절)·(b: 201 수신 뒤 앱 전달 전 단절)를 분리했다. 둘 다 자동 재전송 없음·결과 미확인 안내·같은 키 재시도 성공. (b)는 **같은 병동 ID·201 재생**까지 확인했다. 마지막 실제 `GET /api/v1/wards` 응답에서 기본·(a)·(b) 가상 병동이 **각각 1개**였다. DB 직접 조회는 하지 않았다. 토큰·키·응답 본문을 로그/파일에 기록하지 않았다.
+- 프록시는 원래 `null`, 회전은 원래 `free`로 원복하고 프록시 프로세스·임시 스크립트를 제거했다. 프록시 없는 재실행에서도 세 병동을 확인했다. `nurseflow.mv.db`·`local.properties` 보존. 서버/API/DB 스키마·운영 코드 변경·배포 영향 없음. 되돌리기는 Espresso 의존성 추가 제거(기존 Android 17 테스트 오류 재발).
+- 공유 인계: 같은 `C:\Users\jjang\IdeaProjects\NurseFlow`, `feat/android-ward-create`, HEAD `405a8e5`. 테스트 의존성·두 검증/현황 문서만 미커밋 변경. 기존 현황 기록은 보존했다. 커밋·푸시·PR 개설·병합·배포 없음. 에뮬레이터와 검증 backend(8080)는 실행 상태다. 메모리 DB라 backend 종료 시 검증 병동·서버 세션이 사라진다. 상한·키 충돌·유실 뒤 입력 변경·목록 미적재/외부 장애·초대 의도 경합의 실제 검증, 전체 기기·백엔드 테스트·CI는 이번에 실행하지 않았다.
 
 ## 리뷰 상태
 

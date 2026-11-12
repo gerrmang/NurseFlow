@@ -6,10 +6,39 @@
 
 기준은 `docs/feature-breakdown.md`의 B4a다. 작업 브랜치는 최신 `dev`(`0ed5b4c`)에서 만든 `feat/android-ward-create`다. 서버(A3 `GET /api/v1/hospitals/search`, A4 `POST /api/v1/wards`)와 `docs/openapi.yaml`은 바꾸지 않았다.
 
-연동 구분: **목업 검증만 완료. 실서버 연동은 미검증이다.**
-- 2026-11-12 최신 dev b352759(#42) 반영으로 공식 병원 목록이 서버에 동봉됐다. 별도 파일 전달 없이 서버 시작 시 기본 목록을 적재할 수 있다. 실제 검색·생성 연동은 아직 검증하지 않았다.
-- 이 문서의 모든 자동 검증은 테스트 fake와 MockWebServer를 쓴다. **목업 검증은 실서버 검증이 아니다.** 목업은 문서화된 계약대로 동작하는 가상 서버를 가정할 뿐, 실제 서버가 그렇게 동작한다는 증거가 아니다.
-- PR 병합 전에 아래 [실서버 연동 절차](#실서버-연동-절차-데이터-적재-후)로 확인해야 한다.
+연동 구분: **목업 및 로컬 실서버 핵심 흐름 검증 완료(2026-11-12).** 운영 서버 검증은 아니다.
+- 최신 dev `b352759`(#42)를 통합한 `405a8e5`에서 실제 backend와 동봉 목록을 사용했다. Android 17에서 실제 Kakao 로그인 → 병원 검색 → 생성 → 목록 갱신, 실제 서버의 응답 유실 (a)·(b)를 확인했다. 상세는 아래 최신 검증 절에 있다.
+- JVM 및 Compose 화면 테스트는 fake/MockWebServer를 사용한다. 실제 서버 검증과 구분하며, 아래 2026-11-11 기록은 당시 결과를 보존한 것이다.
+
+## Android 17 재검증 및 실서버 연동 (2026-11-12, Codex)
+
+**환경과 수정**
+- 기존 Pixel_10(Android 17/API 37.2, `emulator-5554`)을 `-no-snapshot-load`로 콜드 부팅했다. 데이터 초기화·새 이미지 설치 없이 Chrome의 Kakao 로그인 화면이 열렸고, 사용자가 직접 로그인한 뒤 생성 화면으로 자동 이동했다. 이전 Chrome `CredentialManager` 충돌은 이번에 재현되지 않았으며, 근본 원인을 확인하거나 Chrome을 수정한 것은 아니다.
+- `:app:dependencyInsight --configuration debugAndroidTestRuntimeClasspath --dependency espresso-core --offline --no-daemon`으로 Compose UI 테스트가 Espresso **3.5.0**을 가져옴을 확인했다. 수정 전 B4a UI 테스트 2건에서 `InputManager.getInstance` 예외가 재현됐다.
+- `androidTestImplementation("androidx.test.espresso:espresso-core:3.7.0")`를 추가했다. [공식 수정 내역](https://developer.android.com/jetpack/androidx/releases/test#espresso-3.7.0)의 `getSystemService` 사용 수정에 해당한다. 운영 앱 코드·compileSdk/targetSdk·서버·API·DB 스키마는 바꾸지 않았다.
+- 설치된 JDK 21로 실행했다. 첫 재시도의 Android Studio JBR 25에서는 Gradle이 `25.0.3` 오류로 기기 테스트 실행 전에 실패했고, JDK 21로 바로잡았다.
+- backend `bootRun`은 임시 세션 비밀값과 `jdbc:h2:mem:b4a_device_verification;DB_CLOSE_DELAY=-1`, 로컬 audience 설정으로 실행했다. 동봉 목록 **79,899건** 적재를 확인했다. 사용자 파일 DB·`local.properties`는 변경하지 않았다.
+
+**실제 앱·서버 확인**
+- `로그인하고 병동 만들기` → 사용자 Kakao 로그인 → 생성 화면 진입 성공. 실제 목록에서 `365` 검색 후 병원명·주소·종별과 결과 구체화 안내를 확인했다.
+- 가상 병동 `B4a-verify-1112` 생성 → 관리자 설정 안내 → `초대 관리 열기` 즉시 이동 → 빈 초대 목록 → 병동 목록에서 병동·병원명 표시를 확인했다. 초대는 발급하지 않았다.
+- 같은 병원·같은 이름으로 다시 생성하면 실제 서버가 **409**를 반환하고 앱이 "같은 병원·이름의 병동을 이미 만들었어요"와 목록 이동을 표시했다.
+- 선택 병원과 입력 이름을 유지한 채 실제 가로 회전 후 상태가 보존됐다. 회전 설정은 원래 `free`로 복원했다. 가로 화면의 모든 버튼 접근성·소프트 키보드 전체 동작을 확인한 것은 아니다.
+- 존재하지 않는 가상 검색어를 입력하고 Android Enter 키로 검색해 빈 결과 안내와 `건강보험심사평가원 전국 병의원 및 약국 현황 (2026.9. 기준)` 출처를 확인했다. 검색 결과의 주소 표시는 확인했으나, 이름이 정확히 같은 병원 두 곳을 골라 비교하지는 않았다.
+
+**실서버 응답 유실 (a)·(b)**
+- 사용자 명시 허용 뒤 PC 루프백 임시 프록시를 사용했다. 실제 backend로만 전달하고 생성 요청에서 한 번 연결을 끊었다. 본문·토큰·키 값은 로그나 파일에 기록하지 않았으며, 키/병동 ID의 일치 여부만 메모리에서 비교했다.
+- (a) `B4a-loss-a-1112`: 요청을 읽고 실제 backend로 전달하기 전에 연결 종료. 생성 요청 수는 1 증가했지만 backend 전달 수는 증가하지 않아 자동 재전송이 없음을 확인했다. 앱의 결과 미확인 안내 → `다시 시도`에서 **같은 키**, 실제 서버 **201**, 생성 완료 화면을 확인했다.
+- (b) `B4a-loss-b-1112`: 실제 backend의 **201** 응답을 받은 뒤 앱에 보내기 전에 연결 종료. 앱이 결과 미확인 상태가 됐고 자동 재전송은 없었다. `다시 시도`에서 **같은 키·같은 병동 ID**, 재생된 **201**, 생성 완료 화면을 확인했다.
+- 마지막 실제 `GET /api/v1/wards` 응답의 가상 이름별 개수를 프록시 메모리에서 집계했다. 기본 생성·(a)·(b) 병동은 **각각 1개**였다. DB 직접 조회는 하지 않았다.
+- 프록시 설정은 원래 `null`로 복원하고 프로세스·임시 스크립트를 제거했다. 이후 프록시 없는 앱 재실행에서도 세 병동이 목록에 각각 한 번 보였다.
+
+**자동 검사와 한계**
+- `./gradlew.bat :app:assembleDebugAndroidTest :app:testDebugUnitTest :app:lintDebug --no-daemon`: **BUILD SUCCESSFUL**, 63개 작업 중 18개 실행. 이때 단위 작업은 UP-TO-DATE였다. Lint XML: 오류 **0**, 경고 **35**, Information **1**.
+- 이후 `./gradlew.bat :app:testDebugUnitTest --rerun-tasks --no-daemon`: **BUILD SUCCESSFUL**, 24개 작업 모두 실행. XML 합계 **140개**, 실패·오류·건너뜀 **0**.
+- 수정된 테스트 APK만 `adb install -r`로 설치한 뒤 `adb shell am instrument -w -r -e class com.nurseflow.app.feature.ward.create.WardCreateScreenUiTest com.nurseflow.app.test/com.nurseflow.app.test.IsolatedSessionTestRunner`: **OK (2 tests)**, 두 메서드 모두 status code 0. 스크롤 접근성·422 안내/거절 행 비활성화 확인. 이 검사는 fake API를 사용한다. Gradle의 기존 connected HTML/XML은 수정 전 실패 기록이며, 성공 근거는 이번 직접 instrumentation 출력이다.
+- 백엔드 전체 테스트·전체 기기 테스트·CI·운영 서버는 이번에 실행하지 않았다. 배포 영향 없음. 되돌리기는 Espresso 명시 의존성 추가를 제거하면 되지만, Android 17의 기존 UI 테스트 초기화 오류가 돌아온다.
+- 공유 인계: `feat/android-ward-create`, HEAD `405a8e5`의 미커밋 변경은 테스트 의존성과 검증 문서다. PR 미개설 유지, 커밋·푸시·병합·배포 없음. 에뮬레이터와 검증용 backend(8080)는 실행 상태로 둔다. 메모리 DB이므로 backend 종료 시 검증 병동·서버 세션이 사라진다.
 
 ## 구현 요약
 
@@ -175,12 +204,10 @@
 
 ## 미검증 항목
 
-- 실서버 검색 → 생성 → 목록 갱신(공식 데이터 미적재).
-- 실제 Kakao 로그인 후 생성 흐름, `로그인하고 병동 만들기` 의도의 실제 로그인 경로.
-- 기기·에뮬레이터 확인 전체: 화면 배치, 회전, 키보드 Search, 뒤로가기, 생성 중 입력 잠금.
-- 실서버의 응답 유실 (a)·(b), 키 재생, `IDEMPOTENCY_KEY_REUSED`, 상한(5개).
-- 실제 동명 병원의 주소 구분 표시와 `attribution` 기준 시점 표시.
-- Compose 화면 단위의 상호작용(버튼 비활성화 등)은 ViewModel 상태 테스트로만 확인했다. P3 수정 뒤 `WardCreateScreenUiTest`를 추가했으나 기기가 없어 실행하지 못했다(위 절).
+- 실서버의 `IDEMPOTENCY_KEY_REUSED`·상한(5개), 유실 뒤 입력 변경, 목록 미적재/외부 장애 서버. 기존 fake/JVM 검증과 구분한다.
+- 실제 로그인 중 초대 대기와 생성 의도 경합, 생성 중 뒤로가기·입력 잠금, 소프트 키보드·다양한 화면 크기 전체 수동 검사.
+- 이름이 정확히 같은 실제 병원 두 곳의 주소 비교. 주소·종별 표시와 출처 기준 시점 자체는 실기기에서 확인했다.
+- 운영 서버·물리 기기·전체 instrumentation 회귀 검사. 위 B4a Compose 2건의 fake 화면 검사는 실행·통과했다.
 
 ## 실서버 연동 절차 (데이터 적재 후)
 
