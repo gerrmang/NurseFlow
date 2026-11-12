@@ -16,6 +16,9 @@ data class CreateWardRequest(
     val timeZone: String = "Asia/Seoul",
 )
 
+/** At least one field is required; the controller rejects an empty body. */
+data class UpdateMembershipRequest(val admin: Boolean? = null, val active: Boolean? = null)
+
 /** The `source` and `externalId` of a hospital search result, as returned. */
 data class HospitalSelection(
     @field:NotBlank @field:Pattern(regexp = HospitalDatasetImporter.SOURCE)
