@@ -1,5 +1,50 @@
 # B3b 웹 초대 관리·가입 검증 기록
 
+## 브라우저·실제 백엔드 검증 (2026-11-12 저녁, Codex)
+
+기준은 `feat/web-invite-join`의 구현 커밋 `ff63354`와 서버 `b352759`다. **실제 Kakao 1계정 로그인 확인**, **가상 OIDC 사용자 3명으로 실제 backend 초대 흐름 확인**을 구분한다. 실제 Kakao 계정 2개를 이용한 관리자→간호사 시연은 사용자가 두 번째 계정이 없다고 알려 미실행이다. 해당 완료 조건을 충족했다고 주장하지 않으며 PR은 Draft로 준비한다.
+
+- **자동 검사:** Windows Node v24.15.0에서 `npm run api:check`, `npm run lint`, `npm run typecheck`, `npm test -- --run`, `npm run build` 모두 성공. 테스트 **8개 파일 241개 통과**, 실패·건너뜀 0. JS **303.58 kB**, gzip **94.25 kB**. 개발용 재현 스크립트 추가 후 `node --check scripts/b3b-browser-fixture.mjs`, `npm run lint`도 성공. `npm ci`는 설치된 잠금 파일 의존성을 사용해 이번에 재실행하지 않았다.
+- **실제 Kakao:** Ubuntu의 기존 로컬 키 파일을 값 출력 없이 환경변수로 읽어 별도 메모리 DB의 backend(8081)를 실행했다. 웹 `http://localhost:5173`에서 사용자가 직접 로그인했고 `/wards` 및 소속 없음 화면까지 성공했다. 합성된 존재하지 않는 토큰으로 실제 미리보기 API의 "초대를 찾을 수 없어요" 안내와 fragment 제거도 확인했다. 실제 계정 이름·키·토큰은 검증 문서에 기록하지 않는다.
+- **가상 사용자 실서버:** 별도 backend(18091, `jdbc:h2:mem:b3b_fictional_e2e`), 웹(5174), 루프백 가상 OIDC 공급자(18090)를 사용했다. 실제 Spring 인증·서명 검증·초대 서비스·HTTP·H2 저장을 사용하며, 공급자만 가짜다. 실제 Kakao 인증 검증과 혼동하지 않는다. 실제 계정 서버와 쿠키 이름도 분리했다.
+- **준비:** 가상 관리자가 실제 웹 인증→병원 검색→병동 생성→미가입 간호사 생성 API로 시드했다. 동봉 병원 79,899건을 적재했다. backend 운영 코드·API 계약·DB 스키마 변경은 없다.
+
+| 브라우저에서 실행한 흐름 | 확인 결과 |
+| --- | --- |
+| 관리자 병동 목록→초대 관리→가상 간호사 기록 선택→발급 | 사용 대기·미가입·24시간 만료 안내 표시 |
+| 웹 링크 복사→병동 목록 입력란에 실제 Ctrl+V | 현재 origin의 `/invite#token=` 링크, 43자 토큰 확인. 도구의 clipboard.readText는 빈 문자열이어서 성공 근거로 쓰지 않았고 실제 붙여넣기로 확인 |
+| 재발급→확인 | 새 링크 사용 대기, 원본 철회됨 표시 |
+| 로그아웃→재발급 링크 진입→가상 간호사 로그인 | `/invite` 복귀, fragment·콜백 쿼리 제거, 병원·병동·역할·만료·기록 연결 안내 표시 |
+| 미래 연월→정상 가상 연월 입력→가입 | 미래 연월 오류, 이후 성공. 간호사 병동 목록 및 관리자 초대 목록의 가입 완료·기록 가입됨 확인 |
+| 이미 사용된 링크 재진입 | 이미 사용된 초대 안내, 닫기 후 병동 목록 복귀 |
+| 연결 없는 간호사 초대 발급→철회→확인 | 새 기록 생성 안내, 철회됨 표시 및 기존 발급 패널의 복사 버튼/유효 안내 제거 |
+| 관리자 역할 초대→다른 가상 사용자 로그인→가입 | 연월 입력란 없음, 관리자 가입 성공, 관리자 초대 관리 진입 및 가입 완료 표시 |
+| 390×844 화면의 관리자 미리보기·사용된 링크 오류 | 문구·버튼 표시, 문서 폭과 스크롤 폭 모두 390으로 가로 넘침 없음. 도구 스크린샷으로 확인 후 viewport 원복 |
+
+신규 애플리케이션 결함은 발견하지 않았다. 브라우저 도구의 읽기 전용 평가 범위에서는 sessionStorage를 직접 읽을 수 없어 실제 저장소 값 삭제·Referer 헤더·브라우저 히스토리 전체를 확인했다고 주장하지 않는다. 로그인 왕복의 초대 복귀와 URL 정리는 화면에서 확인했다. clipboard/sessionStorage 권한 차단, 만료된 실제 초대, 연결 없는 간호사 초대의 실제 가입, 연동 중 응답 유실은 이번 브라우저 실행에서 미검증이며 기존 fake/JVM과 서버 검사를 대신 실연동 결과로 적지 않는다.
+
+**가상 사용자 실서버 재현 도구**
+
+`scripts/b3b-browser-fixture.mjs`는 이번에 사용한 임시 공급자를 개발용으로 보존한 것이다(모듈 import 형식 정리, 로직 동일). 앱 번들에 포함되지 않고 실제 Kakao 키를 사용하지 않는다. 모든 식별자·client secret은 가상이며 서명 키와 인가 코드는 메모리에만 둔다. 운영 backend에 연결하지 않는다. 새 메모리 DB마다 시드는 한 번만 실행한다.
+
+1. `web/`에서 `node scripts/b3b-browser-fixture.mjs` 실행.
+2. 별도 PowerShell의 `backend/`에서 다음과 같이 실행(기존 실제 계정 서버와 다른 포트·DB·쿠키):
+
+```powershell
+$env:JAVA_HOME='C:/Program Files/Eclipse Adoptium/jdk-21.0.10.7-hotspot'
+$env:NURSEFLOW_SESSION_SECRET=[guid]::NewGuid().ToString()+[guid]::NewGuid().ToString()
+$env:NURSEFLOW_KAKAO_REST_API_KEY='b3b-fictional-client'
+$env:NURSEFLOW_KAKAO_CLIENT_SECRET='b3b-fictional-secret'
+$env:NURSEFLOW_KAKAO_REDIRECT_URIS='http://localhost:5174/auth/kakao/callback'
+.\gradlew.bat bootRun '--args=--server.address=127.0.0.1 --server.port=18091 --spring.datasource.url=jdbc:h2:mem:b3b_fictional_e2e;DB_CLOSE_DELAY=-1 --nurseflow.auth.kakao.issuer=http://localhost:18090 --nurseflow.auth.kakao.jwk-set-uri=http://127.0.0.1:18090/.well-known/jwks.json --nurseflow.auth.kakao.authorize-uri=http://localhost:18090/authorize --nurseflow.auth.kakao.token-uri=http://127.0.0.1:18090/token --nurseflow.auth.web.refresh-cookie-name=nf_b3b_fixture_refresh --nurseflow.auth.web.login-cookie-name=nf_b3b_fixture_login' --no-daemon
+```
+
+3. `web/`의 별도 셸에서 `$env:VITE_DEV_API_TARGET='http://127.0.0.1:18091'` 뒤 `npm run dev -- --host localhost --port 5174` 실행.
+4. backend 기동·동봉 목록 적재 후 `Invoke-RestMethod -Method Post http://127.0.0.1:18090/__seed`. 실제 API로 가상 관리자·병동·간호사를 만들며 반환은 병동 ID·성공 여부뿐이다.
+5. `http://localhost:5174`에서 로그인 버튼→가상 관리자 선택. 발급 링크를 복사하고 로그아웃→링크 열기→가상 간호사/가상 추가 관리자 선택으로 역할별 가입을 재현한다. 공급자는 시작할 때 키를 새로 만들므로 재시작 시 테스트 backend도 함께 재시작한다.
+
+공유 인계: 같은 worktree·브랜치에서 이 검증과 개발용 재현 도구를 추가한다. 서버(8081/18091)·웹(5173/5174)·가상 공급자(18090)는 실행 상태다. 실제 계정과 가상 사용자 브라우저 탭은 분리했고 viewport는 복원했다. 사용자 파일 DB·local.properties·Ubuntu 키 파일은 변경하지 않았다. 아래 최초 구현·리뷰 기록은 시점별 기록이며 최신 결과는 이 절을 우선한다.
+
 ## 최신 dev 통합 (2026-11-12, Codex)
 
 - `feat/web-invite-join` HEAD에 `origin/dev` `b352759`(#41 A6, #42 병원 목록 동봉)를 반영하고 기존 미커밋 B3b 변경을 충돌 없이 복원했다. 아래 `0ed5b4c`는 최초 분기 기준이다.
@@ -8,7 +53,7 @@
 
 - 작업: `feat/web-invite-join` (최신 `origin/dev` `0ed5b4c`에서 분기, 공유 worktree `C:\Users\jjang\IdeaProjects\NurseFlow`). B4a 브랜치(`feat/android-ward-create`, `d7ce955`)는 건드리지 않았고 그 커밋을 가져오지 않았다.
 - 범위: `web/**`와 `docs/work-status.md`. `backend/**`와 `docs/openapi.yaml`은 수정하지 않았다(`git diff origin/dev -- backend docs/openapi.yaml` 0줄).
-- **상태: 목업 기반 구현·검증 완료. 실서버·실제 Kakao·브라우저 검증은 하지 않았다.** 아래 "미검증 항목"을 반드시 확인한다.
+- **최초 구현 시점 상태: 목업 기반 검증 완료, 실서버·실제 Kakao·브라우저 미검증.** 이후 검증은 위 최신 절, 현재 미검증 항목은 4절을 확인한다.
 - 커밋·푸시·PR 생성·병합·배포는 하지 않았다.
 
 ## 1. 변경 내용
@@ -109,20 +154,19 @@
 - `vite preview`(WSL)에서 `curl`로 `/`, `/invite`, `/wards`, `/wards/<id>/invitations`, `/auth/kakao/callback` 모두 HTTP 200과 `<div id="root">`(SPA 폴백) 확인. `index.html`의 `no-referrer` 메타 유지.
 - `git diff --check`: 통과(줄바꿈 변환 안내만). backend·OpenAPI diff 0줄.
 
-## 4. 미검증 항목과 이유
+## 4. 남은 미검증 항목과 이유 (브라우저 검증 후 갱신)
 
-**목업 검증은 실서버 검증이 아니다.** 아래는 실행하지 않았다.
+**목업·가상 OIDC 실서버·실제 Kakao 검증은 구분한다.** 위 최신 절의 결과 외에 아래 항목은 남아 있다.
 
 | 항목 | 이유 |
 | --- | --- |
-| 실서버 연동(초대 발급·목록·재발급·철회·미리보기·가입) | 웹 로그인은 실제 Kakao 인증이 필요하고, 이번 작업에서 실서버·Kakao 키를 쓰지 않았다. 서버 계약은 코드·OpenAPI 대조로만 확인했다 |
-| 실제 Kakao 로그인 왕복과 초대 복귀 | 사용자 조작·Kakao 앱 설정이 필요하다 |
-| 두 실제 계정(관리자·간호사) 가입 시연 | 가상 병동·가상 테스트 계정이 준비되지 않았다. 병동 생성(`POST /wards`)은 공식 병원 데이터 적재(`NURSEFLOW_HOSPITAL_DATASET_PATH`)가 필요하다(미적재 시 503) |
-| 실제 브라우저 화면·키보드·좁은 화면·긴 오류 안내 | 이번 세션에는 브라우저 자동화 도구가 연결되지 않았다. 레이아웃은 줄바꿈·`overflow-wrap`·세로 배치 CSS만 적용했고 눈으로 확인하지 못했다 |
-| 브라우저의 실제 sessionStorage·Referer·히스토리 동작 | 테스트는 jsdom과 가짜 저장소다. 주소창의 fragment 제거, 뒤로가기, 탭 종료 뒤 저장소 정리는 실제 브라우저에서 확인하지 못했다 |
-| 클립보드 복사의 권한·보안 컨텍스트 | 테스트는 `user-event`의 클립보드 대역이다. HTTP 비로컬 출처에서는 `navigator.clipboard`가 없어 수동 복사 안내로 떨어진다 |
+| 실제 Kakao 2계정 관리자→간호사 가입과 초대 복귀 | 두 번째 계정이 없음. 실제 Kakao 로그인은 1계정, 관리자/간호사/추가 관리자 초대 흐름은 가상 OIDC+실제 backend로 각각 확인 |
+| 연결 없는 간호사 초대의 가입, 실제 만료·연결 충돌·응답 유실 | 발급/철회와 연결된 간호사·관리자 가입은 실행. 나머지는 기존 fake 테스트 범위이며 이번 브라우저 실연동으로 확인하지 않음 |
+| 전체 화면 크기·소프트 키보드·권한 차단 | 390×844의 관리자 미리보기/사용됨 오류와 실제 Ctrl+V만 확인 |
+| 실제 sessionStorage 삭제·Referer·전체 히스토리 | 도구의 평가 범위에서 저장소 접근 불가. URL fragment·콜백 쿼리 제거와 로그인 후 초대 복귀는 브라우저에서 확인 |
+| 클립보드 권한 차단·비로컬 HTTP | localhost의 복사→실제 붙여넣기는 확인. 거절 시 수동 복사와 보안 컨텍스트 차이는 실제 브라우저에서 미검증 |
 | Web Locks 환경의 로그인 동시성과 이 기능의 상호작용, 웨일 외 브라우저 | B2의 기존 미검증 항목과 같다 |
-| GitHub CI | 푸시하지 않았다 |
+| GitHub CI | 최종 PR head 기준으로 게시 후 확인 |
 | 의존성 audit | 이번에 재실행하지 않았다 |
 
 ## 5. 실연동 절차 (후속)
