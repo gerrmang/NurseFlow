@@ -68,7 +68,7 @@ class StaffOrderInvariantTest : ApiTestBase() {
             val all = nurses()
             val nurse = all.randomOrNull(random)
             val label = "seed $seed step $step"
-            when (random.nextInt(8)) {
+            when (random.nextInt(9)) {
                 0 -> http.post("${base()}/staff", mapOf("displayName" to "가상 추가 $step", "teamId" to teams.randomOrNull(random)), admin)
                 1 -> nurse?.let {
                     val target = if (random.nextInt(4) == 0) null else teams.randomOrNull(random)
@@ -87,6 +87,14 @@ class StaffOrderInvariantTest : ApiTestBase() {
                 6 -> if (teams.size < 4) teams += http.post("${base()}/teams", mapOf("name" to "새팀$step"), admin).json!!.get("teamId").asString()
                 7 -> nurse?.let {
                     http.put("${base()}/staff/${it.id}/roster-settings", mapOf("seniorEligible" to random.nextBoolean(), "stageOverride" to null), admin)
+                }
+                8 -> nurse?.takeIf { it.active }?.let {
+                    // Member deactivation is the other path that takes a nurse off the roster (A6).
+                    val (user, _) = userToken("가상 구성원 $step")
+                    grant(wardId, user, "WARD_MEMBER")
+                    jdbc.update("UPDATE nurses SET subject=? WHERE nurse_id=?", user.toString(), it.id)
+                    val response = http.send("PATCH", "/api/v1/wards/$wardId/memberships/$user", mapOf("active" to false), admin, emptyMap())
+                    assertEquals(200, response.status, "$label member deactivation: ${response.body}")
                 }
             }
             checkInvariants(label)

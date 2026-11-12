@@ -56,6 +56,7 @@ class RosterService(
         parseMonth(request.month)
         requireAdmin(wardId, subject)
         if (!repo.lockWard(wardId)) throw BusinessException(ErrorCode.WARD_NOT_FOUND)
+        requireAdmin(wardId, subject)
         val action = "create-roster:$wardId"
         replay(idempotencyKey, action, request, RosterView::class.java)?.let { return it }
         if (repo.draftExistsForMonth(wardId, request.month)) {
@@ -296,10 +297,14 @@ class RosterService(
     fun cancelGeneration(jobId: UUID, idempotencyKey: UUID, subject: String): GenerationJob {
         val rosterId = repo.jobRosterId(jobId)
             ?: throw BusinessException(ErrorCode.GENERATION_JOB_NOT_FOUND)
-        visibleToAdmin(rosterId, subject)
+        val roster = visibleToAdmin(rosterId, subject)
         val action = "cancel-generation:$jobId"
         replay(idempotencyKey, action, jobId, GenerationJob::class.java)?.let { return it }
+        // Only the job row, never the ward lock: a running generation holds the ward lock until it saves its
+        // result, so cancelling must be able to record the signal meanwhile. The role is checked again after
+        // this lock so a revocation committed while waiting still stops a revoked admin.
         repo.lockGenerationJob(jobId)
+        requireAdmin(roster.wardId, subject)
         val job = readGenerationJob(jobId)
             ?: throw BusinessException(ErrorCode.GENERATION_JOB_NOT_FOUND)
         if (job.status !in setOf("QUEUED", "RUNNING")) {
@@ -324,9 +329,8 @@ class RosterService(
         val requestedBy = repo.generationRequestedBy(jobId)
         val roster = lockAuthorizedRoster(initial.rosterId, requestedBy)
         if (roster.status != "DRAFT" || roster.revision != initial.sourceRosterRevision) {
-            finishGeneration(
-                jobId, "FAILED", null, null,
-                listOf(RuleDiagnostic("STALE_ROSTER_REVISION", "HARD", "근무표가 변경되어 자동배치를 적용하지 않았습니다.")),
+            finishFailedUnlessCancelled(
+                jobId, listOf(RuleDiagnostic("STALE_ROSTER_REVISION", "HARD", "근무표가 변경되어 자동배치를 적용하지 않았습니다.")),
             )
             return
         }
@@ -348,7 +352,7 @@ class RosterService(
             }
         }
         if (preexistingViolations.isNotEmpty()) {
-            finishGeneration(jobId, "FAILED", null, null, preexistingViolations.distinctBy { it.code to it.affectedDate })
+            finishFailedUnlessCancelled(jobId, preexistingViolations.distinctBy { it.code to it.affectedDate })
             return
         }
         val counts = preserved.groupingBy { it.nurseId!! }.eachCount().toMutableMap()
@@ -381,7 +385,7 @@ class RosterService(
                 break
             }
         }
-        if (cancelled || repo.generationCancelled(jobId)) {
+        if (cancelRequestedUnderJobLock(jobId) || cancelled) {
             finishGeneration(jobId, "CANCELLED", null, null, emptyList())
             return
         }
@@ -539,6 +543,8 @@ class RosterService(
     private fun lockAuthorizedRoster(id: UUID, subject: String): DbRoster {
         val roster = visibleToAdmin(id, subject)
         if (!repo.lockWard(roster.wardId)) throw BusinessException(ErrorCode.WARD_NOT_FOUND)
+        // A membership change committed while this request waited must not let a revoked admin finish.
+        requireAdmin(roster.wardId, subject)
         repo.lockRoster(id)
         return repo.findRoster(id)!!
     }
@@ -575,6 +581,23 @@ class RosterService(
         diagnostics = job.diagnosticsJson?.let { mapper.readValue(it, diagnosticList) } ?: emptyList(),
         finishedAt = job.finishedAt,
     )
+
+    /**
+     * Every final decision of a generation is taken under the job row lock: a cancel either commits before it
+     * (and wins) or waits until this transaction ends and then finds the job finished. Without the lock a cancel
+     * landing after the last unlocked check was answered RUNNING while the job still ended another way.
+     */
+    private fun cancelRequestedUnderJobLock(jobId: UUID): Boolean {
+        repo.lockGenerationJob(jobId)
+        return repo.generationCancelled(jobId)
+    }
+
+    private fun finishFailedUnlessCancelled(jobId: UUID, diagnostics: List<RuleDiagnostic>) =
+        if (cancelRequestedUnderJobLock(jobId)) {
+            finishGeneration(jobId, "CANCELLED", null, null, emptyList())
+        } else {
+            finishGeneration(jobId, "FAILED", null, null, diagnostics)
+        }
 
     private fun finishGeneration(
         jobId: UUID, status: String, resultRevision: Int?,

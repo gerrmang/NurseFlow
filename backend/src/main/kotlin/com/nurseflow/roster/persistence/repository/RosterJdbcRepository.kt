@@ -82,13 +82,13 @@ class RosterJdbcRepository(
             ).isNotEmpty()
 
     fun memberships(wardId: UUID, subject: String): Set<String> = jdbc.query(
-        "SELECT role FROM ward_memberships WHERE ward_id=? AND subject=?",
+        "SELECT role FROM ward_memberships WHERE ward_id=? AND subject=? AND active=TRUE",
         { rs, _ -> rs.getString("role") }, wardId, subject,
     ).toSet()
 
     fun canViewWardCalendar(wardId: UUID, subject: String): Boolean =
         (jdbc.queryForObject(
-            "SELECT COUNT(*) FROM ward_memberships WHERE ward_id=? AND subject=? AND can_view_ward_calendar=TRUE",
+            "SELECT COUNT(*) FROM ward_memberships WHERE ward_id=? AND subject=? AND can_view_ward_calendar=TRUE AND active=TRUE",
             Int::class.java, wardId, subject,
         ) ?: 0) > 0
 
@@ -161,8 +161,21 @@ class RosterJdbcRepository(
 
     // ── Nurses ──
 
+    /**
+     * A record linked to an account is rostered only while that account is an active WARD_MEMBER and not an
+     * active admin (admins are never rostered; a deactivated member has no ward access). Membership and staff
+     * rules keep such records inactive; this predicate also covers data from before those rules, so candidates,
+     * manual and automatic assignment, confirmation and staffing counts agree. Records without an account
+     * (fictional demo staff) keep their current behaviour until A7 decides demo mode.
+     */
+    private val rosterable = """nurses.active=TRUE AND (nurses.subject IS NULL OR (
+        EXISTS (SELECT 1 FROM ward_memberships m WHERE m.ward_id=nurses.ward_id AND m.subject=nurses.subject
+            AND m.role='WARD_MEMBER' AND m.active=TRUE)
+        AND NOT EXISTS (SELECT 1 FROM ward_memberships m WHERE m.ward_id=nurses.ward_id AND m.subject=nurses.subject
+            AND m.role='WARD_ADMIN' AND m.active=TRUE)))"""
+
     fun findNurse(id: UUID, wardId: UUID): DbNurse? = jdbc.query(
-        "SELECT nurse_id,qualifications,active FROM nurses WHERE nurse_id=? AND ward_id=?",
+        "SELECT nurse_id,qualifications,($rosterable) AS active FROM nurses WHERE nurse_id=? AND ward_id=?",
         { rs, _ ->
             DbNurse(
                 uuid(rs, "nurse_id"),
@@ -173,7 +186,7 @@ class RosterJdbcRepository(
     ).firstOrNull()
 
     fun activeNurses(wardId: UUID): List<DbNurse> = jdbc.query(
-        "SELECT nurse_id,qualifications,active FROM nurses WHERE ward_id=? AND active=TRUE",
+        "SELECT nurse_id,qualifications,active FROM nurses WHERE ward_id=? AND $rosterable",
         { rs, _ ->
             DbNurse(
                 uuid(rs, "nurse_id"),
@@ -184,10 +197,11 @@ class RosterJdbcRepository(
     )
 
     fun activeNurseCount(wardId: UUID): Int =
-        jdbc.queryForObject("SELECT COUNT(*) FROM nurses WHERE ward_id=? AND active=TRUE", Int::class.java, wardId) ?: 0
+        jdbc.queryForObject("SELECT COUNT(*) FROM nurses WHERE ward_id=? AND $rosterable", Int::class.java, wardId) ?: 0
 
     fun findNurseIdBySubject(wardId: UUID, subject: String): UUID? = jdbc.query(
-        "SELECT nurse_id FROM nurses WHERE ward_id=? AND subject=? AND active=TRUE",
+        // Same rule as rostering: an admin's (or inactive member's) leftover record has no personal calendar.
+        "SELECT nurse_id FROM nurses WHERE ward_id=? AND subject=? AND $rosterable",
         { rs, _ -> uuid(rs, "nurse_id") }, wardId, subject,
     ).firstOrNull()
 
@@ -291,7 +305,8 @@ class RosterJdbcRepository(
 
     fun markFailed(jobId: UUID) {
         jdbc.update(
-            """UPDATE generation_jobs SET status='FAILED',finished_at=?
+            // An accepted cancel wins over a failure, as in every other final decision of a generation.
+            """UPDATE generation_jobs SET status=CASE WHEN cancel_requested THEN 'CANCELLED' ELSE 'FAILED' END,finished_at=?
                 WHERE job_id=? AND status IN ('QUEUED','RUNNING')""",
             Instant.now().toString(), jobId,
         )

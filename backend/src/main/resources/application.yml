@@ -45,8 +45,12 @@ nurseflow:
       timeout: 10s
     dataset:
       # Downloaded 「전국 병의원 및 약국 현황」 zip (data.go.kr 15051059, quarterly) or its 병원정보서비스 CSV.
-      # Imported at startup when the file changed. Empty: search falls back to the live API above.
+      # Imported at startup when the file changed.
       path: ${NURSEFLOW_HOSPITAL_DATASET_PATH:}
+      # Without a path, import the list shipped in the server (src/main/resources/hospitals) when it differs from the
+      # latest import, unless that import is of a later or unknown period (backend/README.md).
+      # false and no path: search falls back to the live API above.
+      bundled: ${NURSEFLOW_HOSPITAL_DATASET_BUNDLED:true}
   ward:
     # Wards one account may create; protects against scripted mass creation.
     max-created-per-user: ${NURSEFLOW_WARD_MAX_CREATED_PER_USER:5}

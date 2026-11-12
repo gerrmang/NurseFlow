@@ -45,6 +45,8 @@ class RosterServiceIntegrationTest @Autowired constructor(
         jdbc.update("INSERT INTO wards(ward_id,name,time_zone) VALUES(?,?,?)", wardId, "테스트 병동", "Asia/Seoul")
         jdbc.update("INSERT INTO ward_memberships(ward_id,subject,role,can_view_ward_calendar) VALUES(?,?,'WARD_ADMIN',TRUE)",
             wardId, admin)
+        // The nurse record is linked to an account, so that account must be an active member to be rostered.
+        jdbc.update("INSERT INTO ward_memberships(ward_id,subject,role,can_view_ward_calendar) VALUES(?,'test-nurse','WARD_MEMBER',TRUE)", wardId)
         jdbc.update("INSERT INTO nurses(nurse_id,ward_id,subject,display_name,qualifications,active) VALUES(?,?,?,?,?,TRUE)",
             nurseId, wardId, "test-nurse", "간호사 1", "[]")
         jdbc.update("""INSERT INTO shift_types(shift_type_id,ward_id,code,display_name,kind,start_time,end_time,spans_midnight)
@@ -122,6 +124,7 @@ class RosterServiceIntegrationTest @Autowired constructor(
         val secondNurse = UUID.randomUUID()
         jdbc.update("INSERT INTO nurses(nurse_id,ward_id,subject,display_name,qualifications,active) VALUES(?,?,?,?,?,TRUE)",
             secondNurse, wardId, "test-nurse-2", "간호사 2", "[]")
+        jdbc.update("INSERT INTO ward_memberships(ward_id,subject,role,can_view_ward_calendar) VALUES(?,'test-nurse-2','WARD_MEMBER',TRUE)", wardId)
         val draft = service.createRoster(wardId, CreateRosterRequest("2026-11"), admin, UUID.randomUUID())
         val requirements = service.replaceRequirements(draft.rosterId, tag(draft), ReplaceRequirementsRequest(listOf(
             StaffingRequirement(LocalDate.parse("2026-11-01"), dayTypeId, 2, emptyList()),
@@ -209,6 +212,7 @@ class RosterServiceIntegrationTest @Autowired constructor(
         val secondNurse = UUID.randomUUID()
         jdbc.update("INSERT INTO nurses(nurse_id,ward_id,subject,display_name,qualifications,active) VALUES(?,?,?,?,?,TRUE)",
             secondNurse, wardId, "test-nurse-2", "간호사 2", "[]")
+        jdbc.update("INSERT INTO ward_memberships(ward_id,subject,role,can_view_ward_calendar) VALUES(?,'test-nurse-2','WARD_MEMBER',TRUE)", wardId)
         val draft = newRoster("2026-11", LocalDate.parse("2026-11-02"), dayTypeId)
         val key = UUID.randomUUID()
         val slotId = draft.slots.single().slotId

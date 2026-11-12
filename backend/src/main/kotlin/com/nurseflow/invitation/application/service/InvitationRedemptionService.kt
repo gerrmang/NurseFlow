@@ -50,14 +50,17 @@ class InvitationRedemptionService(
      */
     @Transactional
     fun redeem(token: String, subject: String, hospitalJoinedOn: YearMonth? = null): WardMembershipResult {
-        val invitation = repo.lockByTokenHash(OpaqueToken.sha256Hex(token))
-            ?: throw BusinessException(ErrorCode.INVITATION_NOT_FOUND)
-        if (!wardRepo.lockWard(invitation.wardId)) throw BusinessException(ErrorCode.INVITATION_NOT_FOUND)
+        val tokenHash = OpaqueToken.sha256Hex(token)
+        // The unlocked read only finds the ward. Ward lock first, then the invitation row, like every admin
+        // write (reissue, revoke), so the two orders cannot deadlock; all decisions use the locked row.
+        val wardId = repo.findByTokenHash(tokenHash)?.wardId ?: throw BusinessException(ErrorCode.INVITATION_NOT_FOUND)
+        if (!wardRepo.lockWard(wardId)) throw BusinessException(ErrorCode.INVITATION_NOT_FOUND)
+        val invitation = repo.lockByTokenHash(tokenHash) ?: throw BusinessException(ErrorCode.INVITATION_NOT_FOUND)
         // Re-check expiry after acquiring both locks; waiting for either lock must not let a
         // request that started before expiration redeem the invitation after its deadline.
         val now = Instant.now()
         requireRedeemable(invitation, now)
-        if (wardRepo.rolesIn(invitation.wardId, subject).isNotEmpty()) {
+        if (wardRepo.hasMembership(invitation.wardId, subject)) {
             // Role changes for existing members are an admin action, not a second invitation.
             throw BusinessException(ErrorCode.ALREADY_WARD_MEMBER)
         }
