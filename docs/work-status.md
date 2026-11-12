@@ -66,6 +66,12 @@
 - 게시 직후 [Verify 43221647358](https://github.com/gerrmang/NurseFlow/actions/runs/43221647358)의 Backend tests·Android debug build·Web checks는 모두 실행 중이었다. CI 통과·GitHub 승인·브랜치 보호 강제를 주장하지 않는다. 이 게시 기록을 포함한 후속 문서 커밋의 CI는 해당 head로 별도 확인한다.
 - 공유 인계: 같은 worktree·`feat/android-ward-create`에서 이 게시 기록만 후속 커밋·푸시한다. 로컬 DB `nurseflow.mv.db`를 보존하고 PR 리뷰 대기로 넘긴다. 병합·자동 병합 설정·수동 배포 없음. 앞 절의 'PR 미개설 유지·커밋/푸시 없음'은 이전 검증 시점 기록이며 이 게시로 대체한다.
 
+## B4a CI 실패 조사 (2026-11-13, Codex)
+
+- 사용자 요청으로 PR #44 head `3a737a5`의 [Verify 43221785489](https://github.com/gerrmang/NurseFlow/actions/runs/43221785489)를 확인했다. Backend·Web은 성공, Android는 단위 140개 중 `WardCreationApiTest`의 응답 유실 관련 5개가 실패했다(타임아웃 3개·상태 assertion 2개). 실패 작업만 재실행한 attempt 2도 같은 5개가 실패했다.
+- Windows JDK 21에서 `:app:testDebugUnitTest --tests '*WardCreationApiTest' --rerun-tasks --no-daemon` 성공. 동일한 컴파일 결과·의존성으로 Linux JDK 21에서 직접 JUnit 실행 시 해당 11개와 전체 140개가 통과했다. assertions 활성화·2코어/512MB 조건의 해당 11개도 통과해 OS·CPU·메모리만으로 원인을 확정하지 못했다. Linux 실행은 Gradle 전체 빌드와 동일한 검사라고 주장하지 않는다.
+- CI의 짧은 예외 출력으로는 실패 상태와 원인을 판단할 수 없어 단위 테스트 로깅을 `TestExceptionFormat.FULL`로 보강한다. 검사 생략·타임아웃 확대·운영 앱 동작 변경은 없다. 다음 CI에서 상세 예외를 확인하고 원인을 좁힌다. 로컬 서버·에뮬레이터는 재시작하지 않았고 사용자 DB는 보존했다.
+
 ## 리뷰 상태
 
 - PR #30의 `RealBackendSessionDeviceTest`는 `IsolatedSessionTestRunner`와 테스트 전용 `Application`/`TokenStore`를 사용한다. 앞서 기록된 “개발자 저장 토큰에 접근할 수 있다”는 P1은 이 코드와 맞지 않아 철회했다. 실제 사용자 세션을 사용하지 않는다는 검증 기록은 [`B1 검증 기록`](../android/B1-verification.md)을 참조한다.
