@@ -41,15 +41,16 @@ class ShiftTypeService(
         )
     }
 
-    /** Retrying with the same Idempotency-Key returns the first result instead of a duplicate-code 409. */
+    /**
+     * Retrying with the same Idempotency-Key returns the first result instead of a duplicate-code 409. The replay
+     * is read only after the lock and admin re-check, so a revoked admin gets no replay either, and a same-key
+     * request that waited on the lock sees the committed first result.
+     */
     @Transactional
     fun create(wardId: UUID, command: ShiftTypeCommand, idempotencyKey: UUID, actor: String): ShiftTypeResult {
-        wards.requireAdmin(wardId, actor)
+        wards.lockAsAdmin(wardId, actor)
         val resolved = resolve(command)
         val requestHash = replays.requestHash(listOf(actor, wardId, command))
-        replayed(idempotencyKey, requestHash)?.let { return it }
-        wards.lockAsAdmin(wardId, actor)
-        // A same-key request that waited on the lock sees the committed first result here.
         replayed(idempotencyKey, requestHash)?.let { return it }
         if (repo.codeExists(wardId, command.code, except = null)) throw BusinessException(ErrorCode.SHIFT_TYPE_CODE_DUPLICATE)
         val row = resolved.toRow(UUID.randomUUID(), wardId, command.active ?: true)
