@@ -11,3 +11,15 @@ export type ApiProblem = Schemas['ApiProblem']
 export interface WardList {
   items: WardMembership[]
 }
+
+export type Invitation = Schemas['Invitation']
+export type InvitationRole = Invitation['role']
+export type InvitationStatus = Invitation['status']
+export type CreatedInvitation = Schemas['CreatedInvitation']
+export type InvitationPreview = Schemas['InvitationPreview']
+export type CreateInvitationRequest = Schemas['CreateInvitationRequest']
+export type RedeemInvitationRequest = Schemas['RedeemInvitationRequest']
+export type StaffMember = Schemas['StaffMember']
+export interface InvitationList {
+  items: Invitation[]
+}
