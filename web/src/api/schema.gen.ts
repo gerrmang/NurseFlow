@@ -672,10 +672,23 @@ export interface paths {
             };
             cookie?: never;
         };
-        /** 병동 근무 유형 조회 */
+        /**
+         * 병동 근무 유형 조회
+         * @description 병동 구성원(관리자·간호사)이 조회한다. 기본은 활성 근무 유형만 반환하며
+         *     `includeInactive=true`이면 비활성 유형도 포함한다. 정렬은 `startTime`, `code` 순이다.
+         *     `policyRevision`은 이 병동의 근무 유형이 바뀔 때마다 1씩 늘어나는 병동 정책 revision이다
+         *     (근무 유형이 한 번도 바뀌지 않았으면 0).
+         */
         get: operations["listShiftTypes"];
         put?: never;
-        /** 근무 유형 생성 */
+        /**
+         * 근무 유형 생성
+         * @description 관리자만 호출할 수 있다. 같은 병동에서 `code`는 비활성 유형을 포함해 유일하다
+         *     (`SHIFT_TYPE_CODE_DUPLICATE`). 서로 다른 유형의 시간대가 겹치는 것은 허용한다.
+         *     같은 `Idempotency-Key`로 재시도하면(응답 유실 등) 처음 만든 유형을 그대로 돌려준다. 다른 본문이나 다른 사용자가
+         *     같은 키를 쓰면 409 `IDEMPOTENCY_KEY_REUSED`. 병동 단위로 직렬화되므로 같은 `code`를 새 키로 동시에 만들면 하나만 201이다.
+         *     `kind`는 DAY·EVENING·NIGHT만 받는다. OTHER(특수 근무)는 휴식 규칙이 정해지지 않아 결정 23 전까지 입력할 수 없다.
+         */
         post: operations["createShiftType"];
         delete?: never;
         options?: never;
@@ -694,10 +707,26 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        /** 근무 유형/시간 갱신 */
+        /**
+         * 근무 유형/시간 갱신
+         * @description 관리자만 호출할 수 있는 전체 교체(full update)다. 생략한 선택 필드는 생성과 같은 기본값으로 다시 계산된다.
+         *     `active`를 생략하면 현재 값을 유지하고, `true`로 보내면 비활성 유형을 다시 켠다.
+         *     시간·휴게·인정시간·월 환산시간·종류·`spansMidnight`·활성 여부가 바뀌면 이 유형을 쓰는 DRAFT 근무표는
+         *     `needsRevalidation=true`가 된다. 표시 이름·코드만 바꾸면 표시하지 않는다.
+         *     시작·종료·`spansMidnight`가 바뀌면 이 유형을 쓰는 DRAFT 근무표의 근무 칸 시각을 새 시간으로 다시 계산하고 그 근무표의
+         *     revision을 올린다(이전 화면의 ETag로는 확정할 수 없다). 확정 시 필수 규칙은 새 시각으로 다시 검사된다.
+         *     PUBLISHED 근무표의 칸은 바뀌지 않는다. `kind`는 생성과 같이 DAY·EVENING·NIGHT만 받는다.
+         */
         put: operations["updateShiftType"];
         post?: never;
-        delete?: never;
+        /**
+         * 근무 유형 비활성화
+         * @description 관리자만 호출할 수 있다. 행을 지우지 않고 `active=false`로 바꾼다(근무 칸이 참조하므로 삭제하지 않는다).
+         *     이미 비활성이어도 200이며 변경 없이 현재 값을 반환한다(정책 revision도 늘지 않는다).
+         *     비활성 유형은 새 필요 인원 입력에 쓸 수 없지만(`SHIFT_TYPE_NOT_FOUND`), 기존 근무 칸과 근무표 조회는 그대로다.
+         *     이 유형을 쓰는 DRAFT 근무표는 `needsRevalidation=true`가 된다.
+         */
+        delete: operations["deactivateShiftType"];
         options?: never;
         head?: never;
         patch?: never;
@@ -1322,36 +1351,48 @@ export interface components {
             /** @enum {string} */
             kind: "DAY" | "EVENING" | "NIGHT" | "OTHER";
             /**
-             * Format: time
-             * @example 19:00:00
+             * @description 병동 현지 시각 HH:mm
+             * @example 22:00
              */
             startTime: string;
             /**
-             * Format: time
-             * @example 07:00:00
+             * @description 병동 현지 시각 HH:mm. `spansMidnight=true`이면 다음 날 시각이다.
+             * @example 07:00
              */
             endTime: string;
+            /** @description 종료가 다음 날이면 true. `endTime < startTime`과 일치해야 한다. */
             spansMidnight: boolean;
+            /** @description 서버가 계산한 근무 구간 길이(분). 자정을 넘으면 `endTime - startTime + 1440`. 22:00~07:00은 540. */
+            durationMinutes: number;
+            /** @description 휴게 시간(분). */
+            breakMinutes: number;
+            /** @description 실제 인정 근무시간(분). `durationMinutes - breakMinutes` 이하. */
+            recognizedMinutes: number;
+            /** @description 월 목표 환산 인정 시간(분). 이 근무 하나가 월 목표 시간에 채워 주는 분. 기본값은 `recognizedMinutes`. 월 목표 계산 자체는 A13에서 다룬다. */
+            targetCreditMinutes: number;
             active: boolean;
         };
         ShiftTypeInput: {
             code: string;
             displayName: string;
-            /** @enum {string} */
-            kind: "DAY" | "EVENING" | "NIGHT" | "OTHER";
             /**
-             * Format: time
-             * @example 19:00:00
+             * @description 입력 가능한 종류. 응답의 기존 OTHER 유형은 읽기만 가능(결정 23 전)
+             * @enum {string}
              */
+            kind: "DAY" | "EVENING" | "NIGHT";
+            /** @example 22:00 */
             startTime: string;
-            /**
-             * Format: time
-             * @example 07:00:00
-             */
+            /** @example 07:00 */
             endTime: string;
             spansMidnight: boolean;
-            /** @default true */
-            active: boolean;
+            /** @default 0 */
+            breakMinutes: number;
+            /** @description 생략하면 `durationMinutes - breakMinutes`. */
+            recognizedMinutes?: number;
+            /** @description 생략하면 `recognizedMinutes`. */
+            targetCreditMinutes?: number;
+            /** @description 생성 시 생략하면 true. 수정 시 생략하면 현재 값 유지. */
+            active?: boolean;
         };
         CreateRosterRequest: {
             /** @example 2026-11 */
@@ -1376,6 +1417,11 @@ export interface components {
             publishedAt?: string;
             /** Format: uuid */
             confirmedBy?: string;
+            /**
+             * @description 이 초안이 쓰는 근무 유형이 바뀌거나 비활성화되어 다시 검증해야 하면 true. PUBLISHED 근무표는 항상 false.
+             *     이 플래그를 지우는 동작은 후속 단위에서 다룬다.
+             */
+            needsRevalidation?: boolean;
         };
         Roster: components["schemas"]["RosterSummary"] & {
             slots: components["schemas"]["StaffingSlot"][];
@@ -3370,7 +3416,9 @@ export interface operations {
     };
     listShiftTypes: {
         parameters: {
-            query?: never;
+            query?: {
+                includeInactive?: boolean;
+            };
             header?: never;
             path: {
                 wardId: components["parameters"]["WardId"];
@@ -3379,7 +3427,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description 근무 유형 목록 */
+            /** @description 근무 유형 목록과 병동 정책 revision */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -3387,11 +3435,21 @@ export interface operations {
                 content: {
                     "application/json": {
                         items: components["schemas"]["ShiftType"][];
+                        /** @description 병동 정책 revision. 근무 유형 생성·수정·비활성화·재활성화마다 1 증가한다. */
+                        policyRevision: number;
                     };
                 };
             };
             401: components["responses"]["Unauthorized"];
-            403: components["responses"]["Forbidden"];
+            /** @description WARD_NOT_FOUND (병동이 없거나 소속이 아님) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
         };
     };
     createShiftType: {
@@ -3424,7 +3482,36 @@ export interface operations {
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
-            409: components["responses"]["Conflict"];
+            /** @description WARD_NOT_FOUND */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description SHIFT_TYPE_CODE_DUPLICATE 또는 IDEMPOTENCY_KEY_REUSED */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /**
+             * @description INVALID_SHIFT_INTERVAL(시작과 종료가 같음), SHIFT_SPANS_MIDNIGHT_MISMATCH(`spansMidnight`가 시각과 맞지 않음),
+             *     INVALID_SHIFT_MINUTES(인정시간이 근무시간에서 휴게를 뺀 값을 넘음)
+             */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
         };
     };
     updateShiftType: {
@@ -3452,10 +3539,70 @@ export interface operations {
                     "application/json": components["schemas"]["ShiftType"];
                 };
             };
+            400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
-            404: components["responses"]["NotFound"];
-            409: components["responses"]["Conflict"];
+            /** @description WARD_NOT_FOUND 또는 SHIFT_TYPE_NOT_FOUND_IN_WARD */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description SHIFT_TYPE_CODE_DUPLICATE */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description INVALID_SHIFT_INTERVAL, SHIFT_SPANS_MIDNIGHT_MISMATCH, INVALID_SHIFT_MINUTES */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+        };
+    };
+    deactivateShiftType: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                wardId: components["parameters"]["WardId"];
+                shiftTypeId: components["parameters"]["ShiftTypeId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 비활성화된 근무 유형 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ShiftType"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            /** @description WARD_NOT_FOUND 또는 SHIFT_TYPE_NOT_FOUND_IN_WARD */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
         };
     };
     listWardRosters: {

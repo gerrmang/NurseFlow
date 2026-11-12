@@ -21,7 +21,8 @@ import java.util.UUID
 
 /**
  * Ward shift type settings (D/E/N hours, break, recognized hours, monthly target credit). Every write
- * runs under the ward lock, bumps the ward policy revision and flags DRAFT rosters that use the type.
+ * runs under the ward lock with the admin role re-checked after it ([WardService.lockAsAdmin]), bumps the ward
+ * policy revision and flags DRAFT rosters that use the type.
  * Shift types are never deleted because roster slots reference them.
  */
 @Service
@@ -47,7 +48,7 @@ class ShiftTypeService(
         val resolved = resolve(command)
         val requestHash = replays.requestHash(listOf(actor, wardId, command))
         replayed(idempotencyKey, requestHash)?.let { return it }
-        lock(wardId)
+        wards.lockAsAdmin(wardId, actor)
         // A same-key request that waited on the lock sees the committed first result here.
         replayed(idempotencyKey, requestHash)?.let { return it }
         if (repo.codeExists(wardId, command.code, except = null)) throw BusinessException(ErrorCode.SHIFT_TYPE_CODE_DUPLICATE)
@@ -60,9 +61,8 @@ class ShiftTypeService(
 
     @Transactional
     fun update(wardId: UUID, shiftTypeId: UUID, command: ShiftTypeCommand, actor: String): ShiftTypeResult {
-        wards.requireAdmin(wardId, actor)
+        wards.lockAsAdmin(wardId, actor)
         val resolved = resolve(command)
-        lock(wardId)
         val old = repo.find(wardId, shiftTypeId) ?: throw BusinessException(ErrorCode.SHIFT_TYPE_NOT_FOUND_IN_WARD)
         if (repo.codeExists(wardId, command.code, except = shiftTypeId)) throw BusinessException(ErrorCode.SHIFT_TYPE_CODE_DUPLICATE)
         val row = resolved.toRow(shiftTypeId, wardId, command.active ?: old.active)
@@ -81,8 +81,7 @@ class ShiftTypeService(
 
     @Transactional
     fun deactivate(wardId: UUID, shiftTypeId: UUID, actor: String): ShiftTypeResult {
-        wards.requireAdmin(wardId, actor)
-        lock(wardId)
+        wards.lockAsAdmin(wardId, actor)
         val old = repo.find(wardId, shiftTypeId) ?: throw BusinessException(ErrorCode.SHIFT_TYPE_NOT_FOUND_IN_WARD)
         if (!old.active) return old.toResult()
         val row = old.copy(active = false)
@@ -91,10 +90,6 @@ class ShiftTypeService(
         repo.markDraftsForRevalidation(wardId, shiftTypeId)
         audit.record(wardId, actor, "SHIFT_TYPE_DEACTIVATED", shiftTypeId.toString())
         return row.toResult()
-    }
-
-    private fun lock(wardId: UUID) {
-        if (!repo.lockWard(wardId)) throw BusinessException(ErrorCode.WARD_NOT_FOUND)
     }
 
     /** Fields that change how existing slots of the type should look; name and code alone do not. */

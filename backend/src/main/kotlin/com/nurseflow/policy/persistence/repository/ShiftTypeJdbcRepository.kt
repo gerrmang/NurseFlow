@@ -13,10 +13,6 @@ import java.util.UUID
 
 @Repository
 class ShiftTypeJdbcRepository(private val jdbc: JdbcTemplate) {
-    /** Serializes every policy write of a ward; also the guard against duplicate codes and lost revision bumps. */
-    fun lockWard(wardId: UUID): Boolean =
-        jdbc.query("SELECT ward_id FROM wards WHERE ward_id=? FOR UPDATE", { rs, _ -> rs.getString(1) }, wardId).isNotEmpty()
-
     fun list(wardId: UUID, includeInactive: Boolean): List<ShiftTypeRow> = jdbc.query(
         "SELECT * FROM shift_types WHERE ward_id=?" + (if (includeInactive) "" else " AND active=TRUE") +
             " ORDER BY start_time, code",
