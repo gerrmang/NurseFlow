@@ -715,7 +715,10 @@ export interface paths {
          *     `needsRevalidation=true`가 되고 그 근무표의 revision이 오른다. 그래서 변경 전 화면의 ETag로는 확정·수정할 수 없고
          *     (412 STALE_ROSTER_REVISION) 현재 정책으로 다시 조회한 뒤 진행해야 한다. 표시 이름·코드만 바꾸면 표시하지 않고 revision도
          *     그대로다. 시작·종료·`spansMidnight`가 바뀌면 근무 칸 시각도 새 시간으로 다시 계산하며, 확정 시 필수 규칙은 새 시각으로 다시 검사된다.
-         *     PUBLISHED 근무표의 칸은 바뀌지 않는다. `kind`는 생성과 같이 DAY·EVENING·NIGHT만 받는다.
+         *     근무 칸은 만들 때의 시각·코드·종류를 저장한다. DRAFT 칸은 유형 변경을 따라가지만 PUBLISHED 칸은 공개 당시 값을 유지하며,
+         *     다음 달 근무의 휴식 규칙도 그 값으로 검사한다. 새 시각을 병동 시간대로 바꿨을 때 일광절약시간 전환일의 DRAFT 칸 중 하나라도
+         *     종료가 시작보다 앞서면 422 INVALID_SHIFT_INTERVAL이며 변경 전체가 적용되지 않는다.
+         *     `kind`는 생성과 같이 DAY·EVENING·NIGHT만 받는다.
          */
         put: operations["updateShiftType"];
         post?: never;

@@ -4,6 +4,9 @@ import com.nurseflow.common.error.BusinessException
 import com.nurseflow.roster.application.model.*
 import com.nurseflow.roster.application.generation.GenerationCoordinator
 import com.nurseflow.roster.application.service.RosterService
+import com.nurseflow.policy.application.model.ShiftTypeCommand
+import com.nurseflow.policy.application.service.ShiftTypeService
+import com.nurseflow.roster.domain.model.ShiftKind
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertThrows
@@ -27,6 +30,7 @@ class RosterServiceIntegrationTest @Autowired constructor(
     private val jdbc: JdbcTemplate,
     private val service: RosterService,
     private val generation: GenerationCoordinator,
+    private val shiftTypes: ShiftTypeService,
 ) {
     private lateinit var wardId: UUID
     private lateinit var nurseId: UUID
@@ -37,7 +41,8 @@ class RosterServiceIntegrationTest @Autowired constructor(
     @BeforeEach
     fun setup() {
         listOf("mutation_replays", "generation_jobs", "approved_absences", "roster_slots", "rosters",
-            "shift_types", "nurses", "ward_memberships", "wards").forEach { jdbc.update("DELETE FROM $it") }
+            "shift_types", "nurses", "ward_memberships", "audit_events", "ward_policy_revisions", "wards")
+            .forEach { jdbc.update("DELETE FROM $it") }
         wardId = UUID.randomUUID()
         nurseId = UUID.randomUUID()
         dayTypeId = UUID.randomUUID()
@@ -70,6 +75,25 @@ class RosterServiceIntegrationTest @Autowired constructor(
         assertTrue(conflict.ruleViolations.filterIsInstance<RuleDiagnostic>().any { it.code == "REST_AFTER_NIGHT" })
         assertEquals("DRAFT", service.getRoster(november.rosterId, admin).status)
         assertThrows(BusinessException::class.java) { service.publishedWard(wardId, "2026-11", admin) }
+    }
+
+    @Test
+    fun `editing a shift type never rewrites a published roster or the rest rules checked against it`() {
+        val october = assign(newRoster("2026-10", LocalDate.parse("2026-10-31"), nightTypeId), nurseId)
+        val november = assign(newRoster("2026-11", LocalDate.parse("2026-11-01"), dayTypeId), nurseId)
+        service.confirm(october.rosterId, tag(october), UUID.randomUUID(), ConfirmRosterRequest(), admin)
+
+        // The published night type is turned into a day type with another code.
+        shiftTypes.update(wardId, nightTypeId, ShiftTypeCommand("N2", "데이로 바뀐 유형", ShiftKind.DAY,
+            java.time.LocalTime.of(7, 0), java.time.LocalTime.of(15, 0), false, null, null, null, null), admin)
+
+        val published = service.publishedMine(wardId, "2026-10", "test-nurse").assignments.single()
+        assertEquals("NIGHT", published.shiftType)
+        assertEquals(Instant.parse("2026-10-31T10:00:00Z"), published.startsAt)
+        val conflict = assertThrows(BusinessException::class.java) {
+            service.confirm(november.rosterId, tag(november), UUID.randomUUID(), ConfirmRosterRequest(), admin)
+        }
+        assertTrue(conflict.ruleViolations.filterIsInstance<RuleDiagnostic>().any { it.code == "REST_AFTER_NIGHT" })
     }
 
     @Test

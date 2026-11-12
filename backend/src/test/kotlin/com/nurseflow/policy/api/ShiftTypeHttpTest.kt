@@ -119,6 +119,44 @@ class ShiftTypeHttpTest : ApiTestBase() {
     }
 
     @Test
+    fun `draft slots follow a code and kind change while published slots keep theirs`() {
+        val id = create().get("shiftTypeId").asString()
+        val draft = roster("DRAFT", "2026-11", id)
+        val published = roster("PUBLISHED", "2026-10", id)
+        fun codeAndKind(rosterId: UUID) = jdbc.queryForMap("SELECT shift_code, shift_kind FROM roster_slots WHERE roster_id=?", rosterId)
+            .mapKeys { it.key.lowercase() }
+
+        assertEquals(200, http.put("${base()}/$id", body(code = "E", kind = "EVENING"), admin).status)
+
+        assertEquals(mapOf("shift_code" to "E", "shift_kind" to "EVENING"), codeAndKind(draft))
+        assertEquals(mapOf("shift_code" to "N", "shift_kind" to "NIGHT"), codeAndKind(published))
+    }
+
+    @Test
+    fun `an hours change that would end a draft slot before it starts on a daylight-saving day is rolled back`() {
+        jdbc.update("UPDATE wards SET time_zone='America/New_York' WHERE ward_id=?", wardId)
+        val id = create(body("D", "데이", "DAY", "01:00", "02:00", false)).get("shiftTypeId").asString()
+        val draft = UUID.randomUUID()
+        jdbc.update("INSERT INTO rosters(roster_id,ward_id,roster_month,status,active,revision) VALUES(?,?,'2026-03','DRAFT',FALSE,1)", draft, wardId)
+        // 2026-03-08 01:00-02:00 EST.
+        jdbc.update("""INSERT INTO roster_slots(slot_id,roster_id,shift_date,shift_type_id,shift_code,shift_kind,starts_at,ends_at)
+            VALUES(?,?,'2026-03-08',?,'D','DAY','2026-03-08T06:00:00Z','2026-03-08T07:00:00Z')""", UUID.randomUUID(), draft, UUID.fromString(id))
+        val policyBefore = revision()
+
+        // 02:30 does not exist that night (clocks jump 02:00 -> 03:00), so the start moves to 03:30, after the 03:00 end.
+        val response = http.put("${base()}/$id", body("D", "데이", "DAY", "02:30", "03:00", false), admin)
+
+        assertEquals(422, response.status, response.body)
+        assertEquals("INVALID_SHIFT_INTERVAL", response.code)
+        assertEquals("01:00", http.get(base(), admin).json!!.get("items")[0].get("startTime").asString().take(5))
+        assertEquals(mapOf("starts_at" to "2026-03-08T06:00:00Z", "ends_at" to "2026-03-08T07:00:00Z"),
+            jdbc.queryForMap("SELECT starts_at, ends_at FROM roster_slots WHERE roster_id=?", draft).mapKeys { it.key.lowercase() }
+                .mapValues { it.value.toString() })
+        assertEquals(1, jdbc.queryForObject("SELECT revision FROM rosters WHERE roster_id=?", Int::class.java, draft))
+        assertEquals(policyBefore, revision())
+    }
+
+    @Test
     fun `a name-only change keeps the draft revision`() {
         val id = create().get("shiftTypeId").asString()
         val draft = roster("DRAFT", "2026-11", id)
@@ -272,9 +310,11 @@ class ShiftTypeHttpTest : ApiTestBase() {
         val rosterId = UUID.randomUUID()
         jdbc.update("INSERT INTO rosters(roster_id,ward_id,roster_month,status,active,revision) VALUES(?,?,?,?,?,1)",
             rosterId, wardId, month, status, status == "PUBLISHED")
-        jdbc.update("INSERT INTO roster_slots(slot_id,roster_id,shift_date,shift_type_id,starts_at,ends_at) VALUES(?,?,?,?,?,?)",
-            UUID.randomUUID(), rosterId, "$month-05", UUID.fromString(shiftTypeId),
-            Instant.parse("2026-11-05T13:00:00Z").toString(), Instant.parse("2026-11-05T22:00:00Z").toString())
+        // Like RosterJdbcRepository.insertSlot: the slot keeps the type's code and kind as created.
+        jdbc.update("""INSERT INTO roster_slots(slot_id,roster_id,shift_date,shift_type_id,shift_code,shift_kind,starts_at,ends_at)
+            SELECT ?,?,?,shift_type_id,code,kind,?,? FROM shift_types WHERE shift_type_id=?""",
+            UUID.randomUUID(), rosterId, "$month-05",
+            Instant.parse("2026-11-05T13:00:00Z").toString(), Instant.parse("2026-11-05T22:00:00Z").toString(), UUID.fromString(shiftTypeId))
         return rosterId
     }
 

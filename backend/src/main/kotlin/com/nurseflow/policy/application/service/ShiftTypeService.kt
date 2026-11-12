@@ -69,9 +69,15 @@ class ShiftTypeService(
         val row = resolved.toRow(shiftTypeId, wardId, command.active ?: old.active)
         repo.update(row)
         repo.bumpPolicyRevision(wardId, actor, Instant.now())
-        if (old.start != row.start || old.end != row.end || old.spansMidnight != row.spansMidnight) {
-            repo.recomputeDraftSlotTimes(wardId, shiftTypeId, row.start, row.end, row.spansMidnight)
+        val hoursChanged = old.start != row.start || old.end != row.end || old.spansMidnight != row.spansMidnight
+        if (hoursChanged && !repo.recomputeDraftSlotTimes(wardId, shiftTypeId, row.start, row.end, row.spansMidnight)) {
+            // Rolls the whole change back, like a requirement whose interval is empty in the ward's time zone.
+            throw BusinessException(
+                ErrorCode.INVALID_SHIFT_INTERVAL,
+                safeDetail = "병동 시간대의 일광절약시간 전환일에 종료가 시작보다 앞서는 초안 근무 칸이 생깁니다.",
+            )
         }
+        if (old.code != row.code || old.kind != row.kind) repo.syncDraftSlotCodeAndKind(wardId, shiftTypeId, row.code, row.kind)
         if (affectsSlots(old.toResult(), row.toResult())) repo.markDraftsForRevalidation(wardId, shiftTypeId)
         audit.record(
             wardId, actor,

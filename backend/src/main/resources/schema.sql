@@ -266,3 +266,13 @@ CREATE TABLE IF NOT EXISTS ward_policy_revisions (
 
 -- A8: set on DRAFT rosters whose shift types changed after their slots were created.
 ALTER TABLE rosters ADD COLUMN IF NOT EXISTS needs_revalidation BOOLEAN DEFAULT FALSE NOT NULL;
+
+-- A8: a slot keeps the code and kind of its shift type as created, like its start and end, so editing the type
+-- never rewrites a published roster or the rest rules checked against it. DRAFT slots follow type edits.
+-- Older slots take the type's current values once.
+ALTER TABLE roster_slots ADD COLUMN IF NOT EXISTS shift_code VARCHAR(32);
+ALTER TABLE roster_slots ADD COLUMN IF NOT EXISTS shift_kind VARCHAR(10);
+UPDATE roster_slots s SET
+    shift_code = COALESCE(s.shift_code, (SELECT t.code FROM shift_types t WHERE t.shift_type_id = s.shift_type_id)),
+    shift_kind = COALESCE(s.shift_kind, (SELECT t.kind FROM shift_types t WHERE t.shift_type_id = s.shift_type_id))
+WHERE s.shift_code IS NULL OR s.shift_kind IS NULL;

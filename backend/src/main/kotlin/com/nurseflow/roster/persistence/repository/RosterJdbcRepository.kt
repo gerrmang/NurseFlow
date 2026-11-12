@@ -95,7 +95,8 @@ class RosterJdbcRepository(
     // ── Slots ──
 
     fun slots(rosterId: UUID): List<DbSlot> = jdbc.query(
-        """SELECT s.*,t.code,t.kind,n.display_name FROM roster_slots s
+        // The slot's own code and kind: a later shift type edit must not change a published roster.
+        """SELECT s.*,COALESCE(s.shift_code,t.code) AS code,COALESCE(s.shift_kind,t.kind) AS kind,n.display_name FROM roster_slots s
             JOIN shift_types t ON t.shift_type_id=s.shift_type_id
             LEFT JOIN nurses n ON n.nurse_id=s.nurse_id
             WHERE s.roster_id=? ORDER BY s.shift_date,s.starts_at,s.slot_id""",
@@ -117,9 +118,9 @@ class RosterJdbcRepository(
 
     fun insertSlot(rosterId: UUID, slot: NewSlot) {
         jdbc.update(
-            """INSERT INTO roster_slots(slot_id,roster_id,shift_date,shift_type_id,starts_at,ends_at,required_qualifications)
-                VALUES(?,?,?,?,?,?,?)""",
-            UUID.randomUUID(), rosterId, slot.date, slot.shiftTypeId,
+            """INSERT INTO roster_slots(slot_id,roster_id,shift_date,shift_type_id,shift_code,shift_kind,starts_at,ends_at,required_qualifications)
+                VALUES(?,?,?,?,?,?,?,?,?)""",
+            UUID.randomUUID(), rosterId, slot.date, slot.shiftTypeId, slot.shiftCode, slot.shiftKind.name,
             slot.startsAt.toString(), slot.endsAt.toString(),
             mapper.writeValueAsString(slot.requiredQualifications),
         )

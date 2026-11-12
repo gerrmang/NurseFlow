@@ -111,7 +111,7 @@ class RosterService(
                 throw BusinessException(ErrorCode.INVALID_SHIFT_INTERVAL)
             }
             List(item.requiredCount) {
-                NewSlot(item.date, item.shiftTypeId, start, end, item.requiredQualifications.distinct())
+                NewSlot(item.date, item.shiftTypeId, shift.code, shift.kind, start, end, item.requiredQualifications.distinct())
             }
         }
         repo.deleteSlots(roster.id)

@@ -66,10 +66,12 @@ class ShiftTypeJdbcRepository(private val jdbc: JdbcTemplate) {
 
     /**
      * Rewrites the start/end instants of the type's slots in DRAFT rosters from the new hours (slots store the
-     * times they were created with, and confirmation checks rules against them). The revision is bumped by
-     * [markDraftsForRevalidation], which every such change also calls.
+     * times they were created with, and confirmation checks rules against them). Every slot is computed first:
+     * if any would end before it starts in the ward's time zone (a daylight-saving gap or overlap moves one end),
+     * nothing is written and false is returned. The revision is bumped by [markDraftsForRevalidation], which every
+     * such change also calls.
      */
-    fun recomputeDraftSlotTimes(wardId: UUID, shiftTypeId: UUID, start: LocalTime, end: LocalTime, spansMidnight: Boolean) {
+    fun recomputeDraftSlotTimes(wardId: UUID, shiftTypeId: UUID, start: LocalTime, end: LocalTime, spansMidnight: Boolean): Boolean {
         val slots = jdbc.query(
             """SELECT s.slot_id, s.roster_id, s.shift_date, w.time_zone FROM roster_slots s
                JOIN rosters r ON r.roster_id=s.roster_id JOIN wards w ON w.ward_id=r.ward_id
@@ -82,11 +84,25 @@ class ShiftTypeJdbcRepository(private val jdbc: JdbcTemplate) {
             },
             wardId, shiftTypeId,
         )
-        slots.forEach { slot ->
+        val times = slots.map { slot ->
             val startsAt = slot.date.atTime(start).atZone(slot.zone).toInstant()
             val endsAt = (if (spansMidnight) slot.date.plusDays(1) else slot.date).atTime(end).atZone(slot.zone).toInstant()
-            jdbc.update("UPDATE roster_slots SET starts_at=?, ends_at=? WHERE slot_id=?", startsAt.toString(), endsAt.toString(), slot.id)
+            Triple(slot.id, startsAt, endsAt)
         }
+        if (times.any { (_, startsAt, endsAt) -> !startsAt.isBefore(endsAt) }) return false
+        times.forEach { (id, startsAt, endsAt) ->
+            jdbc.update("UPDATE roster_slots SET starts_at=?, ends_at=? WHERE slot_id=?", startsAt.toString(), endsAt.toString(), id)
+        }
+        return true
+    }
+
+    /** DRAFT slots follow the type's code and kind; published slots keep the values they were published with. */
+    fun syncDraftSlotCodeAndKind(wardId: UUID, shiftTypeId: UUID, code: String, kind: ShiftKind) {
+        jdbc.update(
+            """UPDATE roster_slots SET shift_code=?, shift_kind=?
+                WHERE shift_type_id=? AND roster_id IN (SELECT roster_id FROM rosters WHERE ward_id=? AND status='DRAFT')""",
+            code, kind.name, shiftTypeId, wardId,
+        )
     }
 
     private data class SlotDate(val id: UUID, val rosterId: UUID, val date: LocalDate, val zone: ZoneId)
