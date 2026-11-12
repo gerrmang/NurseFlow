@@ -2,7 +2,7 @@
 
 ## 브라우저·실제 백엔드 검증 (2026-11-12 저녁, Codex)
 
-기준은 `feat/web-invite-join`의 구현 커밋 `ff63354`와 서버 `b352759`다. **실제 Kakao 1계정 로그인 확인**, **가상 OIDC 사용자 3명으로 실제 backend 초대 흐름 확인**을 구분한다. 실제 Kakao 계정 2개를 이용한 관리자→간호사 시연은 사용자가 두 번째 계정이 없다고 알려 미실행이다. 해당 완료 조건을 충족했다고 주장하지 않으며 PR은 Draft로 준비한다.
+기준은 `feat/web-invite-join`의 구현 커밋 `ff63354`와 서버 `b352759`다. **실제 Kakao 1계정 로그인 확인**, **가상 OIDC 사용자 3명으로 실제 backend 초대 흐름 확인**을 구분한다. 실제 Kakao 계정 2개를 이용한 관리자→간호사 시연은 사용자가 두 번째 계정이 없다고 알려 미실행이다. 해당 완료 조건을 충족했다고 주장하지 않는다. 최초 Draft 게시 뒤 사용자 요청으로 [PR #45](https://github.com/gerrmang/NurseFlow/pull/45)를 일반 PR로 전환했다. 미검증 조건은 유지한다.
 
 - **자동 검사:** Windows Node v24.15.0에서 `npm run api:check`, `npm run lint`, `npm run typecheck`, `npm test -- --run`, `npm run build` 모두 성공. 테스트 **8개 파일 241개 통과**, 실패·건너뜀 0. JS **303.58 kB**, gzip **94.25 kB**. 개발용 재현 스크립트 추가 후 `node --check scripts/b3b-browser-fixture.mjs`, `npm run lint`도 성공. `npm ci`는 설치된 잠금 파일 의존성을 사용해 이번에 재실행하지 않았다.
 - **실제 Kakao:** Ubuntu의 기존 로컬 키 파일을 값 출력 없이 환경변수로 읽어 별도 메모리 DB의 backend(8081)를 실행했다. 웹 `http://localhost:5173`에서 사용자가 직접 로그인했고 `/wards` 및 소속 없음 화면까지 성공했다. 합성된 존재하지 않는 토큰으로 실제 미리보기 API의 "초대를 찾을 수 없어요" 안내와 fragment 제거도 확인했다. 실제 계정 이름·키·토큰은 검증 문서에 기록하지 않는다.
