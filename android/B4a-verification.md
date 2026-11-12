@@ -10,6 +10,16 @@
 - 최신 dev `b352759`(#42)를 통합한 `405a8e5`에서 실제 backend와 동봉 목록을 사용했다. Android 17에서 실제 Kakao 로그인 → 병원 검색 → 생성 → 목록 갱신, 실제 서버의 응답 유실 (a)·(b)를 확인했다. 상세는 아래 최신 검증 절에 있다.
 - JVM 및 Compose 화면 테스트는 fake/MockWebServer를 사용한다. 실제 서버 검증과 구분하며, 아래 2026-11-11 기록은 당시 결과를 보존한 것이다.
 
+## CI 응답 유실 테스트 주소 고정 (2026-11-13, Codex)
+
+- PR #44 head `3a737a5`의 Verify 43221785489는 Backend·Web 성공, Android 단위 140개 중 응답 유실 5개 실패였다. 실패 작업 재실행 attempt 2도 동일했다. 진단 커밋 `8b13420`의 Verify 43276828688도 같은 5개가 실패했고, 전체 예외에서 재진입 기대 `ALREADY_CREATED`가 실제 `NETWORK`가 되는 것과 가상 병동 2개 기대가 1개인 것을 확인했다.
+- 일반 Windows·Linux 실행은 통과했으나 테스트 JVM 전용 hosts 파일에 `127.0.0.1 localhost`, `::1 localhost`를 함께 넣고 `-Djdk.net.hosts.file=<테스트 파일>`로 실행하니 **같은 5개 실패**(타임아웃 3개·assertion 2개)가 재현됐다. 시스템 hosts 파일은 변경하지 않았다.
+- 원인은 단일 주소에 바인딩한 MockWebServer를 `localhost`라는 이중 주소 이름으로 호출한 fixture다. 응답 유실로 첫 경로가 실패한 뒤 OkHttp가 다른 주소 경로를 먼저 선택할 수 있고, 그 주소에는 서버가 없어 후속 요청이 `NETWORK`로 끝났다. 실제 앱의 무재시도 정책을 변경할 사안으로 단정하지 않는다.
+- `WardCreationApiTest.signedIn`에서 MockWebServer 바인딩과 URL을 모두 **127.0.0.1**로 고정했다. 키 재사용·재생·중복 방지·자동 재전송 없음 assertion과 10초 대기 제한은 유지했다. 단위 테스트의 상세 예외 로그 보강도 유지한다. 앱·API·DB·CI 워크플로 변경 없음.
+- 수정 후 Windows 해당 11개 통과. 같은 이중 주소 파일, Linux JDK 21, assertions·2코어·512MB 조건에서 **전체 140개 통과**(직접 JUnit, 13.613초). Linux 실행은 Windows에서 컴파일한 동일 클래스/의존성을 사용했으며 Linux Gradle 전체 빌드라고 주장하지 않는다.
+- Windows에서 CI와 같은 `:app:testDebugUnitTest :app:assembleDebug :app:assembleDebugAndroidTest --no-daemon`도 **BUILD SUCCESSFUL**, 71개 작업 중 48개 실행·23개 UP-TO-DATE. 단위 XML 합계 140개, 실패·오류·건너뜀 0. Lint·기기 UI는 테스트 주소 수정 범위라 이번에 재실행하지 않았다.
+- 수정 전 5개 실패→수정 후 통과를 실제 네트워크 단절 테스트로 확인했다. 실서버·Kakao·에뮬레이터는 이번에 다시 켜지 않았다. 배포 영향 없음. 되돌리기는 테스트 주소 고정을 제거하면 되지만 이중 주소 환경의 CI 실패가 돌아온다. 푸시 후 최종 CI는 해당 head에서 별도 확인한다.
+
 ## Android 17 재검증 및 실서버 연동 (2026-11-12, Codex)
 
 **환경과 수정**

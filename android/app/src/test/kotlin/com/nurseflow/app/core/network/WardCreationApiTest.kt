@@ -26,6 +26,7 @@ import okhttp3.mockwebserver.RecordedRequest
 import okhttp3.mockwebserver.SocketPolicy
 import org.junit.Assert.*
 import org.junit.Test
+import java.net.InetAddress
 import java.util.concurrent.TimeUnit
 
 /**
@@ -41,7 +42,11 @@ class WardCreationApiTest {
         MockResponse().setResponseCode(status).setHeader("Content-Type", "application/problem+json").setBody("""{"status":$status,"code":"$code","detail":"untrusted"}""")
 
     private fun signedIn(server: MockWebServer): WardCreationApi {
-        val base = server.url("/").toString()
+        // Keep retries on the same endpoint. With dual-stack localhost, OkHttp can postpone
+        // the disconnected IPv4 route and try IPv6, where this server is not listening.
+        // Production writes must remain non-retrying; make the fault fixture deterministic.
+        server.start(InetAddress.getByName("127.0.0.1"), 0)
+        val base = "http://127.0.0.1:${server.port}/"
         val manager = SessionManager(ApiFactory.authApi(base), MemoryTokenStore())
         runBlocking { manager.loginWithKakao("fake-id", "fake-nonce") }
         return ApiFactory.wardCreationApi(base, manager)

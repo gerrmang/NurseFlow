@@ -72,6 +72,14 @@
 - Windows JDK 21에서 `:app:testDebugUnitTest --tests '*WardCreationApiTest' --rerun-tasks --no-daemon` 성공. 동일한 컴파일 결과·의존성으로 Linux JDK 21에서 직접 JUnit 실행 시 해당 11개와 전체 140개가 통과했다. assertions 활성화·2코어/512MB 조건의 해당 11개도 통과해 OS·CPU·메모리만으로 원인을 확정하지 못했다. Linux 실행은 Gradle 전체 빌드와 동일한 검사라고 주장하지 않는다.
 - CI의 짧은 예외 출력으로는 실패 상태와 원인을 판단할 수 없어 단위 테스트 로깅을 `TestExceptionFormat.FULL`로 보강한다. 검사 생략·타임아웃 확대·운영 앱 동작 변경은 없다. 다음 CI에서 상세 예외를 확인하고 원인을 좁힌다. 로컬 서버·에뮬레이터는 재시작하지 않았고 사용자 DB는 보존했다.
 
+## B4a CI 실패 재현·수정 (2026-11-13, Codex)
+
+- 상세 예외 커밋 `8b13420`의 Verify 43276828688에서도 같은 5개가 실패했다. 이후 테스트 JVM 전용 hosts 파일에서 localhost를 IPv4/IPv6 두 주소로 해석하게 하자 로컬 Linux에서도 **동일한 5개 실패**를 재현했다. 일반 Linux·2코어 조건만으로는 통과했던 이유를 분리했으며 시스템 hosts 파일은 건드리지 않았다.
+- 단일 주소의 MockWebServer를 이중 주소 hostname으로 호출해, 의도적으로 연결을 끊은 뒤 후속 호출이 서버가 없는 다른 경로로 향하는 fixture 문제다. `WardCreationApiTest.signedIn`에서 서버 바인딩과 클라이언트 URL을 모두 `127.0.0.1`로 고정했다. 무재시도·키/중복 assertion·대기 제한·운영 앱 코드는 유지했다.
+- 수정 후 Windows 해당 11개 통과, Linux의 이중 주소·assertions·2코어·512MB 조건에서 전체 **140개 통과**(직접 JUnit, 13.613초). CI와 같은 Windows Gradle 검사·앱/테스트 APK 빌드 결과와 최종 CI는 아래 후속 기록으로 확인한다. 상세 재현 근거는 android/B4a-verification.md에 있다.
+- Windows의 CI 동일 명령 `:app:testDebugUnitTest :app:assembleDebug :app:assembleDebugAndroidTest --no-daemon`도 BUILD SUCCESSFUL(71개 작업 중 48개 실행), 단위 XML **140개**, 실패·오류·건너뜀 0. 최종 CI는 푸시한 수정 head로 별도 확인한다. 이번 변경 후 Lint·기기·실서버 검사는 재실행하지 않았다.
+- 공유 인계: 같은 worktree·`feat/android-ward-create`에서 테스트 fixture와 검증 문서만 반영한다. 사용자 DB 보존, 서버·에뮬레이터 재시작 없음. API/DB·배포 영향 없음. 테스트 주소 고정 제거 시 기존 이중 주소 CI 실패가 재발할 수 있다.
+
 ## 리뷰 상태
 
 - PR #30의 `RealBackendSessionDeviceTest`는 `IsolatedSessionTestRunner`와 테스트 전용 `Application`/`TokenStore`를 사용한다. 앞서 기록된 “개발자 저장 토큰에 접근할 수 있다”는 P1은 이 코드와 맞지 않아 철회했다. 실제 사용자 세션을 사용하지 않는다는 검증 기록은 [`B1 검증 기록`](../android/B1-verification.md)을 참조한다.
