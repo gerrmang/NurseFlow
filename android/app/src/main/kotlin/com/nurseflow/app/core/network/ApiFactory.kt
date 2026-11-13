@@ -59,14 +59,22 @@ object ApiFactory {
      * socket that might already be closed. A lost response surfaces as a NETWORK error and the
      * screen resolves it explicitly. 401 still refreshes once: the server did not process it.
      */
-    fun invitationApi(baseUrl: String, session: SessionManager): InvitationApi {
-        val client = baseClient()
-            .connectionPool(ConnectionPool(0, 1, TimeUnit.NANOSECONDS))
-            .addInterceptor(BearerInterceptor(session))
-            .authenticator(RefreshAuthenticator(session))
-            .build()
-        return retrofit(baseUrl, client).create(InvitationApi::class.java)
-    }
+    fun invitationApi(baseUrl: String, session: SessionManager): InvitationApi =
+        retrofit(baseUrl, nonRetryingClient(session).build()).create(InvitationApi::class.java)
+
+    /**
+     * Hospital search and ward creation. Same non-retrying policy as [invitationApi]; creation
+     * is protected by an Idempotency-Key the screen reuses for an explicit retry. The read
+     * timeout is longer because the server may fall back to a live lookup.
+     */
+    fun wardCreationApi(baseUrl: String, session: SessionManager): WardCreationApi =
+        retrofit(baseUrl, nonRetryingClient(session).readTimeout(30, TimeUnit.SECONDS).build())
+            .create(WardCreationApi::class.java)
+
+    private fun nonRetryingClient(session: SessionManager) = baseClient()
+        .connectionPool(ConnectionPool(0, 1, TimeUnit.NANOSECONDS))
+        .addInterceptor(BearerInterceptor(session))
+        .authenticator(RefreshAuthenticator(session))
 }
 
 private class BearerInterceptor(private val session: SessionManager) : Interceptor {
