@@ -25,11 +25,11 @@ internal fun com.nurseflow.roster.application.model.StaffingSummary.toResponse()
 internal fun com.nurseflow.roster.application.model.AssignmentView.toResponse() =
     AssignmentView(nurseId, displayName, locked)
 internal fun com.nurseflow.roster.application.model.SlotView.toResponse() =
-    SlotView(slotId, date, shiftTypeId, startAt, endAt, status, assignment?.toResponse())
+    SlotView(slotId, date, shiftTypeId, shiftCode, shiftKind, startAt, endAt, status, assignment?.toResponse())
 internal fun com.nurseflow.roster.application.model.RosterSummary.toResponse() =
-    RosterSummary(rosterId, wardId, month, status, revision, timeZone, staffing.toResponse(), publishedAt)
+    RosterSummary(rosterId, wardId, month, status, revision, timeZone, staffing.toResponse(), publishedAt, needsRevalidation)
 internal fun com.nurseflow.roster.application.model.RosterView.toResponse() =
-    RosterView(rosterId, wardId, month, status, revision, timeZone, staffing.toResponse(), slots.map { it.toResponse() }, publishedAt)
+    RosterView(rosterId, wardId, month, status, revision, timeZone, staffing.toResponse(), slots.map { it.toResponse() }, publishedAt, needsRevalidation)
 internal fun com.nurseflow.roster.application.model.ApprovedAbsenceView.toResponse() =
     ApprovedAbsenceView(absenceId, nurseId, kind, startsAt, endsAt)
 internal fun com.nurseflow.roster.application.model.RuleDiagnostic.toResponse() =

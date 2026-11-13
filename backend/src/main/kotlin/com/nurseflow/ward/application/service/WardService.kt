@@ -3,6 +3,7 @@ package com.nurseflow.ward.application.service
 import com.nurseflow.common.audit.AuditLog
 import com.nurseflow.common.error.BusinessException
 import com.nurseflow.common.error.ErrorCode
+import com.nurseflow.common.idempotency.IdempotencyKeyRaceException
 import com.nurseflow.common.idempotency.MutationReplayRepository
 import com.nurseflow.common.idempotency.ReplayLookup
 import com.nurseflow.hospital.application.service.HospitalSearchService
@@ -12,7 +13,6 @@ import com.nurseflow.ward.application.model.WardRole
 import com.nurseflow.ward.config.WardProperties
 import com.nurseflow.ward.persistence.repository.NewWard
 import com.nurseflow.ward.persistence.repository.WardJdbcRepository
-import org.springframework.dao.DuplicateKeyException
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import org.springframework.transaction.support.TransactionTemplate
@@ -106,8 +106,8 @@ class WardService(
         replayed(idempotencyKey, requestHash)?.let { return it }
         return try {
             transactions.execute { create(command, idempotencyKey, requestHash, subject) }!!
-        } catch (ex: DuplicateKeyException) {
-            replayed(idempotencyKey, requestHash) ?: throw ex
+        } catch (ex: IdempotencyKeyRaceException) {
+            replayed(idempotencyKey, requestHash) ?: throw BusinessException(ErrorCode.IDEMPOTENCY_KEY_REUSED)
         }
     }
 

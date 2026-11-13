@@ -1,7 +1,9 @@
 package com.nurseflow.roster.application.service
 
 import tools.jackson.core.type.TypeReference
+import tools.jackson.databind.JsonNode
 import tools.jackson.databind.json.JsonMapper
+import tools.jackson.databind.node.ObjectNode
 import com.nurseflow.common.error.BusinessException
 import com.nurseflow.common.error.ErrorCode
 import com.nurseflow.roster.application.model.*
@@ -18,6 +20,7 @@ import com.nurseflow.roster.persistence.entity.DbRoster
 import com.nurseflow.roster.persistence.entity.DbSlot
 import com.nurseflow.roster.persistence.entity.NewSlot
 import com.nurseflow.roster.persistence.repository.RosterJdbcRepository
+import com.nurseflow.common.idempotency.IdempotencyKeyRaceException
 import com.nurseflow.common.idempotency.MutationReplayRepository
 import com.nurseflow.common.idempotency.ReplayLookup
 import org.springframework.stereotype.Service
@@ -58,7 +61,7 @@ class RosterService(
         if (!repo.lockWard(wardId)) throw BusinessException(ErrorCode.WARD_NOT_FOUND)
         requireAdmin(wardId, subject)
         val action = "create-roster:$wardId"
-        replay(idempotencyKey, action, request, RosterView::class.java)?.let { return it }
+        replayView(idempotencyKey, action, request)?.let { return it }
         if (repo.draftExistsForMonth(wardId, request.month)) {
             throw BusinessException(ErrorCode.DRAFT_EXISTS)
         }
@@ -111,7 +114,7 @@ class RosterService(
                 throw BusinessException(ErrorCode.INVALID_SHIFT_INTERVAL)
             }
             List(item.requiredCount) {
-                NewSlot(item.date, item.shiftTypeId, start, end, item.requiredQualifications.distinct())
+                NewSlot(item.date, item.shiftTypeId, shift.code, shift.kind, start, end, item.requiredQualifications.distinct())
             }
         }
         repo.deleteSlots(roster.id)
@@ -194,7 +197,7 @@ class RosterService(
         val roster = lockAuthorizedRoster(rosterId, subject)
         val action = "assign:$rosterId:$slotId"
         val payload = ifMatch to input
-        replay(idempotencyKey, action, payload, RosterView::class.java)?.let { return it }
+        replayView(idempotencyKey, action, payload)?.let { return it }
         checkRevision(roster, ifMatch)
         ensureDraft(roster)
         val slot = repo.slots(roster.id).firstOrNull { it.id == slotId }
@@ -299,12 +302,13 @@ class RosterService(
             ?: throw BusinessException(ErrorCode.GENERATION_JOB_NOT_FOUND)
         val roster = visibleToAdmin(rosterId, subject)
         val action = "cancel-generation:$jobId"
-        replay(idempotencyKey, action, jobId, GenerationJob::class.java)?.let { return it }
         // Only the job row, never the ward lock: a running generation holds the ward lock until it saves its
         // result, so cancelling must be able to record the signal meanwhile. The role is checked again after
-        // this lock so a revocation committed while waiting still stops a revoked admin.
+        // this lock so a revocation committed while waiting still stops a revoked admin. The replay is read after
+        // both, so a revoked admin gets none and a same-key retry that waited here gets the first result.
         repo.lockGenerationJob(jobId)
         requireAdmin(roster.wardId, subject)
+        replay(idempotencyKey, action, jobId, GenerationJob::class.java)?.let { return it }
         val job = readGenerationJob(jobId)
             ?: throw BusinessException(ErrorCode.GENERATION_JOB_NOT_FOUND)
         if (job.status !in setOf("QUEUED", "RUNNING")) {
@@ -515,12 +519,13 @@ class RosterService(
             StaffingSummary(all.size, all.count { it.nurseId != null }, all.count { it.nurseId == null }),
             all.map {
                 SlotView(
-                    it.id, it.date, it.shiftTypeId, it.startsAt, it.endsAt,
+                    it.id, it.date, it.shiftTypeId, it.shiftCode, it.kind.name, it.startsAt, it.endsAt,
                     if (it.nurseId == null) "UNFILLED" else "FILLED",
                     it.nurseId?.let { nurseId -> AssignmentView(nurseId, it.nurseName ?: "", it.locked) },
                 )
             },
             roster.publishedAt,
+            roster.needsRevalidation && roster.status == "DRAFT",
         )
     }
 
@@ -530,6 +535,7 @@ class RosterService(
             roster.id, roster.wardId, roster.month, roster.status, roster.revision, roster.zone.id,
             StaffingSummary(all.size, all.count { it.nurseId != null }, all.count { it.nurseId == null }),
             roster.publishedAt,
+            roster.needsRevalidation && roster.status == "DRAFT",
         )
     }
 
@@ -614,8 +620,31 @@ class RosterService(
             is ReplayLookup.Found -> result.value
         }
 
-    private fun recordReplay(key: UUID, action: String, payload: Any, response: Any) =
+    /**
+     * Roster responses saved before slots carried their code and kind (A8) lack both fields; a retry of such a
+     * request reads them from the slot's stored values, or from its type once the slot is gone.
+     */
+    private fun replayView(key: UUID, action: String, payload: Any): RosterView? {
+        val saved = replay(key, action, payload, JsonNode::class.java) ?: return null
+        val slots = saved.get("slots")
+        for (i in 0 until (slots?.size() ?: 0)) {
+            val slot = slots.get(i) as ObjectNode
+            if (slot.has("shiftCode") && slot.has("shiftKind")) continue
+            val (code, kind) = repo.slotShift(
+                UUID.fromString(slot.get("slotId").asString()), UUID.fromString(slot.get("shiftTypeId").asString()),
+            ) ?: continue
+            slot.put("shiftCode", code)
+            slot.put("shiftKind", kind)
+        }
+        return mapper.treeToValue(saved, RosterView::class.java)
+    }
+
+    /** Every caller holds the ward or roster lock, so a concurrent same key is another roster's or job's request. */
+    private fun recordReplay(key: UUID, action: String, payload: Any, response: Any) = try {
         replays.recordReplay(key, action, replays.requestHash(payload), response)
+    } catch (_: IdempotencyKeyRaceException) {
+        throw BusinessException(ErrorCode.IDEMPOTENCY_KEY_REUSED)
+    }
 
     private fun checkRevision(roster: DbRoster, ifMatch: String) {
         if (ifMatch != "\"${etag(roster.id, roster.revision)}\"") {

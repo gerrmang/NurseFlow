@@ -61,7 +61,7 @@ class RosterJdbcRepository(
 
     fun publishRoster(rosterId: UUID, publishedAt: Instant, confirmedBy: String) {
         jdbc.update(
-            "UPDATE rosters SET status='PUBLISHED',active=TRUE,revision=revision+1,published_at=?,confirmed_by=? WHERE roster_id=?",
+            "UPDATE rosters SET status='PUBLISHED',active=TRUE,needs_revalidation=FALSE,revision=revision+1,published_at=?,confirmed_by=? WHERE roster_id=?",
             publishedAt.toString(), confirmedBy, rosterId,
         )
     }
@@ -94,8 +94,16 @@ class RosterJdbcRepository(
 
     // ── Slots ──
 
+    /** Code and kind of a slot, or of its type when the slot no longer exists. Null for an unknown type. */
+    fun slotShift(slotId: UUID, shiftTypeId: UUID): Pair<String, String>? = jdbc.query(
+        """SELECT COALESCE(s.shift_code,t.code) AS code,COALESCE(s.shift_kind,t.kind) AS kind FROM shift_types t
+            LEFT JOIN roster_slots s ON s.slot_id=? AND s.shift_type_id=t.shift_type_id WHERE t.shift_type_id=?""",
+        { rs, _ -> rs.getString("code") to rs.getString("kind") }, slotId, shiftTypeId,
+    ).firstOrNull()
+
     fun slots(rosterId: UUID): List<DbSlot> = jdbc.query(
-        """SELECT s.*,t.code,t.kind,n.display_name FROM roster_slots s
+        // The slot's own code and kind: a later shift type edit must not change a published roster.
+        """SELECT s.*,COALESCE(s.shift_code,t.code) AS code,COALESCE(s.shift_kind,t.kind) AS kind,n.display_name FROM roster_slots s
             JOIN shift_types t ON t.shift_type_id=s.shift_type_id
             LEFT JOIN nurses n ON n.nurse_id=s.nurse_id
             WHERE s.roster_id=? ORDER BY s.shift_date,s.starts_at,s.slot_id""",
@@ -117,9 +125,9 @@ class RosterJdbcRepository(
 
     fun insertSlot(rosterId: UUID, slot: NewSlot) {
         jdbc.update(
-            """INSERT INTO roster_slots(slot_id,roster_id,shift_date,shift_type_id,starts_at,ends_at,required_qualifications)
-                VALUES(?,?,?,?,?,?,?)""",
-            UUID.randomUUID(), rosterId, slot.date, slot.shiftTypeId,
+            """INSERT INTO roster_slots(slot_id,roster_id,shift_date,shift_type_id,shift_code,shift_kind,starts_at,ends_at,required_qualifications)
+                VALUES(?,?,?,?,?,?,?,?,?)""",
+            UUID.randomUUID(), rosterId, slot.date, slot.shiftTypeId, slot.shiftCode, slot.shiftKind.name,
             slot.startsAt.toString(), slot.endsAt.toString(),
             mapper.writeValueAsString(slot.requiredQualifications),
         )
@@ -347,6 +355,7 @@ class RosterJdbcRepository(
         rs.getString("roster_month"), rs.getString("status"), rs.getInt("revision"),
         ZoneId.of(rs.getString("time_zone")),
         rs.getString("published_at")?.let(Instant::parse), rs.getString("confirmed_by"),
+        rs.getBoolean("needs_revalidation"),
     )
 
     private fun mapAbsence(rs: ResultSet) = DbAbsence(
