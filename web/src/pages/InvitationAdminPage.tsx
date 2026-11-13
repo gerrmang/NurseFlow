@@ -6,7 +6,7 @@ import { buildAppPasteText, buildWebInviteLink, isLocalOrigin } from '../invite/
 import {
   classifyInviteError,
   formatInviteTime,
-  inviteFailureMessage,
+  adminInviteFailureMessage,
   invitationRoleLabel,
   invitationStatusLabel,
   invitationTargetLabel,
@@ -379,7 +379,7 @@ function composeNotice(action: Action, failure: InviteFailure | null, reloaded: 
     }
   }
   return {
-    text: `${inviteFailureMessage(failure)} ${reloaded ? '목록을 새로 불러왔어요.' : '목록을 새로 불러오지 못했어요. 새로고침으로 확인해 주세요.'}`,
+    text: `${adminInviteFailureMessage(failure)} ${reloaded ? '목록을 새로 불러왔어요.' : '목록을 새로 불러오지 못했어요. 새로고침으로 확인해 주세요.'}`,
     tone: 'error',
   }
 }

@@ -1,6 +1,6 @@
 import { render } from '@testing-library/react'
-import { StrictMode } from 'react'
-import { MemoryRouter, useLocation } from 'react-router'
+import { StrictMode, useEffect } from 'react'
+import { MemoryRouter, useLocation, useNavigate, type NavigateFunction } from 'react-router'
 import { AppRoutes } from '../App'
 import { InviteProvider } from '../invite/InviteContext'
 import { PendingInviteStore } from '../invite/pendingInvite'
@@ -11,9 +11,11 @@ import { FakeAuthServer } from './fakeAuthServer'
 import { FakeInvitationBackend } from './fakeInvitationBackend'
 import { FakeStorage } from './fakeStorage'
 
-function LocationProbe() {
+function LocationProbe({ onNavigate }: { onNavigate: (navigate: NavigateFunction) => void }) {
+  const navigate = useNavigate()
+  useEffect(() => onNavigate(navigate), [navigate, onNavigate])
   const location = useLocation()
-  return <output data-testid="location">{location.pathname + location.search + location.hash}</output>
+  return <><output data-testid="location">{location.pathname + location.search + location.hash}</output><output data-testid="route-state">{JSON.stringify(location.state)}</output></>
 }
 
 export interface AppOptions {
@@ -49,16 +51,18 @@ export function setupApp(path: string, options: AppOptions = {}) {
   const [pathname, search = ''] = withoutHash!.split('?')
   manager.start(pathname!, search ? `?${search}` : '')
 
+  let navigate!: NavigateFunction
+  const onNavigate = (value: NavigateFunction) => { navigate = value }
   const tree = (
     <SessionProvider manager={manager}>
       <InviteProvider store={store}>
         <MemoryRouter initialEntries={[path]}>
           <AppRoutes />
-          <LocationProbe />
+          <LocationProbe onNavigate={onNavigate} />
         </MemoryRouter>
       </InviteProvider>
     </SessionProvider>
   )
   const view = render(options.strict === false ? tree : <StrictMode>{tree}</StrictMode>)
-  return { server, backend, storage, store, manager, redirect, clock, ...view }
+  return { server, backend, storage, store, manager, redirect, clock, navigate: (path: string) => navigate(path), ...view }
 }

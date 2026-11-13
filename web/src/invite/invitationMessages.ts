@@ -88,13 +88,13 @@ const failureMessages: Record<InviteFailure, string> = {
   revoked: '철회된 초대예요. 관리자에게 문의해 주세요.',
   redeemed: '이미 사용된 초대예요. 초대는 한 번만 사용할 수 있어요.',
   notFound: '초대를 찾을 수 없어요. 링크를 다시 확인해 주세요.',
-  alreadyMember: '이미 이 병동에 소속되어 있어요. 이 초대는 사용되지 않았어요.',
+  alreadyMember: '기존 소속 또는 연결된 간호사 기록이 있어 가입할 수 없어요. 이 초대는 사용되지 않았어요. 병동 목록에 없다면 관리자에게 소속 상태를 확인해 주세요.',
   nurseLinked: '이미 다른 계정과 연결된 간호사 기록이에요. 관리자에게 문의해 주세요.',
   adminConflict: '이 병동에 연결된 간호사 기록이 있는 계정은 관리자 초대를 수락할 수 없어요.',
   joinMonthRequired: '병원 입사 연월을 입력해 주세요.',
   invalidJoinMonth: '병원 입사 연월이 올바르지 않아요. 미래 연월은 입력할 수 없어요.',
   invalidRequest: '요청 형식이 올바르지 않아요.',
-  forbidden: '이 병동의 관리자 권한이 없어요.',
+  forbidden: '이 계정으로 초대를 확인하거나 가입할 수 없어요. 관리자에게 계정과 초대를 확인해 주세요.',
   alreadyPending: '이 간호사에게 사용 가능한 초대가 이미 있어요.',
   nurseNotFound: '간호사 기록을 찾을 수 없어요. 목록을 새로 불러와 주세요.',
   userNotFound: '계정 정보를 찾을 수 없어요. 다시 로그인해 주세요.',
@@ -105,6 +105,14 @@ const failureMessages: Record<InviteFailure, string> = {
 }
 
 export const inviteFailureMessage = (failure: InviteFailure): string => failureMessages[failure]
+
+/** Admin instructions differ from the invitee's recovery steps. */
+export function adminInviteFailureMessage(failure: InviteFailure): string {
+  if (failure === 'forbidden') return '이 병동의 관리자 권한이 없어요.'
+  if (failure === 'nurseLinked') return '이미 계정과 연결된 간호사 기록이에요. 목록을 새로 불러오고 다른 미가입 간호사를 선택해 주세요.'
+  if (failure === 'alreadyMember') return '기존 소속 또는 간호사 연결을 확인하고 초대 대상을 다시 선택해 주세요.'
+  return inviteFailureMessage(failure)
+}
 
 const restoreNoticeMessages: Record<LoginReturnFailure, string> = {
   readFailed: '초대를 이어가지 못했어요(브라우저 저장소를 읽을 수 없음). 받은 초대 링크를 다시 열거나 붙여넣어 주세요.',
@@ -151,15 +159,14 @@ export function linkableNurses(staff: readonly StaffMember[], invitations: reado
 const MONTH_PATTERN = /^(\d{4})-(0[1-9]|1[0-2])$/
 
 /** Client-side pre-check only; the server is the final judge. Returns a failure key or null when acceptable. */
-export function validateJoinMonth(value: string, now: Date = new Date()): 'joinMonthRequired' | 'invalidJoinMonth' | null {
+export function validateJoinMonth(value: string): 'joinMonthRequired' | 'invalidJoinMonth' | null {
   const text = value.trim()
   if (text === '') return 'joinMonthRequired'
   const match = MONTH_PATTERN.exec(text)
   if (!match) return 'invalidJoinMonth'
   const year = Number(match[1])
-  const month = Number(match[2])
   if (year < 1950) return 'invalidJoinMonth'
-  if (year > now.getFullYear() || (year === now.getFullYear() && month > now.getMonth() + 1)) return 'invalidJoinMonth'
+  // Whether the month is in the future depends on the ward time zone: the server decides.
   return null
 }
 

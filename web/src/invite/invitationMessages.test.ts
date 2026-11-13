@@ -2,6 +2,7 @@ import type { Invitation, StaffMember } from '../api/types'
 import { callbackDestination } from './callbackDestination'
 import {
   classifyInviteError,
+  adminInviteFailureMessage,
   inviteFailureMessage,
   invitationTargetLabel,
   isResultUnknown,
@@ -66,12 +67,11 @@ describe('classifyInviteError', () => {
 })
 
 describe('validateJoinMonth', () => {
-  const now = new Date(2026, 10, 12) // 2026-11
   it.each([
     ['', 'joinMonthRequired'],
     ['  ', 'joinMonthRequired'],
-    ['2026-12', 'invalidJoinMonth'],
-    ['2027-01', 'invalidJoinMonth'],
+    ['2026-12', null],
+    ['2027-01', null],
     ['1949-12', 'invalidJoinMonth'],
     ['2021-00', 'invalidJoinMonth'],
     ['2021-13', 'invalidJoinMonth'],
@@ -81,7 +81,7 @@ describe('validateJoinMonth', () => {
     ['1950-01', null],
     [' 2021-03 ', null],
   ])('%j -> %s', (value, expected) => {
-    expect(validateJoinMonth(value, now)).toBe(expected)
+    expect(validateJoinMonth(value)).toBe(expected)
   })
 })
 
@@ -150,4 +150,11 @@ describe('callbackDestination (single decision point)', () => {
   it('no parameters at all goes to the home redirect', () => {
     expect(callbackDestination({ hasCode: false, error: null, sessionStatus: 'signedOut', loginReturn: { kind: 'none' } })).toEqual({ kind: 'go', to: '/' })
   })
+})
+
+
+it('gives administrators actionable guidance without referring them to themselves', () => {
+  expect(adminInviteFailureMessage('nurseLinked')).toContain('다른 미가입 간호사를 선택')
+  expect(adminInviteFailureMessage('forbidden')).toBe('이 병동의 관리자 권한이 없어요.')
+  expect(inviteFailureMessage('forbidden')).not.toContain('관리자 권한이 없어요')
 })

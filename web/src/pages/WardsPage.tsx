@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Link, useLocation } from 'react-router'
+import { Link, useLocation, useNavigate } from 'react-router'
 import { asApiError, ClientErrorCode } from '../api/http'
 import type { CurrentUser, WardMembership } from '../api/types'
 import { PasteInviteForm, PendingInviteBanner, RestoreNotice } from '../invite/InviteWidgets'
@@ -15,6 +15,12 @@ type LoadState =
 /** Rendered with key=userId:epoch, so a new session always starts from an empty screen state. */
 export function WardsPage({ user }: { user: SessionUser }) {
   const manager = useSessionManager()
+  const location = useLocation()
+  const navigate = useNavigate()
+  const [joined] = useState(() => location.state as { joinedWardId?: string; joinedWardName?: string } | null)
+  useEffect(() => {
+    if (location.state?.joinedWardName) navigate(location.pathname, { replace: true, state: null })
+  }, [location.state, location.pathname, navigate])
   const [load, setLoad] = useState<LoadState>({ status: 'loading' })
   const [attempt, setAttempt] = useState(0)
 
@@ -43,7 +49,6 @@ export function WardsPage({ user }: { user: SessionUser }) {
 
   const name = load.status === 'ready' ? load.me.displayName : user.displayName
   // Set by the invitation screen after a successful join; non-sensitive (ward id and name only).
-  const joined = (useLocation().state as { joinedWardId?: string; joinedWardName?: string } | null) ?? null
 
   return (
     <main className="page">

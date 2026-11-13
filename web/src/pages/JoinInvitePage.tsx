@@ -35,12 +35,13 @@ export function JoinInvitePage() {
   const navigate = useNavigate()
   const fragment = useMemo(() => readInviteFragment(location.hash), [location.hash])
   // Non-sensitive flag carried by route state; the token itself never is.
+  const linkBusy = (location.state as { linkBusy?: boolean } | null)?.linkBusy === true
   const linkInvalid = (location.state as { linkInvalid?: boolean } | null)?.linkInvalid === true
 
   useEffect(() => {
-    if (fragment.kind === 'token') store.offer(fragment.token)
+    const busy = fragment.kind === 'token' && store.offer(fragment.token) === 'busy'
     if (fragment.kind !== 'none') {
-      navigate(INVITE_PATH, { replace: true, state: fragment.kind === 'invalid' ? { linkInvalid: true } : null })
+      navigate(INVITE_PATH, { replace: true, state: fragment.kind === 'invalid' ? { linkInvalid: true } : busy ? { linkBusy: true } : null })
     }
   }, [fragment, navigate, store])
 
@@ -48,7 +49,7 @@ export function JoinInvitePage() {
 
   if (state.status === 'signedIn') {
     if (!invite) return <NoInvite linkInvalid={linkInvalid} signedIn />
-    return <JoinFlow key={`${state.user.userId}:${state.epoch}:${invite.seq}`} invite={invite} user={state.user} />
+    return <JoinFlow key={`${state.user.userId}:${state.epoch}:${invite.seq}`} invite={invite} user={state.user} linkBusy={linkBusy} />
   }
   if (state.status === 'signedOut') {
     if (!invite) return <NoInvite linkInvalid={linkInvalid} signedIn={false} />
@@ -69,7 +70,7 @@ function NoInvite({ linkInvalid, signedIn }: { linkInvalid: boolean; signedIn: b
             올바른 초대 링크가 아니에요. 받은 링크를 다시 확인해 주세요.
           </p>
         )}
-        <p>받은 초대 링크를 열거나 아래에 붙여넣으면 병동을 확인할 수 있어요.</p>
+        <p>새로고침이나 로그인 화면에서 돌아온 뒤 초대가 보이지 않으면, 받은 초대 링크를 다시 열거나 아래에 붙여넣어 주세요.</p>
         <PasteInviteForm />
         <div className="actions">
           <button type="button" className="secondary" onClick={() => navigate(signedIn ? '/wards' : '/login')}>
@@ -173,7 +174,7 @@ const uncertainNotes: Record<'checkFailed' | 'conflict' | 'initial', string> = {
  * Signed-in flow. Rendered with key=userId:epoch:seq, so a different account, session or invitation
  * always starts from a fresh screen state; results that arrive after that are discarded.
  */
-function JoinFlow({ invite, user }: { invite: PendingInvite; user: SessionUser }) {
+function JoinFlow({ invite, user, linkBusy }: { invite: PendingInvite; user: SessionUser; linkBusy: boolean }) {
   const store = useInviteStore()
   const manager = useSessionManager()
   const navigate = useNavigate()
@@ -294,6 +295,7 @@ function JoinFlow({ invite, user }: { invite: PendingInvite; user: SessionUser }
       <section className="card" aria-busy={phase.kind === 'previewing' || phase.kind === 'submitting'}>
         <h1>초대로 가입</h1>
         <p className="notice">{user.displayName}님으로 로그인되어 있어요.</p>
+        {linkBusy && <p role="alert" className="error">다른 초대를 처리하는 중이라 새 링크를 받지 않았어요. 끝난 뒤 새 링크를 다시 열거나 붙여넣어 주세요.</p>}
         {phase.kind === 'previewing' && <p role="status">초대를 확인하고 있어요…</p>}
         {phase.kind === 'previewError' && (
           <>

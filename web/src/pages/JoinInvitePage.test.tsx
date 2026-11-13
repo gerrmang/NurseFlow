@@ -101,7 +101,6 @@ describe('joining', () => {
 
   it.each([
     ['', '병원 입사 연월을 입력해 주세요.'],
-    ['2999-01', '병원 입사 연월이 올바르지 않아요. 미래 연월은 입력할 수 없어요.'],
     ['1949-12', '병원 입사 연월이 올바르지 않아요. 미래 연월은 입력할 수 없어요.'],
     ['2021-13', '병원 입사 연월이 올바르지 않아요. 미래 연월은 입력할 수 없어요.'],
   ])('checks the join month "%s" before sending', async (value, message) => {
@@ -189,7 +188,7 @@ describe('invitation errors are told apart by server code', () => {
     openSignedIn(w, token)
     const user = userEvent.setup()
     await user.click(await joinButton())
-    expect(await screen.findByRole('alert')).toHaveTextContent('이미 이 병동에 소속되어 있어요. 이 초대는 사용되지 않았어요.')
+    expect(await screen.findByRole('alert')).toHaveTextContent('기존 소속 또는 연결된 간호사 기록이 있어 가입할 수 없어요. 이 초대는 사용되지 않았어요. 병동 목록에 없다면 관리자에게 소속 상태를 확인해 주세요.')
     await user.click(screen.getByRole('button', { name: '내 병동으로' }))
     expect(location()).toBe('/wards')
   })
@@ -361,7 +360,7 @@ describe('session and account changes', () => {
       await app.manager.completeLogin('code-b', 'state-b')
     })
     await waitFor(() => expect(app.store.getInvite()).toBeNull())
-    expect(await screen.findByText('받은 초대 링크를 열거나 아래에 붙여넣으면 병동을 확인할 수 있어요.')).toBeInTheDocument()
+    expect(await screen.findByText('새로고침이나 로그인 화면에서 돌아온 뒤 초대가 보이지 않으면, 받은 초대 링크를 다시 열거나 아래에 붙여넣어 주세요.')).toBeInTheDocument()
     expect(w.backend.count('redeem')).toBe(0)
   })
 
@@ -422,7 +421,7 @@ describe('signed out: login round trip', () => {
     await user.click(screen.getByRole('button', { name: '초대 취소' }))
     expect(app.store.getInvite()).toBeNull()
     expect(w.storage.items.size).toBe(0)
-    expect(await screen.findByText('받은 초대 링크를 열거나 아래에 붙여넣으면 병동을 확인할 수 있어요.')).toBeInTheDocument()
+    expect(await screen.findByText('새로고침이나 로그인 화면에서 돌아온 뒤 초대가 보이지 않으면, 받은 초대 링크를 다시 열거나 아래에 붙여넣어 주세요.')).toBeInTheDocument()
   })
 
   it('a stale saved entry is swept when the app starts anywhere but the callback', async () => {
@@ -577,5 +576,84 @@ describe('paste and waiting invitation', () => {
     await user.click(screen.getByRole('button', { name: '초대 취소' }))
     expect(location()).toBe('/wards')
     expect(screen.queryByText('확인 중인 초대가 있어요.')).not.toBeInTheDocument()
+  })
+})
+
+
+describe('PR review regressions', () => {
+  it('warns when a different hash link arrives during redemption and preserves the original request', async () => {
+    const w = world()
+    const token = w.backend.seedInvitation({ role: 'WARD_ADMIN' })
+    const other = w.backend.seedInvitation({ role: 'WARD_ADMIN' })
+    const app = openSignedIn(w, token)
+    const release = app.backend.hold('redeem')
+    await userEvent.setup().click(await joinButton())
+    await waitFor(() => expect(app.backend.count('redeem')).toBe(1))
+    await act(() => app.navigate('/invite#token=' + other))
+    expect(await screen.findByRole('alert')).toHaveTextContent('새 링크를 받지 않았어요')
+    expect(location()).toBe('/invite')
+    expect(app.store.getInvite()?.token).toBe(token)
+    expect(app.backend.count('redeem')).toBe(1)
+    release()
+    await screen.findByText(WARD_1.wardName + ' 병동에 가입했어요.')
+    expect(app.backend.calls.find((call) => call.op === 'redeem')?.body).toEqual({ token })
+  })
+
+  it('drops the old invite and never redeems it for the new cookie identity', async () => {
+    const w = world()
+    const token = w.backend.seedInvitation({ role: 'WARD_ADMIN' })
+    const app = openSignedIn(w, token)
+    await joinButton()
+    w.server.expireAllAccessTokens()
+    w.server.signInAs(USER_B)
+    await userEvent.setup().click(await joinButton())
+    await waitFor(() => expect(app.manager.getState()).toMatchObject({ status: 'signedIn', user: USER_B }))
+    expect(app.backend.count('redeem')).toBe(0)
+    expect(app.store.getInvite()).toBeNull()
+    expect(await screen.findByText(/초대가 보이지 않으면/)).toBeInTheDocument()
+  })
+
+  it('sends a syntactically valid future month for the server to judge', async () => {
+    const w = world()
+    const token = w.backend.seedInvitation({ role: 'WARD_MEMBER' })
+    const app = openSignedIn(w, token)
+    await userEvent.setup().type(await screen.findByLabelText(/병원 입사 연월/), '2999-01')
+    await userEvent.setup().click(await joinButton())
+    expect(await screen.findByRole('alert')).toHaveTextContent('미래 연월은 입력할 수 없어요')
+    expect(app.backend.count('redeem')).toBe(1)
+  })
+
+  it('uses invitee guidance for a join 403', async () => {
+    const w = world()
+    const token = w.backend.seedInvitation({ role: 'WARD_ADMIN' })
+    const app = openSignedIn(w, token)
+    app.backend.failWith('redeem', 403, 'NURSE_IDENTITY_REQUIRED')
+    await userEvent.setup().click(await joinButton())
+    expect(await screen.findByRole('alert')).toHaveTextContent('이 계정으로 초대를 확인하거나 가입할 수 없어요')
+    expect(screen.queryByText('이 병동의 관리자 권한이 없어요.')).not.toBeInTheDocument()
+  })
+
+  it('explains how to recover an invitation after a clean page reload', async () => {
+    const w = world()
+    const token = w.backend.seedInvitation({ role: 'WARD_ADMIN' })
+    openSignedIn(w, token)
+    await joinButton()
+    cleanup()
+    const second = setupApp('/invite', w)
+    expect(await screen.findByText(/새로고침이나 로그인 화면에서 돌아온 뒤 초대가 보이지 않으면/)).toBeInTheDocument()
+    expect(second.store.getInvite()).toBeNull()
+  })
+
+  it('consumes the joined banner route state and does not repeat it after remount', async () => {
+    const w = world()
+    const token = w.backend.seedInvitation({ role: 'WARD_ADMIN' })
+    openSignedIn(w, token)
+    await userEvent.setup().click(await joinButton())
+    await screen.findByText(WARD_1.wardName + ' 병동에 가입했어요.')
+    await waitFor(() => expect(screen.getByTestId('route-state')).toHaveTextContent('null'))
+    cleanup()
+    setupApp('/wards', w)
+    await screen.findByText(USER_A.displayName + '님, 안녕하세요.')
+    expect(screen.queryByText(WARD_1.wardName + ' 병동에 가입했어요.')).not.toBeInTheDocument()
   })
 })

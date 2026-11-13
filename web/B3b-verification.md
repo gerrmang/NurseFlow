@@ -202,3 +202,14 @@ $env:NURSEFLOW_KAKAO_REDIRECT_URIS='http://localhost:5174/auth/kakao/callback'
 - 테스트: 잘못된 기대의 기존 테스트를 바로잡고 5개로 분리(204+조회 실패 / 유실+조회 성공 / 서버 미처리+조회 성공 / 유실+조회 실패 / 늦은 조회). 변이(대상 연결 제거) 검출 후 원복.
 - 결과(Windows): api:check·lint·typecheck 성공, 테스트 8개 파일 **241개 통과**, build 성공, git diff --check 통과. backend·OpenAPI 변경 없음.
 - 미검증: 실제 브라우저·클립보드·Kakao·실서버·GitHub CI. Codex 재리뷰 대기.
+
+## B3b PR #45 리뷰 수정 (2026-11-13, Codex)
+
+- d808aca 리뷰 P1: refresh로 signedIn userId가 바뀌면 beginEpoch로 진행 중 요청을 중단하고 새 세션을 적용한다. 가입·발급·재발급·철회 전송 전과 401 뒤 갱신을 검사하는 5개 회귀 테스트가 수정 전 모두 실패, 수정 후 통과했다. 최초 restore와 같은 계정 refresh의 기존 검사는 유지했다.
+- P4: 가입 대기 중 새 hash 링크는 busy를 route state에 남겨 거절·재진입 안내를 표시하고 기존 요청을 유지한다. 토큰은 주소에서 제거하며 새로 저장하지 않는다.
+- P3: 관리자 오류 문구 분리, 가입 403의 계정·초대 안내, 소속/연결 충돌의 보수적 안내, 빈 초대 화면의 새로고침·로그인 뒤 복구 안내, 가입 배너 history state 소비를 반영했다. 미래 입사 연월 판단은 서버 병동 시간대에 맡기고 형식·1950년 하한 검사만 유지한다.
+- USER_NOT_FOUND의 401 사용과 소속 상태별 오류 코드 분리는 리뷰에 명시된 A 후속이다. 현행 재인증 처리를 유지한다. 이번에 서버·OpenAPI를 변경하지 않았다.
+- web에서 npm run api:check, npm run lint, npm run typecheck, npm test -- --run, npm run build 모두 성공. 8파일 252개 통과, 실패·건너뜀 0, JS gzip 94.51 kB. git diff --check 통과. 중간 실행에서 기존 문구 기대값 3개가 실패해 새 안내에 맞춘 뒤 통과했다.
+- 실제 브라우저·Kakao·실서버·backend 전체 검사는 이번 수정에서 재실행하지 않았다. 실제 Kakao 2계정 인수 검증과 독립 재리뷰는 미완료이며 병합하지 않는다. API/DB/환경·추가 저장소 변경 없음. 웹 정적 빌드에 영향, 배포 없음, 롤백은 수정 커밋 revert.
+- B4a는 같은 공유 worktree에서 기존 feat/android-ward-create에 a57fa65를 커밋·푸시했다. 단위 144개·앱/테스트 APK·Lint 통과, Verify 43422104112 전체 성공 확인. B3b에는 Android 수정 커밋을 섞지 않았다.
+- 인계: 같은 C:\Users\jjang\IdeaProjects\NurseFlow, feat/web-invite-join에서 이 수정만 커밋·푸시한다. nurseflow.mv.db 보존. PR #44/#45의 서버 후속·미실행 인수 검증·독립 재리뷰를 남긴다.

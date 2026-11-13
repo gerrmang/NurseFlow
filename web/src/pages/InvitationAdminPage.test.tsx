@@ -201,7 +201,7 @@ describe('issuing', () => {
 
   it.each([
     ['INVITATION_ALREADY_PENDING', 409, '사용 가능한 초대가 이미 있어요'],
-    ['NURSE_ALREADY_LINKED', 409, '이미 다른 계정과 연결된 간호사 기록이에요'],
+    ['NURSE_ALREADY_LINKED', 409, '이미 계정과 연결된 간호사 기록이에요'],
     ['NURSE_NOT_FOUND', 404, '간호사 기록을 찾을 수 없어요'],
   ])('%s is shown with its own message and the list is reloaded', async (code, status, message) => {
     const w = world()

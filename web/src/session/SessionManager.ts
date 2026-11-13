@@ -225,6 +225,9 @@ export class SessionManager {
       .then(
         (session): RefreshOutcome => {
           if (epoch !== this.epoch) return { ok: false, error: aborted() }
+          // A cookie may have been replaced in another tab without a logout broadcast.
+          // Never continue an old identity's request using the new identity's access token.
+          if (this.state.status === 'signedIn' && this.state.user.userId !== session.user.userId) this.beginEpoch()
           this.applySession(session)
           return { ok: true, token: session.accessToken }
         },
