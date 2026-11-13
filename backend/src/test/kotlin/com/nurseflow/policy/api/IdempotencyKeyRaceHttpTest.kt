@@ -79,7 +79,7 @@ class IdempotencyKeyRaceHttpTest : ApiTestBase() {
         val first = CompletableFuture.supplyAsync {
             transactions.execute {
                 shiftTypes.create(ward, ShiftTypeCommand("N", "나이트", ShiftKind.NIGHT, LocalTime.of(22, 0), LocalTime.of(7, 0), true,
-                    null, null, null, null), key, adminId.toString()).also {
+                    null, null, null, null), ShiftTypeService.policyEtag(0), key, adminId.toString()).also {
                     recorded.countDown()
                     gate.second.await(10, TimeUnit.SECONDS)
                 }
@@ -90,7 +90,7 @@ class IdempotencyKeyRaceHttpTest : ApiTestBase() {
             http.post("/api/v1/wards/$otherWard/shift-types", mapOf(
                 "code" to "N", "displayName" to "나이트", "kind" to "NIGHT",
                 "startTime" to "22:00", "endTime" to "07:00", "spansMidnight" to true,
-            ), otherAdmin, mapOf("Idempotency-Key" to key.toString()))
+            ), otherAdmin, mapOf("Idempotency-Key" to key.toString(), "If-Match" to ShiftTypeService.policyEtag(0)))
         }
 
         assertEquals("N", first.get(10, TimeUnit.SECONDS).shiftType.code)

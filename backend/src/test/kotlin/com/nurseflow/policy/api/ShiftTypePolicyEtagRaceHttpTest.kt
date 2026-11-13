@@ -1,6 +1,7 @@
 package com.nurseflow.policy.api
 
 import com.nurseflow.policy.application.model.ShiftTypeRow
+import com.nurseflow.policy.application.service.ShiftTypeService
 import com.nurseflow.policy.persistence.repository.ShiftTypeJdbcRepository
 import com.nurseflow.support.ApiTestBase
 import com.nurseflow.support.HttpTestClient
@@ -80,7 +81,7 @@ class ShiftTypePolicyEtagRaceHttpTest : ApiTestBase() {
         val (adminId, token) = userToken("가상 수간호사")
         grant(wardId, adminId, "WARD_ADMIN")
         admin = token
-        shiftTypeId = http.post(base(), body("나이트"), admin, mapOf("Idempotency-Key" to UUID.randomUUID().toString()))
+        shiftTypeId = http.post(base(), body("나이트"), admin, mapOf("Idempotency-Key" to UUID.randomUUID().toString(), "If-Match" to ShiftTypeService.policyEtag(0)))
             .json!!.get("shiftTypeId").asString()
     }
 

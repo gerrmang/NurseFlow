@@ -692,6 +692,9 @@ export interface paths {
          *     같은 키를 쓰면 409 `IDEMPOTENCY_KEY_REUSED`이며, 다른 병동에서 같은 키로 동시에 만들어도 먼저 커밋한 쪽만 성공하고 나머지는 409다.
          *     병동 단위로 직렬화되므로 같은 `code`를 새 키로 동시에 만들면 하나만 201이다.
          *     `kind`는 DAY·EVENING·NIGHT만 받는다. OTHER(특수 근무)는 휴식 규칙이 정해지지 않아 결정 23 전까지 입력할 수 없다.
+         *     `If-Match`에는 마지막으로 받은 정책 `ETag`를 보낸다. 응답 ETag는 이 생성 뒤의 정책 revision이므로, 오래된 화면에서 만든 요청을
+         *     받아들이면 그 화면이 다른 관리자의 변경을 412 없이 덮어쓸 수 있다. 그래서 다르면 412 STALE_POLICY_REVISION이며 만들지 않는다.
+         *     같은 키 재시도는 이 비교보다 먼저 처리한다(처음 생성이 보낸 ETag를 이미 오래된 값으로 만들었으므로).
          */
         post: operations["createShiftType"];
         delete?: never;
@@ -722,7 +725,8 @@ export interface paths {
          *     근무 칸은 만들 때의 시각·코드·종류를 저장한다. DRAFT 칸은 유형 변경을 따라가지만 PUBLISHED 칸은 공개 당시 값을 유지하며,
          *     다음 달 근무의 휴식 규칙도 그 값으로 검사한다. 새 시각을 병동 시간대로 바꿨을 때 일광절약시간 전환일의 DRAFT 칸 중 하나라도
          *     종료가 시작보다 앞서면 422 INVALID_SHIFT_INTERVAL이며 변경 전체가 적용되지 않는다.
-         *     `kind`는 생성과 같이 DAY·EVENING·NIGHT만 받는다.
+         *     `kind`는 생성과 같이 DAY·EVENING·NIGHT만 받는다. 그래서 A8 이전에 만들어진 OTHER 유형은 PUT으로 이름을 바꾸거나 다시 켤 수 없고
+         *     (400 INVALID_REQUEST) DELETE로 비활성화만 할 수 있다(결정 23 전까지).
          *     `If-Match`에는 마지막으로 받은 정책 `ETag`(목록·생성·수정·비활성화 응답)를 보낸다. 그 사이 다른 관리자가 근무 유형을 바꿨으면
          *     412 STALE_POLICY_REVISION(`currentRevision`에 현재 정책 revision)이며 아무것도 바뀌지 않는다. 다시 조회한 뒤 저장한다.
          *     저장 전 영향은 `POST .../preview`로 확인한다. 서로 다른 유형의 시간대가 겹치는 것은 허용한다(실제 근무 겹침은 배치 규칙이 검사한다).
@@ -732,8 +736,9 @@ export interface paths {
         /**
          * 근무 유형 비활성화
          * @description 관리자만 호출할 수 있다. 행을 지우지 않고 `active=false`로 바꾼다(근무 칸이 참조하므로 삭제하지 않는다).
-         *     이미 비활성이어도 200이며 변경 없이 현재 값을 반환한다(정책 revision도 늘지 않고, 쓰는 것이 없으므로 `If-Match`도 비교하지 않는다).
-         *     활성 유형을 비활성화할 때 `If-Match`가 현재 정책 ETag와 다르면 412 STALE_POLICY_REVISION.
+         *     `If-Match`가 현재 정책 ETag와 다르면 412 STALE_POLICY_REVISION이다. 이미 비활성이어도 먼저 비교한다(응답의 현재 ETag가
+         *     오래된 화면으로 넘어가지 않도록). 같으면 200이며 변경 없이 현재 값을 반환하고 정책 revision도 늘지 않는다.
+         *     응답 유실 뒤 같은 `If-Match`로 다시 보내면 첫 요청이 revision을 올렸으므로 412이며, 목록을 다시 조회해 결과를 확인한다.
          *     비활성 유형은 새 필요 인원 입력에 쓸 수 없지만(`SHIFT_TYPE_NOT_FOUND`), 기존 근무 칸과 근무표 조회는 그대로다.
          *     이 유형을 쓰는 DRAFT 근무표는 `needsRevalidation=true`가 되고 revision이 올라, 변경 전 ETag로는 확정할 수 없다.
          */
@@ -1434,6 +1439,7 @@ export interface components {
         };
         ShiftTypeInput: {
             code: string;
+            /** @description 공백만으로는 만들 수 없다 */
             displayName: string;
             /**
              * @description 입력 가능한 종류. 응답의 기존 OTHER 유형은 읽기만 가능(결정 23 전)
@@ -3534,6 +3540,11 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
+                /**
+                 * @description 마지막으로 받은 병동 근무 유형 정책 ETag.
+                 * @example "policy-3"
+                 */
+                "If-Match": components["parameters"]["PolicyIfMatch"];
                 /** @description Unique UUID per logical mutation; retrying the same key must not duplicate the operation. */
                 "Idempotency-Key": components["parameters"]["IdempotencyKey"];
             };
@@ -3572,6 +3583,15 @@ export interface operations {
             };
             /** @description SHIFT_TYPE_CODE_DUPLICATE 또는 IDEMPOTENCY_KEY_REUSED */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description STALE_POLICY_REVISION */
+            412: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -3694,6 +3714,7 @@ export interface operations {
                     "application/json": components["schemas"]["ShiftType"];
                 };
             };
+            400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             /** @description WARD_NOT_FOUND 또는 SHIFT_TYPE_NOT_FOUND_IN_WARD */

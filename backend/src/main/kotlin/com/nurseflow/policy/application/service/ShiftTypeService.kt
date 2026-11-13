@@ -3,6 +3,7 @@ package com.nurseflow.policy.application.service
 import com.nurseflow.common.audit.AuditLog
 import com.nurseflow.common.error.BusinessException
 import com.nurseflow.common.error.ErrorCode
+import com.nurseflow.common.idempotency.IdempotencyKeyRaceException
 import com.nurseflow.common.idempotency.MutationReplayRepository
 import com.nurseflow.common.idempotency.ReplayLookup
 import com.nurseflow.policy.application.model.AffectedDraft
@@ -48,23 +49,34 @@ class ShiftTypeService(
     }
 
     /**
+     * [ifMatch] is checked like [update]: the response ETag is the revision this create produced, so a create from a
+     * stale screen must fail, or its ETag would let that screen save over a change it never saw.
      * Retrying with the same Idempotency-Key returns the first result instead of a duplicate-code 409, with the
      * policy revision of that first result: if the type changed since, a save from the replay gets 412 instead of
      * overwriting the change. The replay is read only after the lock and admin re-check, so a revoked admin gets
-     * no replay either, and a same-key request that waited on the lock sees the committed first result.
+     * no replay either, and a same-key request that waited on the lock sees the committed first result. It is read
+     * before the revision check, which the first create itself made stale.
      */
     @Transactional
-    fun create(wardId: UUID, command: ShiftTypeCommand, idempotencyKey: UUID, actor: String): ShiftTypeWrite {
+    fun create(wardId: UUID, command: ShiftTypeCommand, ifMatch: String, idempotencyKey: UUID, actor: String): ShiftTypeWrite {
         wards.lockAsAdmin(wardId, actor)
         val resolved = resolve(command)
-        val requestHash = replays.requestHash(listOf(actor, wardId, command))
+        val requestHash = replays.requestHash(listOf(actor, wardId, ifMatch, command))
         replayed(idempotencyKey, requestHash)?.let { return it }
+        checkPolicyRevision(wardId, ifMatch)
         if (repo.codeExists(wardId, command.code, except = null)) throw BusinessException(ErrorCode.SHIFT_TYPE_CODE_DUPLICATE)
         val row = resolved.toRow(UUID.randomUUID(), wardId, command.active ?: true)
         repo.insert(row)
         repo.bumpPolicyRevision(wardId, actor, Instant.now())
         audit.record(wardId, actor, "SHIFT_TYPE_CREATED", row.id.toString())
-        return written(wardId, row.toResult()).also { replays.recordReplay(idempotencyKey, CREATE_OPERATION, requestHash, it) }
+        return written(wardId, row.toResult()).also {
+            try {
+                replays.recordReplay(idempotencyKey, CREATE_OPERATION, requestHash, it)
+            } catch (_: IdempotencyKeyRaceException) {
+                // The same key committed for another ward first; this ward was locked, so it is not this request.
+                throw BusinessException(ErrorCode.IDEMPOTENCY_KEY_REUSED)
+            }
+        }
     }
 
     /**
@@ -91,13 +103,16 @@ class ShiftTypeService(
         return written(wardId, row.toResult())
     }
 
-    /** Already inactive is a no-op without a revision check: nothing is written, so nothing can be overwritten. */
+    /**
+     * Already inactive is a no-op, but still checks [ifMatch]: its response carries the current ETag, which must not
+     * reach a screen that has not seen the changes behind it.
+     */
     @Transactional
     fun deactivate(wardId: UUID, shiftTypeId: UUID, ifMatch: String, actor: String): ShiftTypeWrite {
         wards.lockAsAdmin(wardId, actor)
         val old = repo.find(wardId, shiftTypeId) ?: throw BusinessException(ErrorCode.SHIFT_TYPE_NOT_FOUND_IN_WARD)
-        if (!old.active) return written(wardId, old.toResult())
         checkPolicyRevision(wardId, ifMatch)
+        if (!old.active) return written(wardId, old.toResult())
         val row = old.copy(active = false)
         repo.update(row)
         repo.bumpPolicyRevision(wardId, actor, Instant.now())

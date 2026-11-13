@@ -46,20 +46,23 @@ class ShiftTypeHttpTest : ApiTestBase() {
         return r.json!!
     }
 
-    private fun postType(b: Map<String, Any?>, token: String?, key: String = UUID.randomUUID().toString()) =
-        http.post(base(), b, token, mapOf("Idempotency-Key" to key))
+    private fun postType(
+        b: Map<String, Any?>, token: String?, key: String = UUID.randomUUID().toString(), ifMatch: String = etag(),
+    ) = http.post(base(), b, token, mapOf("Idempotency-Key" to key, "If-Match" to ifMatch))
 
     @Test
     fun `retrying a create with the same key returns the first type`() {
         val key = UUID.randomUUID().toString()
-        val first = postType(body(code = "R1"), admin, key)
-        val retry = postType(body(code = "R1"), admin, key)
+        val seen = etag()
+        val first = postType(body(code = "R1"), admin, key, seen)
+        val retry = postType(body(code = "R1"), admin, key, seen)
 
         assertEquals(201, first.status, first.body)
         assertEquals(201, retry.status, retry.body)
         assertEquals(first.json!!.get("shiftTypeId").asString(), retry.json!!.get("shiftTypeId").asString())
-        assertEquals("IDEMPOTENCY_KEY_REUSED", postType(body(code = "R2"), admin, key).code)
-        assertEquals(400, http.post(base(), body(code = "R3"), admin).status)
+        assertEquals("IDEMPOTENCY_KEY_REUSED", postType(body(code = "R2"), admin, key, seen).code)
+        assertEquals(400, http.post(base(), body(code = "R3"), admin, current()).status)
+        assertEquals(400, http.post(base(), body(code = "R3"), admin, mapOf("Idempotency-Key" to UUID.randomUUID().toString())).status)
     }
 
     @Test
@@ -90,7 +93,9 @@ class ShiftTypeHttpTest : ApiTestBase() {
     private fun revision(): Int = http.get(base(), admin).json!!.get("policyRevision").asInt()
 
     /** If-Match with the ward policy ETag as of now, as a client that just reloaded the list would send. */
-    private fun current() = mapOf("If-Match" to http.get(base(), admin).header("ETag")!!)
+    private fun etag() = http.get(base(), admin).header("ETag")!!
+
+    private fun current() = mapOf("If-Match" to etag())
 
     private fun confirmWith(rosterId: UUID, etag: String) = http.post("/api/v1/rosters/$rosterId/confirm", emptyMap<String, Any>(),
         admin, mapOf("If-Match" to etag, "Idempotency-Key" to UUID.randomUUID().toString()))
@@ -190,14 +195,37 @@ class ShiftTypeHttpTest : ApiTestBase() {
         assertEquals("INVALID_REQUEST", http.put("${base()}/$id", body(name = "야간 C"), admin).code)
         assertEquals("야간 A", http.get(base(), admin).json!!.get("items")[0].get("displayName").asString())
 
-        // Deactivating an already inactive type writes nothing, so even a stale view gets the no-op 200.
-        assertEquals(200, http.delete("${base()}/$id", admin, current()).status)
-        assertEquals(200, http.delete("${base()}/$id", admin, seen).status)
+        // Deactivating an already inactive type writes nothing, but its ETag must not reach a stale view either.
+        val now = current()
+        val deactivated = http.delete("${base()}/$id", admin, now)
+        assertEquals(200, deactivated.status, deactivated.body)
+        val noop = http.delete("${base()}/$id", admin, mapOf("If-Match" to deactivated.header("ETag")!!))
+        assertEquals(200, noop.status, noop.body)
+        assertEquals(deactivated.header("ETag"), noop.header("ETag"))
+        assertEquals("STALE_POLICY_REVISION", http.delete("${base()}/$id", admin, seen).code)
+        assertEquals("STALE_POLICY_REVISION", http.delete("${base()}/$id", admin, now).code)
+    }
+
+    @Test
+    fun `a create from a stale policy revision is refused, so its ETag cannot hide another admin's change`() {
+        val id = create().get("shiftTypeId").asString()
+        val seen = etag()
+        // Another admin changes the type's hours after this screen loaded.
+        assertEquals(200, http.put("${base()}/$id", body(name = "나이트", end = "08:00"), admin, current()).status)
+
+        val stale = postType(body(code = "Y"), admin, ifMatch = seen)
+        assertEquals(412, stale.status, stale.body)
+        assertEquals("STALE_POLICY_REVISION", stale.code)
+        assertEquals(revision(), stale.json!!.get("currentRevision").asInt())
+        assertEquals(1, http.get(base(), admin).json!!.get("items").size())
+        // Without the create's fresh ETag the old screen cannot save over the change.
+        assertEquals("STALE_POLICY_REVISION", http.put("${base()}/$id", body(name = "나이트"), admin, mapOf("If-Match" to seen)).code)
+        assertEquals("08:00", http.get(base(), admin).json!!.get("items")[0].get("endTime").asString().take(5))
     }
 
     @Test
     fun `a create retried after the type changed replays the first revision, so saving from it is refused`() {
-        val key = mapOf("Idempotency-Key" to UUID.randomUUID().toString())
+        val key = mapOf("Idempotency-Key" to UUID.randomUUID().toString()) + current()
         val created = http.post(base(), body(), admin, key)
         val id = created.json!!.get("shiftTypeId").asString()
         assertEquals(200, http.put("${base()}/$id", body(name = "다른 관리자가 바꾼 이름"), admin, current()).status)
@@ -462,19 +490,20 @@ class ShiftTypeHttpTest : ApiTestBase() {
     }
 
     @Test
-    fun `concurrent creates with the same code yield one created and one conflict`() {
+    fun `concurrent creates from the same policy revision yield one created and one stale`() {
         val pool = Executors.newFixedThreadPool(2)
         try {
+            val seen = etag()
             val ready = CountDownLatch(2)
             val go = CountDownLatch(1)
             val results = (1..2).map { n ->
                 pool.submit<Int> {
                     ready.countDown(); go.await()
-                    postType(body("D", "데이$n", "DAY", "07:00", "15:00", false), admin).status
+                    postType(body("D$n", "데이$n", "DAY", "07:00", "15:00", false), admin, ifMatch = seen).status
                 }
             }
             ready.await(); go.countDown()
-            assertEquals(listOf(201, 409), results.map { it.get() }.sorted())
+            assertEquals(listOf(201, 412), results.map { it.get() }.sorted())
         } finally {
             pool.shutdownNow()
         }

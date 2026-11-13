@@ -28,7 +28,7 @@ import java.util.UUID
 
 /**
  * Ward shift types. Members read them; only admins change them. Every response carries the ward policy revision as
- * an ETag, and PUT/DELETE require it in If-Match so concurrent admin edits cannot overwrite each other.
+ * an ETag, and every write requires it in If-Match so concurrent admin edits cannot overwrite each other.
  */
 @RestController
 @RequestMapping("/api/v1/wards/{wardId}/shift-types")
@@ -46,11 +46,12 @@ class ShiftTypeController(private val shiftTypes: ShiftTypeService) {
     @PostMapping
     fun create(
         @PathVariable wardId: UUID,
+        @RequestHeader("If-Match") ifMatch: String,
         @Valid @RequestBody request: ShiftTypeRequest,
         @RequestHeader("Idempotency-Key") idempotencyKey: UUID,
         @CurrentSubject subject: String,
     ): ResponseEntity<ShiftTypeResponse> =
-        shiftTypes.create(wardId, request.toCommand(), idempotencyKey, subject).toEntity(HttpStatus.CREATED)
+        shiftTypes.create(wardId, request.toCommand(), ifMatch, idempotencyKey, subject).toEntity(HttpStatus.CREATED)
 
     @PutMapping("/{shiftTypeId}")
     fun update(

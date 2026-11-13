@@ -28,8 +28,8 @@ class MutationReplayRepository(private val jdbc: JdbcTemplate, private val mappe
     /**
      * Must run in the mutation's transaction; a concurrent duplicate fails on the primary key with
      * [IdempotencyKeyRaceException]. Mutations that lock their scope re-read the replay after the lock, so a
-     * duplicate reaching here used the key for another scope or request (another ward or roster) and is answered
-     * 409 IDEMPOTENCY_KEY_REUSED unless the caller recovers a same-request replay itself.
+     * duplicate reaching here used the key for another scope or request (another ward or roster): the service
+     * answers it with IDEMPOTENCY_KEY_REUSED unless it recovers a same-request replay itself.
      */
     fun recordReplay(key: UUID, operation: String, requestHash: String, response: Any) {
         try {

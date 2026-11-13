@@ -146,7 +146,7 @@ class WardMembershipRaceHttpTest : ApiTestBase() {
             http.post("/api/v1/wards/$wardId/shift-types", mapOf(
                 "code" to "N", "displayName" to "나이트", "kind" to "NIGHT",
                 "startTime" to "22:00", "endTime" to "07:00", "spansMidnight" to true,
-            ), bToken, mapOf("Idempotency-Key" to UUID.randomUUID().toString()))
+            ), bToken, mapOf("Idempotency-Key" to UUID.randomUUID().toString(), "If-Match" to "\"policy-0\""))
         }
         assertTrue(gate.secondArrived.await(10, TimeUnit.SECONDS), "B's shift type change should reach the ward lock")
         gate.release.countDown()
@@ -166,7 +166,7 @@ class WardMembershipRaceHttpTest : ApiTestBase() {
         grant(wardId, a, "WARD_ADMIN")
         grant(wardId, b, "WARD_ADMIN")
         grant(wardId, b, "WARD_MEMBER")
-        val key = mapOf("Idempotency-Key" to UUID.randomUUID().toString())
+        val key = mapOf("Idempotency-Key" to UUID.randomUUID().toString(), "If-Match" to "\"policy-0\"")
         val body = mapOf(
             "code" to "N", "displayName" to "나이트", "kind" to "NIGHT",
             "startTime" to "22:00", "endTime" to "07:00", "spansMidnight" to true,

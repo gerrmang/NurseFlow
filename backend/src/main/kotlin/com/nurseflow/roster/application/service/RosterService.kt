@@ -20,6 +20,7 @@ import com.nurseflow.roster.persistence.entity.DbRoster
 import com.nurseflow.roster.persistence.entity.DbSlot
 import com.nurseflow.roster.persistence.entity.NewSlot
 import com.nurseflow.roster.persistence.repository.RosterJdbcRepository
+import com.nurseflow.common.idempotency.IdempotencyKeyRaceException
 import com.nurseflow.common.idempotency.MutationReplayRepository
 import com.nurseflow.common.idempotency.ReplayLookup
 import org.springframework.stereotype.Service
@@ -638,8 +639,12 @@ class RosterService(
         return mapper.treeToValue(saved, RosterView::class.java)
     }
 
-    private fun recordReplay(key: UUID, action: String, payload: Any, response: Any) =
+    /** Every caller holds the ward or roster lock, so a concurrent same key is another roster's or job's request. */
+    private fun recordReplay(key: UUID, action: String, payload: Any, response: Any) = try {
         replays.recordReplay(key, action, replays.requestHash(payload), response)
+    } catch (_: IdempotencyKeyRaceException) {
+        throw BusinessException(ErrorCode.IDEMPOTENCY_KEY_REUSED)
+    }
 
     private fun checkRevision(roster: DbRoster, ifMatch: String) {
         if (ifMatch != "\"${etag(roster.id, roster.revision)}\"") {
