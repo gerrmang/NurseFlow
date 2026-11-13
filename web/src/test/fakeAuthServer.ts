@@ -120,7 +120,7 @@ export class FakeAuthServer {
 
   private readonly accessOwners = new Map<string, typeof USER_A>()
 
-  private userForToken(token: string) {
+  userForToken(token: string) {
     const user = this.accessOwners.get(token)!
     return { userId: user.userId, displayName: user.displayName }
   }

@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
+import { Link, useLocation, useNavigate } from 'react-router'
 import { asApiError, ClientErrorCode } from '../api/http'
 import type { CurrentUser, WardMembership } from '../api/types'
+import { PasteInviteForm, PendingInviteBanner, RestoreNotice } from '../invite/InviteWidgets'
 import { errorMessage, roleLabel } from '../messages'
 import { useSessionManager } from '../session/SessionContext'
 import type { SessionUser } from '../session/SessionManager'
@@ -13,6 +15,12 @@ type LoadState =
 /** Rendered with key=userId:epoch, so a new session always starts from an empty screen state. */
 export function WardsPage({ user }: { user: SessionUser }) {
   const manager = useSessionManager()
+  const location = useLocation()
+  const navigate = useNavigate()
+  const [joined] = useState(() => location.state as { joinedWardId?: string; joinedWardName?: string } | null)
+  useEffect(() => {
+    if (location.state?.joinedWardName) navigate(location.pathname, { replace: true, state: null })
+  }, [location.state, location.pathname, navigate])
   const [load, setLoad] = useState<LoadState>({ status: 'loading' })
   const [attempt, setAttempt] = useState(0)
 
@@ -40,6 +48,7 @@ export function WardsPage({ user }: { user: SessionUser }) {
   }
 
   const name = load.status === 'ready' ? load.me.displayName : user.displayName
+  // Set by the invitation screen after a successful join; non-sensitive (ward id and name only).
 
   return (
     <main className="page">
@@ -55,6 +64,13 @@ export function WardsPage({ user }: { user: SessionUser }) {
         </div>
       </header>
       <p>{name}님, 안녕하세요.</p>
+      <RestoreNotice />
+      {joined?.joinedWardName && (
+        <p role="status" className="notice">
+          {joined.joinedWardName} 병동에 가입했어요.
+        </p>
+      )}
+      <PendingInviteBanner />
       {load.status === 'loading' && <p role="status">병동 목록을 불러오고 있어요…</p>}
       {load.status === 'error' && (
         <section className="card">
@@ -73,14 +89,20 @@ export function WardsPage({ user }: { user: SessionUser }) {
           <p>아직 소속된 병동이 없어요.</p>
           <ul className="hints">
             <li>병동 만들기: 준비 중이에요.</li>
-            <li>초대 수락: 받은 초대 링크로 가입하는 기능은 준비 중이에요.</li>
+            <li>초대 수락: 받은 초대 링크를 열거나 아래에 붙여넣어 가입해요.</li>
           </ul>
+        </section>
+      )}
+      {load.status === 'ready' && (
+        <section className="card" aria-label="초대 링크로 가입">
+          <h2>초대 링크로 가입</h2>
+          <PasteInviteForm />
         </section>
       )}
       {load.status === 'ready' && load.wards.length > 0 && (
         <ul className="ward-list" aria-label="소속 병동">
           {load.wards.map((ward) => (
-            <li key={ward.wardId} className="card">
+            <li key={ward.wardId} className={`card${joined?.joinedWardId === ward.wardId ? ' highlight' : ''}`}>
               <div>
                 <span className="ward-name">{ward.wardName}</span>
                 {ward.hospitalName && <div className="notice">{ward.hospitalName}</div>}
@@ -91,6 +113,11 @@ export function WardsPage({ user }: { user: SessionUser }) {
                     {roleLabel(role)}
                   </span>
                 ))}
+                {ward.roles.includes('WARD_ADMIN') && (
+                  <Link className="button secondary" to={`/wards/${encodeURIComponent(ward.wardId)}/invitations`}>
+                    초대 관리
+                  </Link>
+                )}
               </span>
             </li>
           ))}

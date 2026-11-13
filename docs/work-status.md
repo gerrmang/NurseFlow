@@ -25,6 +25,7 @@
 | B2 웹 기반 세션 | `feat/web-foundation-session` (`dev` `e4ca9bf` 반영) | [#39](https://github.com/gerrmang/NurseFlow/pull/39) (Ready) | 구현·주요 실제 Kakao 검증·A 리뷰 수정 완료. B3a 병합 후 최신 dev 통합 | 리뷰 수정 head `d47eb38`: 웹 55개 통과·빌드 성공, CI 3개 작업 성공. 통합 후 검증은 아래 2026-11-11 기록 | 개발 의존성 moderate 경고·기존 브라우저 검증 제한 유지. A 진단 후속은 별도 미반영 |
 | B9a Android 공개 근무표 조회 | `feat/android-published-roster` (`dev` `fa47a5a` 통합) | [#34](https://github.com/gerrmang/NurseFlow/pull/34) | `dev` 병합 완료 (2026-11-10, 스쿼시 병합 커밋 `d1b8729`). 구현·기기·실서버 검증과 PR P3 수정 완료, 병합 전 Backend tests·Android debug build 통과 | [B9a 검증 기록](../android/B9a-verification.md), 아래 최종 검증 참조 | 기존 P2 해결, P3 수정 후 재리뷰 대기 |
 | B3a Android 초대 관리·가입 | `feat/android-invite-join` | [#38](https://github.com/gerrmang/NurseFlow/pull/38) | `dev` 병합 완료 (2026-11-11, `e4ca9bf`). GitHub merged=true 확인 | 수정 head `691312c`: 단위 76개·빌드·Lint 성공, CI Backend·Android 성공. 기기 실행 제한은 기존 기록 유지 | 기존 알려진 제한은 android/B3a-verification.md 참조 |
+| B3b 웹 초대 관리·가입 | `feat/web-invite-join` (`b352759` 기반 구현 `ff63354`) | [#45](https://github.com/gerrmang/NurseFlow/pull/45) (Ready) | 구현·코드 재리뷰 완료. 실제 Kakao 1계정 로그인, 가상 OIDC 3사용자+실제 backend의 발급·재발급·철회·간호사/관리자 가입을 브라우저에서 확인. 실제 Kakao 2계정 완료 조건은 미충족 | 2026-11-12 Windows 계약·Lint·타입·테스트 8파일 241개·빌드 성공. 실제 복사→붙여넣기·URL 정리·390×844 화면 확인. 개발용 재현 도구 추가. [B3b 검증 기록](../web/B3b-verification.md) | 두 번째 실제 Kakao 계정 없음. 실제 2계정 가입·저장소 값/Referer·실제 만료/응답 유실 등과 최종 CI는 미검증 |
 | 에이전트 지침 정합성 | `docs/agent-guidance-alignment` | #32 | `dev` 병합 완료 (2026-11-09, 일반 병합 커밋 `ab8347d`. 스쿼시 원칙에서 벗어남) | `git diff --check` 통과. GitHub Actions `Verify` PR 실행 성공, `dev` push 실행 성공 | 없음 |
 | A3 병원 검색 API | `feat/hospital-search` | #35 | `dev` 병합 완료 (2026-11-10, 스쿼시 병합 커밋 `23af850`) | 병합 전 `./gradlew test --offline` 134건 통과, CI 통과. 실제 2026.9. 파일 79,899곳 적재 0.7초, 검색 15~40ms | 없음 |
 | A4 병동 생성 | `feat/ward-self-create` | #36 | `dev` 병합 완료 (2026-11-10, 스쿼시 병합 커밋 `6a2cf29`) | 2026-11-10 `./gradlew test --offline` 138건 통과(건너뜀 4). 같은 키 동시 요청 테스트는 중복 키 처리 제거 변이 3/3 실패로 검출력 확인. 이전 스키마 H2에 schema.sql 두 번 적용 테스트 통과 | 없음 |
@@ -34,6 +35,29 @@
 | 병원 목록 동봉(A3 후속) | `feat/hospital-bundled-list` (`/private/tmp/NurseFlow-hospital`) | PR #42 dev 병합 완료(`b352759`) | B 개발 환경에서 경로 설정 없이 병원 검색·병동 생성이 되도록 공식 목록 5개 열(2026.9., 79,899행, gzip 약 2.5MB)을 서버에 동봉. 경로가 없으면 시작 시 같은·더 새 목록이 없을 때만 가져옴. 갱신 스크립트 `backend/scripts/extract_hospital_list.py`. Codex P4 2건 수정 `1a24ff9`. PR 리뷰 P3·P4·P5 수정: 동봉 목록이 마지막 적재와 다르면 가져오고(같은 기간 정정본 반영) 더 이전 기간·기간 미상이면 건너뜀, 스크립트는 1만 행 미만이면 기존 목록을 건드리지 않고 종료, 기간 미상 적재 뒤 복구 방법 문서화 | 2026-11-12 dev `1205f04` 반영 후 `./gradlew test --offline` 223건 중 통과 218, 건너뜀 5, 실패 0(리뷰 수정 후). web `api:check` 통과. 패키징된 jar를 별도 DB로 두 번 실행해 첫 실행 79,899행 가져옴, 두 번째 건너뜀 확인 | 없음 |
 | A8 근무 유형 설정 | `feat/shift-type-settings` (`/private/tmp/NurseFlow-a8`) | PR 개설(최신 dev `b352759` 반영) | 구현·Codex 리뷰 완료. `/wards/{id}/shift-types` 조회·생성·수정·비활성화, 휴게·인정·월 환산 시간, 병동 정책 revision(`policyRevision`), 사용 중 유형 변경 시 DRAFT `needsRevalidation`·칸 시각 재계산, OTHER 입력 차단, 생성 Idempotency-Key. dev 반영 후 쓰기를 `lockAsAdmin`으로(`a16d751`), 멱등 재생을 잠금·재확인 뒤로(`6fbaa45`, 같은 패턴인 `cancelGeneration` 같은 키 재시도 500 수정 포함). 미결: 결정 14·23(휴일·목표 시간)은 범위 밖, 비활성 유형 코드는 재사용 불가 | 2026-11-13 `./gradlew test --offline` 262건 중 통과 257, 건너뜀 5, 실패 0(외부 리뷰 P2 생성·no-op 비활성화 If-Match 수정 후). web `api:check`·lint·typecheck·test·build 통과. 경합 테스트 3건은 각 보호 코드 제거 시 실패 확인 | 없음 |
 | A7 이후 | 해당 없음 | 미개설 | 미착수. A7은 A8 다음 | 해당 없음 | 없음 |
+
+## B3b 브라우저·실제 backend 검증 및 Draft 준비 (2026-11-12 저녁, Codex)
+
+- 기존 공유 worktree에서 `feat/web-invite-join`(`ff63354`)으로 복귀했다. B4a 코드·커밋은 가져오지 않았으며 사용자 DB를 보존했다. 기존 `b352759`는 현재 조회한 `origin/dev`를 포함한다.
+- Windows Node v24.15.0: `npm run api:check`·`npm run lint`·`npm run typecheck`·`npm test -- --run`·`npm run build` 모두 성공. **8파일 241개 통과**, 실패·건너뜀 0, JS gzip **94.25 kB**. 이번에는 npm ci·변이 검사를 재실행하지 않았다. 재현 도구 추가 후 node --check·Lint도 성공.
+- 사용자가 알려준 Ubuntu 기존 키 파일을 값 출력 없이 사용해 실제 Kakao용 backend(8081, 별도 메모리 DB)·웹(5173)을 실행했다. 사용자가 직접 1계정 로그인해 병동 목록·소속 없음 화면 진입 성공. 합성한 없는 초대 토큰의 실제 오류 안내와 fragment 제거도 확인했다. 키 파일·실제 계정 정보를 문서에 복사하지 않았다.
+- 사용자가 두 번째 Kakao 계정이 없다고 알려, 별도 루프백 OIDC 테스트 공급자(18090)·실제 backend(18091, 별도 메모리 DB)·웹(5174)에서 가상 관리자/간호사/추가 관리자 3사용자 흐름을 검증했다. 실제 Spring 인증·JWT 서명/state/nonce·초대 API·DB를 사용하고 외부 공급자만 가상이다. 실제 계정 서버와 쿠키 이름도 분리했다. 실제 Kakao 2계정 시연 완료로 주장하지 않는다.
+- 브라우저 결과: 기록 연결 발급·목록·현재 origin 웹 링크 복사→실제 Ctrl+V·재발급과 원본 철회·로그아웃 후 링크 진입→다른 가상 사용자 로그인→초대 복귀·미래 연월 오류·정상 간호사 가입·관리자 측 가입 완료. 연결 없는 초대 발급/철회 후 패널의 복사 버튼 제거, 관리자 초대의 연월 입력 없음·추가 관리자 가입·초대 관리 권한까지 확인했다. 사용된 링크 재진입의 오류와 닫기, 390×844 화면의 문구/버튼·가로 넘침 없음도 확인하고 viewport를 원복했다.
+- 임시 공급자를 `web/scripts/b3b-browser-fixture.mjs`로 보존했다(모듈 import 정리, 검증 로직 동일). 개발 전용·루프백·가상 계정/키이며 앱 번들에 포함되지 않는다. 실제 API로 시드하는 재현 명령과 실제/가상 구분은 `web/B3b-verification.md`에 있다. 신규 앱 결함은 발견하지 않았으며 운영 앱·서버 코드·API/DB 스키마는 수정하지 않았다.
+- 남은 조건: 실제 Kakao 2계정 가입은 두 번째 계정 부재로 미실행. 저장소 값 직접 읽기·Referer·전체 히스토리·권한 차단·실제 만료/응답 유실·연결 없는 간호사 가입 등은 이번 브라우저 검증에서 확인하지 않았다. 목업 테스트를 실제 외부 계정 검증으로 대신 기록하지 않는다. Draft PR에 이 조건을 명시한다.
+- 공유 인계: 같은 `C:\Users\jjang\IdeaProjects\NurseFlow`, `feat/web-invite-join`에서 개발용 재현 도구·두 검증/현황 문서만 추가 커밋·푸시하고 Draft PR을 게시한다. backend·OpenAPI diff 없음, `git diff --check` 통과. 서버 8081/18091·웹 5173/5174·가상 공급자 18090과 각각의 브라우저 탭은 검증 후 실행 상태다. 메모리 DB라 종료 시 시연 데이터가 사라진다. 사용자 DB·local.properties·Ubuntu 키 파일 보존, 병합·배포 없음.
+
+## B3b Draft PR #45 게시 (2026-11-12, Codex)
+
+- 검증 기록·개발용 가상 OIDC 도구를 `2ee90bb`에 커밋·푸시하고 [PR #45](https://github.com/gerrmang/NurseFlow/pull/45)를 `gh`로 생성했다. `OPEN`, `isDraft=true`, 대상 `dev`, 게시 head `2ee90bbb6af0a7651b3573cf3c6206531d290c45`를 확인했다. 실제 Kakao 2계정 인수 검증 미완료를 Draft 사유로 명시했다.
+- 게시 직후 [Verify 43225192104](https://github.com/gerrmang/NurseFlow/actions/runs/43225192104)의 Backend tests·Android debug build·Web checks는 실행 중이었다. 최종 문서 커밋의 CI는 해당 head로 별도 확인한다. CI 통과·독립 승인·병합 준비 완료를 주장하지 않는다.
+- 같은 공유 worktree·`feat/web-invite-join`에서 이 게시 기록만 후속 커밋·푸시한다. 기존 검증 후 앱 코드는 바뀌지 않아 자동 검사·브라우저 검사를 재실행하지 않았다. `git diff --check` 통과, 미추적 사용자 DB 보존. 실제 2계정이 준비되면 본문 5절의 외부 계정 인수 검증을 이어가며 병합·배포는 하지 않는다.
+
+## B3b PR #45 일반 PR 전환 (2026-11-12, Codex)
+
+- 사용자 요청으로 `gh pr ready 45`를 실행했다. GitHub API에서 `draft=false`, 대상 `dev`, head `ee6e78a`를 확인했다. PR 본문의 Draft 유지 문구를 갱신하고 실제 Kakao 2계정 가입·나머지 미검증 항목은 그대로 명시했다. 실제 검증 완료나 병합 승인을 의미하지 않는다.
+- 코드 구현과 실행 가능한 검사는 앞 기록대로 완료했다. 새로운 기능 수정은 없고 문서만 변경해 로컬 테스트는 재실행하지 않았다. 전환 확인 시 `ee6e78a`의 Verify 43225366631은 Backend·Android·Web 실행 중이었으며 후속 문서 head의 CI는 별도 확인한다.
+- 같은 worktree·`feat/web-invite-join`에 전환 기록을 커밋·푸시한다. 미추적 사용자 DB를 보존하고 일반 PR 리뷰 대기로 인계한다. 미검증 외부 2계정 시연을 완료로 표시하거나 PR을 병합·배포하지 않는다.
 
 ## 리뷰 상태
 
@@ -123,6 +147,82 @@
   3. 오류 상태 화면 캡처 (가상 데이터)
 - **실제 Kakao 검증 (2026-11-10 저녁):** 사용자 실제 계정 1개, 임시 에뮬레이터·임시 DB, 가상 병동·초대. 결과는 검증 기록의 같은 이름 절. 서버 로그 WARN·ERROR 0, 토큰 0회. logcat의 시드 토큰은 검증용 adb 명령(adbd)에만 있었다.
 - **미검증:** 두 실제 계정 전환, KakaoTalk 앱 로그인, 클립보드 복사·가림, 실제 메신저의 사용자 스킴 링크 표시, 물리 기기, 화면에서의 명시적 로그아웃 시 대기 초대 삭제(기기 테스트로만 확인).
+
+## B3b 인계 (2026-11-12, Claude)
+
+- **작업 공간:** 공유 worktree `C:\Users\jjang\IdeaProjects\NurseFlow`, 브랜치 `feat/web-invite-join`, 기준 HEAD `0ed5b4c2bb7443d719180433c3593ad9c3b579ba`(= `origin/dev`). 원격 추적은 해제했다(`dev`로 잘못 푸시되지 않도록). **커밋·푸시·PR은 하지 않았고 모든 변경이 미커밋 상태다.**
+- **B4a 보존:** `feat/android-ward-create`(`d7ce955`, origin과 동일)에서 `git switch -c feat/web-invite-join origin/dev`로 분기했다. B4a 변경·커밋은 이 브랜치에 없고 `git log origin/dev..HEAD`는 비어 있다. 미추적 `nurseflow.mv.db`는 건드리지 않았다.
+- **변경 범위:** `web/` 안(신규 `src/invite/*`, `src/pages/JoinInvitePage.tsx`, `InvitationAdminPage.tsx`, 테스트·가짜 서버 파일, 수정 `App.tsx`·`main.tsx`·`KakaoCallbackPage.tsx`·`LoginPage.tsx`·`WardsPage.tsx`·`nurseflowApi.ts`·`types.ts`·`styles.css`·기존 테스트 설정·`README.md`·`B3b-verification.md`)과 이 문서뿐이다. `backend/**`·`docs/openapi.yaml`·공통 정책 문서는 수정하지 않았다.
+- **사용자 승인 결정(2026-11-11):** (1) 로그인 왕복용 sessionStorage 제한 저장(초대 토큰 1개·`expiresAt`, 로그인 버튼에서만 저장, 읽기→삭제→검증→복원, 10분은 논리 만료, 삭제 실패 시 자동 복원 중단), (2) 현재 웹 origin으로 `/invite#token=` 링크 직접 생성(서버 `inviteUrl` 미사용). 승인 시 보완 4건(URL 읽기·제거 분리와 StrictMode, 로그인 복귀 1회 소비와 목적지 일원화, 삭제 실패 처리, 응답 유실 후 조회 결과의 정확한 표현)을 모두 반영했다. 공통 정책 문서(`feature-breakdown.md` §7)에는 아직 반영하지 않았다(별도 결정 반영 문서 PR).
+- **Codex 리뷰 지점**
+  1. `src/invite/pendingInvite.ts`: 저장·소비·폐기 경로(`consumeLoginReturn`의 1회 메모, 삭제 실패 분기, `observeSession`의 소유·폐기 규칙), 저장 항목이 토큰·만료 외에 없는지.
+  2. `src/pages/JoinInvitePage.tsx`: fragment 읽기(렌더 중 순수 읽기)와 제거·등록(효과)의 분리, 가입 `Uncertain` 흐름(`verifyOutcome`의 `/wards` → 미리보기 재조회 판정), 늦은 응답 폐기(`current()`), 쓰기 이중 제출 가드.
+  3. `src/invite/callbackDestination.ts`와 `KakaoCallbackPage.tsx`: 목적지 결정이 한 곳인지, 기존 로그인 성공·취소·실패 동작이 그대로인지.
+  4. `src/pages/InvitationAdminPage.tsx`: 쓰기 뒤 재조회 결과별 문구(`composeNotice`), 발급 토큰이 컴포넌트 state에만 있고 닫으면 사라지는지, 연결 후보 필터(`linkableNurses`).
+  5. 서버 코드·detail이 화면에 새지 않는지(`invitationMessages.ts`), 토큰이 URL·router state·로그·DOM에 남지 않는지.
+- **알려진 제한·관찰:** `SessionManager.beginEpoch`는 쓰기를 포함한 모든 진행 중 API 요청을 취소하므로 로그아웃·계정 전환 중에는 서버가 처리했지만 화면이 결과를 보지 못할 수 있다(화면은 사라지고 이후 조회로 확인). 계약 관찰 4건(비활성 간호사 기록 가입 시 `ALREADY_WARD_MEMBER`, 관리자 초대의 `hospitalJoinedOn` 형식 검사, §7 #8 미결 표기, B3a 문서 차이 중 3건 해결)은 [검증 기록](../web/B3b-verification.md) 2.4절.
+- **남은 일:** Codex 리뷰와 수정. 실연동용 가상 병동·가상 테스트 계정 2개 준비는 병원 CSV와 별개로 확인한다(병동 생성은 공식 병원 데이터 적재가 필요). 실서버·Kakao·실제 브라우저 검증 절차는 검증 기록 5절. 그 뒤 PR(`dev` 대상, 스쿼시 병합)을 연다. B9b 웹 공개 근무표는 B3b 완료·리뷰 뒤 별도 작업이다.
+
+## B3b Codex 리뷰 (2026-11-12 13:17 KST)
+
+- **결과:** P3(런타임) 3건. 수정·재리뷰 전이며 병합 준비 완료로 보지 않는다. 애플리케이션 코드는 수정하지 않았고 커밋·푸시·PR도 하지 않았다.
+  1. `web/src/pages/InvitationAdminPage.tsx:375–377,236`: 복사 실패로 수동 링크 A가 표시된 상태에서 재발급 B를 받으면 같은 `IssuedLinkPanel`의 `manualText`가 유지되어, 새 링크 제목 아래 철회된 A가 남는다. 토큰 변경 시 복사 상태를 초기화하고 이전 복사 작업의 늦은 응답도 폐기해야 한다.
+  2. `web/src/pages/InvitationAdminPage.tsx:168–170,222`: 선택한 간호사가 다른 초대 발급·연결 등으로 후보에서 빠지고 새로고침하면 화면은 '연결하지 않음'이지만 요청은 이전 `nurseId`를 보낸다. 후보를 확인한 실제 표시값으로 본문을 만들거나 선택 상태를 명시적으로 초기화해야 한다.
+  3. `web/src/pages/InvitationAdminPage.tsx:153–161,236`: 현재 발급 패널의 초대를 철회해도 패널·복사 버튼·'24시간 동안 사용할 수 있음' 설명이 남아 무효 링크를 공유할 수 있다. 패널에 invitationId를 연결해 철회·재조회 결과에 따라 숨기거나 무효화하고, 재발급 응답 유실 때의 이전 패널도 점검해야 한다.
+- **직접 검증:** WSL `~/nf-b3b/web/src`와 공유 worktree의 `web/src`를 `diff -qr`로 대조해 차이 없음 확인. 해당 사본에서 `npm test -- --run`: **8개 파일 228개 통과**. `npm run api:check`, `npm run lint`, `npm run typecheck`, `npm run build` 모두 exit 0. JS gzip 93.94 kB. `npm ci`는 재실행하지 않았다. `git diff --check` 통과.
+- **재현:** WSL 사본에만 임시 `codex-review.test.tsx`를 추가해 위 3개 정상 기대값을 검사했고 **3개 모두 해당 결함으로 실패**했다(수동 입력값 A 유지, 요청에 이전 nurseId 포함, 철회 후 패널 유지). 재현 후 임시 파일은 삭제했다. 공유 worktree에는 테스트나 운영 코드 변경을 남기지 않았다.
+- **미검증:** 실제 브라우저·클립보드·Kakao·실서버·두 계정 시연·GitHub CI. 목업 검증으로 이 항목의 완료를 주장하지 않는다.
+- **인계 기준:** 경로 `C:\Users\jjang\IdeaProjects\NurseFlow`, 브랜치 `feat/web-invite-join`, HEAD `0ed5b4c2bb7443d719180433c3593ad9c3b579ba`. `docs/work-status.md` 제외 tracked diff SHA-256 `d6b6380d96ae3fbf176d507d319819cb356b547c64a1e4142f24563728adbfb4`. 신규 `web/**` 17개 파일을 경로순 정렬한 `SHA256 + 두 공백 + 경로 + LF` manifest의 SHA-256 `3d9252c003c965e472cb3171ca337bb18399df6c2e72b7fd906130c7c8483f17`. 검토 주체 Codex. 기존 미추적 `nurseflow.mv.db` 보존.
+
+## B3b Codex 리뷰 P3 3건 수정 (2026-11-12, Claude)
+
+- **상태:** 수정 완료, **Codex 재리뷰 대기**. 커밋·푸시·PR 없음. `backend/**`·`docs/openapi.yaml` 변경 0줄. 수정 파일은 `web/src/pages/InvitationAdminPage.tsx`, `InvitationAdminPage.test.tsx`(정식 테스트 9개 추가)와 이 문서·`web/B3b-verification.md`뿐이다.
+  1. 발급 패널을 `invitationId`로 key를 줘 재발급 시 새로 마운트(복사·수동 복사 상태 초기화). 한 패널 안에서는 마지막 복사 시도만 화면을 바꾸고, 이전 시도의 늦은 성공·실패는 버린다.
+  2. `issue()`가 화면과 같은 기준(현재 후보 목록에 있는 선택만 유효)으로 `nurseId`를 만들어, 후보에서 빠진 간호사는 보내지 않는다.
+  3. 발급 패널이 `invitationId`와 가용 상태를 갖고, 재조회 성공 때마다 목록의 해당 초대 상태(철회·사용·만료·목록에 없음)를 반영한다. PENDING이 아니면 복사 버튼과 '24시간' 안내를 없애고 사용 불가 안내만 보인다. 다른 초대 철회는 영향 없다. 재조회 실패(상태 불명)는 패널을 그대로 두고 기존 '결과 미확인' 안내를 유지한다. 재발급 응답 유실도 재조회로 이전 패널이 철회됨으로 바뀐다.
+- **같은 패턴 점검:** 가입 화면·로그인 복귀 경로는 변경하지 않았다. 확인 대기 중(`confirming`)인 초대가 다른 곳에서 상태가 바뀌어도 확인 상자가 남는 점은 서버가 최종 판정하므로 그대로 뒀다.
+- **검증(Windows, Node, 이번에는 test·build도 차단 없이 실행):** `api:check` 일치, `lint`·`typecheck` 성공, `npm test -- --run` **8개 파일 237개 통과**(기준 228 + 신규 9, 실패·건너뜀 0), `build` 성공(JS gzip 93.2 kB), `git diff --check` 통과. 변이 3개(패널 key 제거, 화면과 다른 nurseId 전송, 상태 반영 제거)를 각각 신규 테스트가 검출했고 원복했다. WSL 사본은 이번에 사용하지 않았다(WSL에서 Linux Node가 없어 Windows npm만 잡혀 실행 불가).
+- **미검증:** 실제 브라우저·클립보드·Kakao·실서버·두 계정 시연·GitHub CI·기기. 목업 검증이며 완료를 주장하지 않는다.
+- **공유 인계:** `C:\Users\jjang\IdeaProjects\NurseFlow`, `feat/web-invite-join`, HEAD `0ed5b4c`, 미커밋 구현을 이어서 사용. 미추적 `nurseflow.mv.db` 보존.
+
+## B3b Codex 재리뷰 (2026-11-12)
+
+- **결과:** 기존 P3 1번(복사 상태)·2번(간호사 선택값) 해결 확인. 3번(철회 패널)은 재조회 성공 경로만 해결됐고 **P3(런타임) 1건이 남음**. B3b 수정·재리뷰를 먼저 마친 뒤 B9b 별도 구현으로 이어간다.
+- **남은 P3:** `web/src/pages/InvitationAdminPage.tsx:151–175`에서 DELETE 204를 받았어도 해당 발급 패널을 즉시 무효화하지 않고 목록 재조회에만 의존한다. 발급 → 같은 초대 철회 성공 → 목록 조회 실패이면 이미 철회된 링크를 계속 복사할 수 있고 24시간 사용 가능 안내도 남는다. **철회 성공 응답은 결과가 확인된 상태**이며, 철회 응답 자체를 잃은 상태와 구분해야 한다. `confirmed()`의 대상 invitationId를 쓰기 결과에 연결해 성공 시 해당 패널을 즉시 REVOKED 처리하고, 응답 유실 때는 목록 재조회로 판정해야 한다.
+- **재현 근거:** 정식 테스트 `InvitationAdminPage.test.tsx:498`은 `failBefore('list')`만 주입하고 철회 요청은 정상 처리한다. 그런데도 복사 버튼이 남는 것을 정상 기대값으로 검사하므로 현재 237개 통과가 이 경로의 정확성을 증명하지 못한다. 이 테스트는 성공 철회 시 복사 불가를 검사하도록 바꾸고, 철회 응답 유실+목록 조회 실패는 별도 테스트로 분리해야 한다. 무관한 초대 철회 유지 테스트도 보존한다.
+- **직접 검증(Windows):** `npm test -- --run` **8개 파일 237개 통과**, `npm run api:check`·`npm run lint`·`npm run typecheck`·`npm run build` 모두 exit 0. 이번 build JS gzip **94.19 kB**. `git diff --check` 통과. WSL·npm ci는 재실행하지 않았다. 실제 브라우저·클립보드·Kakao·실서버·GitHub CI는 미검증이다.
+- **인계 기준:** 공유 worktree `C:\Users\jjang\IdeaProjects\NurseFlow`, 브랜치 `feat/web-invite-join`, HEAD `0ed5b4c2bb7443d719180433c3593ad9c3b579ba`. 상태 문서 제외 tracked diff SHA-256 `d6b6380d96ae3fbf176d507d319819cb356b547c64a1e4142f24563728adbfb4`, 신규 web 17개 파일 manifest SHA-256 `d7d37224b55bd4b68ccb05b81597c44fc6e182ecddbd0a5fcc882a6374f7c79d`(앞선 리뷰와 같은 계산 방식). 검토 주체 Codex. 코드 수정·커밋·푸시·PR·B9b 구현은 하지 않았다. 기존 미추적 DB 보존.
+
+## B3b 재리뷰 P3 수정: 철회 성공 후 재조회 실패 (2026-11-12, Claude)
+
+- **상태:** 수정 완료, **Codex 재리뷰 대기**. 커밋·푸시·PR·B9b 시작 없음. `backend/**`·`docs/openapi.yaml` 변경 0줄. 수정 파일: `web/src/pages/InvitationAdminPage.tsx`, `InvitationAdminPage.test.tsx`, 이 문서, `web/B3b-verification.md`.
+- **수정:** `run()`이 철회 대상 `invitationId`를 쓰기 결과에 연결한다. 철회 요청이 성공(204)하면 현재 발급 패널이 그 초대일 때 즉시 REVOKED로 바꾸고, 이후 목록 조회가 실패해도 복사 버튼·수동 복사란·24시간 안내가 다시 나오지 않는다(재조회 실패 안내는 그대로 표시). 다른 초대의 철회는 패널을 유지한다. 철회 응답 유실·실패는 성공으로 보지 않고 재조회 결과로만 판단하며, 재조회도 실패하면 '결과 미확인' 안내와 기존 패널을 유지한다. 목록 반영 시 이미 사용 불가로 확인된 패널을 PENDING 목록이 되살리지 못하게 막았다(재조회마다 요청 번호로 이전 응답은 버려지므로 이중 방어).
+- **테스트:** 기존 '재조회 실패' 테스트의 잘못된 기대(철회 성공인데 복사 버튼 유지)를 바로잡고 분리: 철회 204+조회 실패(복사·수동 복사란 불가, 실패 안내 유지), 응답 유실+조회 성공(조회 상태 반영), 서버가 처리하지 못한 철회+조회 성공(패널 유지), 응답 유실+조회 실패(미확인 안내·패널 유지), 늦은 이전 조회 응답이 철회 상태를 되돌리지 못함. 무관한 초대 철회 유지·복사 상태 초기화·늦은 복사 폐기·간호사 선택값 테스트는 유지.
+- **검증(Windows):** `api:check` 일치, `lint`·`typecheck` 성공, `npm test -- --run` **8개 파일 241개 통과**(기존 237 + 순증 4, 실패·건너뜀 0), `build` 성공(JS gzip 약 93.3 kB), `git diff --check` 통과. 철회 대상 연결을 끊는 변이를 신규 테스트가 검출했고 원복했다. 늦은 응답 가드 단독 변이는 요청 번호 방어와 겹쳐 따로 검출되지 않는다.
+- **미검증:** 실제 브라우저·클립보드·Kakao·실서버·두 계정 시연·GitHub CI·기기. WSL·`npm ci`는 재실행하지 않았다.
+- **공유 인계:** `C:\Users\jjang\IdeaProjects\NurseFlow`, `feat/web-invite-join`, HEAD `0ed5b4c`, 미커밋 구현 이어서 사용. 미추적 `nurseflow.mv.db` 보존.
+
+## B3b Codex 최종 수정 재리뷰 (2026-11-12 13:39 KST)
+
+- **결과:** 남은 P3(철회 성공 후 목록 조회 실패) 해결 확인. 기존 P3 3건과 후속 잔여 경로 모두 해결됐으며, 이번 수정 범위에서 추가 조치할 결함을 발견하지 못했다. 코드 리뷰 완료이며 실연동 완료·병합 완료를 의미하지 않는다.
+- **검토:** `confirmed()`가 철회 대상 ID를 전달하고, `run()`이 성공 응답을 받은 경우에만 해당 패널을 즉시 REVOKED로 바꾸는 것을 확인했다. 다른 초대 철회는 현재 패널을 유지한다. 응답 유실은 재조회로 판정하며, 이미 무효인 패널은 PENDING 조회 결과로 되살아나지 않는다. 무효 패널은 복사·수동 복사란·24시간 안내를 렌더하지 않는다. 요청 번호·세션/컴포넌트 수명 검사와 기존 복사 상태·간호사 선택값 수정도 확인했다.
+- **직접 검증(Windows):** `npm test -- --run` **8개 파일 241개 통과**, `npm run api:check`·`npm run lint`·`npm run typecheck`·`npm run build` 모두 exit 0. 실제 이번 build JS gzip **94.25 kB**. `git diff --check` 통과. backend·OpenAPI diff 없음. npm ci·WSL·변이 검사는 이번 재리뷰에서 실행하지 않았다. 늦은 조회 테스트는 요청 번호 방어를 검사하며, 가짜 서버가 보류 시점의 PENDING 응답 본문을 고정하지 않으므로 상태 가드 자체의 독립 변이 검출까지 주장하지 않는다.
+- **남은 완료 조건:** 실제 브라우저·클립보드 권한·Kakao 로그인 왕복·실서버 관리자/간호사 두 계정 시연과 PR/CI 확인. 코드 리뷰를 마쳤으므로 이 검증 준비와 별개로 B9b를 별도 기능 작업으로 진행할 수 있다.
+- **인계 기준:** 공유 worktree `C:\Users\jjang\IdeaProjects\NurseFlow`, 브랜치 `feat/web-invite-join`, HEAD `0ed5b4c2bb7443d719180433c3593ad9c3b579ba`. 상태 문서 제외 tracked diff SHA-256 `d6b6380d96ae3fbf176d507d319819cb356b547c64a1e4142f24563728adbfb4`, 신규 web 17개 파일 manifest SHA-256 `a9d576564f313fabb8f010cd20be80a202cf517290e224d2f1a0e492b9590bfe`(앞선 리뷰와 같은 계산 방식). 검토 주체 Codex. 운영 코드 수정·커밋·푸시·PR·B9b 시작 없음. 미추적 DB 보존.
+
+## B3b·B4a 최신 dev 반영 완료 (2026-11-12, Codex)
+
+- 최신 `origin/dev`는 `b352759`(#41 A6 구성원 관리, #42 병원 목록 동봉 포함)이며 두 작업 브랜치 모두 이 커밋을 조상으로 포함한다. B9b는 이번 요청 대상이 아니다.
+- **B3b:** `feat/web-invite-join` HEAD를 `0ed5b4c`에서 `b352759`로 fast-forward했다. 기존 B3b 작업 파일만 임시 보관 후 복원했으며 충돌 없음. 보존된 web 28개 파일을 임시 보관본과 LF 정규화하여 대조해 차이 0개 확인(상태 문서는 dev 내용과 3-way 병합). 기존 B3b 구현은 미커밋 상태를 유지한다. 최신 OpenAPI와 생성 타입은 dev에서 함께 반영됐다.
+- **B3b 직접 검증:** Windows에서 `npm run api:check`·`npm run lint`·`npm run typecheck`·`npm run build` 모두 exit 0, `npm test -- --run` **8개 파일 241개 통과**, JS gzip 94.25 kB. `git diff --check` 통과. 앞선 최종 재리뷰에서 P3는 모두 해결 확인됐으며, 표의 '재리뷰 대기'는 이 기록으로 대체한다.
+- **B4a:** 기존 `d7ce955`와 최신 dev를 충돌 없이 병합한 로컬 통합 커밋 `405a8e5727a1e9de8f5c3e5c72ce521b60c372a2`. `:app:testDebugUnitTest :app:assembleDebug :app:assembleDebugAndroidTest :app:lintDebug --no-daemon` **BUILD SUCCESSFUL**, 80개 작업 중 8개 실행·72개 UP-TO-DATE(단위 테스트는 캐시 재사용). 상세·변경된 실연동 준비 절차는 B4a 브랜치의 상태 기록과 `android/B4a-verification.md`에 남겼다.
+- **인계:** 현재 공유 worktree는 `feat/web-invite-join`, HEAD `b352759`, B3b 미커밋 구현이 복원돼 있다. B4a는 로컬 브랜치에 통합 커밋이 있고 원격에는 아직 푸시하지 않았다. B3b 커밋·두 브랜치 푸시·PR·dev/main 병합·배포는 하지 않았다. 백엔드 테스트·실서버·Kakao·브라우저/기기·CI는 이번에 실행하지 않았다. 사용자 DB·local.properties 보존.
+
+## B3b·B4a 커밋·푸시 인계 (2026-11-12, Codex)
+
+- 사용자 요청으로 두 작업 브랜치의 커밋·원격 푸시를 진행한다. B3b는 최신 dev `b352759` 위에 검토 완료한 `web/**`와 이 상태 문서만 커밋하며, B4a는 이미 만든 dev 통합 커밋 `405a8e5`를 푸시한다. PR 개설·dev/main 병합·배포는 범위에 없다.
+- 직전 통합 검증 결과: B3b 테스트 8개 파일 241개 통과, api:check·lint·typecheck·build 성공. B4a 단위 테스트·앱/테스트 APK 빌드·Lint 명령 BUILD SUCCESSFUL(단위 테스트는 UP-TO-DATE). 이후 기능 코드 변경이 없어 재실행하지 않았고 `git diff --check`를 다시 확인했다.
+- 실브라우저·실서버·Kakao·기기·CI 미검증을 유지한다. B3b 기존 P3는 최종 재리뷰에서 모두 해결 확인됐다. 사용자 DB는 스테이징·커밋·푸시 대상에서 제외한다. 푸시 후 두 원격 브랜치 SHA와 로컬 SHA가 같은지 확인하고 현재 B3b 브랜치에서 인계한다.
 
 ## 기타 브랜치
 
@@ -331,3 +431,21 @@ Claude와 Codex가 같은 진행 기록을 사용한다. PR 또는 정기 리뷰
 - 통합 후 WSL에서 오프라인 npm ci·api:check·lint·typecheck·테스트 55/55·build 모두 성공. git diff --check 통과. 기기·실제 Kakao·실서버·audit은 이번에 재실행하지 않았고, 개발 서버도 시작하지 않았다. 최종 GitHub CI는 푸시 후 확인한다.
 - A 진단·초대 계약 후속 be6d78c는 여전히 미반영이며 별도 후속으로 유지한다. B3a는 이미 병합됐고 B2만 최신 dev 기준으로 갱신한다. 병합·자동 병합·배포는 하지 않는다.
 - 공유 인계: C:\Users\jjang\IdeaProjects\NurseFlow, feat/web-foundation-session에서 통합 커밋·푸시한다. 기존 nurseflow.mv.db와 사용자 로컬 설정·잔여물을 보존한다.
+
+## B3b PR #45 리뷰 수정 (2026-11-13, Codex)
+
+- d808aca 리뷰 P1: refresh로 signedIn userId가 바뀌면 beginEpoch로 진행 중 요청을 중단하고 새 세션을 적용한다. 가입·발급·재발급·철회 전송 전과 401 뒤 갱신을 검사하는 5개 회귀 테스트가 수정 전 모두 실패, 수정 후 통과했다. 최초 restore와 같은 계정 refresh의 기존 검사는 유지했다.
+- P4: 가입 대기 중 새 hash 링크는 busy를 route state에 남겨 거절·재진입 안내를 표시하고 기존 요청을 유지한다. 토큰은 주소에서 제거하며 새로 저장하지 않는다.
+- P3: 관리자 오류 문구 분리, 가입 403의 계정·초대 안내, 소속/연결 충돌의 보수적 안내, 빈 초대 화면의 새로고침·로그인 뒤 복구 안내, 가입 배너 history state 소비를 반영했다. 미래 입사 연월 판단은 서버 병동 시간대에 맡기고 형식·1950년 하한 검사만 유지한다.
+- USER_NOT_FOUND의 401 사용과 소속 상태별 오류 코드 분리는 리뷰에 명시된 A 후속이다. 현행 재인증 처리를 유지한다. 이번에 서버·OpenAPI를 변경하지 않았다.
+- web에서 npm run api:check, npm run lint, npm run typecheck, npm test -- --run, npm run build 모두 성공. 8파일 252개 통과, 실패·건너뜀 0, JS gzip 94.51 kB. git diff --check 통과. 중간 실행에서 기존 문구 기대값 3개가 실패해 새 안내에 맞춘 뒤 통과했다.
+- 실제 브라우저·Kakao·실서버·backend 전체 검사는 이번 수정에서 재실행하지 않았다. 실제 Kakao 2계정 인수 검증과 독립 재리뷰는 미완료이며 병합하지 않는다. API/DB/환경·추가 저장소 변경 없음. 웹 정적 빌드에 영향, 배포 없음, 롤백은 수정 커밋 revert.
+- B4a는 같은 공유 worktree에서 기존 feat/android-ward-create에 a57fa65를 커밋·푸시했다. 단위 144개·앱/테스트 APK·Lint 통과, Verify 43422104112 전체 성공 확인. B3b에는 Android 수정 커밋을 섞지 않았다.
+- 인계: 같은 C:\Users\jjang\IdeaProjects\NurseFlow, feat/web-invite-join에서 이 수정만 커밋·푸시한다. nurseflow.mv.db 보존. PR #44/#45의 서버 후속·미실행 인수 검증·독립 재리뷰를 남긴다.
+
+## B3b 최신 dev 통합 (2026-11-13, Codex)
+
+- 사용자 요청으로 기존 feat/web-invite-join의 ccaf77b에 최신 origin/dev e1ce681(A8 PR #43)을 병합했다. 충돌 없음. 서버·OpenAPI·schema.gen.ts는 dev와 동일하며 기존 초대 기능·계정 전환 방어를 보존했다.
+- web: npm run api:check, lint, typecheck, npm test -- --run, build 모두 성공. 8파일 252개 통과, 실패·건너뜀 0, JS gzip 94.51 kB. backend: JDK 21 .\gradlew.bat test --no-daemon BUILD SUCCESSFUL, XML 262개 중 257개 통과·5개 opt-in 건너뜀·실패/오류 0. git diff --cached --check 통과.
+- API/DB/환경의 추가 변경 없음(A8에 이미 포함된 계약·스키마를 통합). 배포 없음. 롤백은 이 병합 커밋을 첫 부모 기준 revert. 브라우저·실제 Kakao·기기 검사는 재실행하지 않았다. 기존 실제 Kakao 2계정 인수·독립 재리뷰 미완료를 유지한다.
+- 같은 공유 worktree에서 이 브랜치에 통합·검증 기록을 커밋·푸시하고 B4a로 이동한다. 사용자 nurseflow.mv.db 보존, dev/main에 직접 푸시·PR 병합·자동 병합 설정 없음. 최종 PR CI와 GitHub 충돌 상태는 푸시 후 별도 확인한다.
