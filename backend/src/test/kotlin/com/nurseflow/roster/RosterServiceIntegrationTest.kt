@@ -256,6 +256,26 @@ class RosterServiceIntegrationTest @Autowired constructor(
         assertEquals(nurseId, current.slots.single().assignment?.nurseId)
     }
 
+    @Test
+    fun `assign retry replays a response saved before slots carried their code and kind`() {
+        val draft = newRoster("2026-11", LocalDate.parse("2026-11-02"), dayTypeId)
+        val key = UUID.randomUUID()
+        val slotId = draft.slots.single().slotId
+        val first = service.assign(draft.rosterId, slotId, tag(draft), key, AssignNurseRequest(nurseId), admin)
+        // The response as an earlier server stored it, and a later type edit the slot's own values do not follow.
+        val saved = jdbc.queryForObject(
+            "SELECT response_json FROM mutation_replays WHERE idempotency_key=?", String::class.java, key)!!
+        val legacy = saved.replace(""""shiftCode":"DAY",""", "").replace(""""shiftKind":"DAY",""", "")
+        assertFalse(legacy.contains("shiftCode") || legacy.contains("shiftKind"), legacy)
+        jdbc.update("UPDATE mutation_replays SET response_json=? WHERE idempotency_key=?", legacy, key)
+        jdbc.update("UPDATE shift_types SET code='D2',kind='EVENING' WHERE shift_type_id=?", dayTypeId)
+
+        val replayed = service.assign(draft.rosterId, slotId, tag(draft), key, AssignNurseRequest(nurseId), admin)
+        assertEquals(first, replayed)
+        assertEquals("DAY" to "DAY", replayed.slots.single().let { it.shiftCode to it.shiftKind })
+        assertEquals(draft.revision + 1, service.getRoster(draft.rosterId, admin).revision)
+    }
+
     private fun newRoster(month: String, date: LocalDate, shiftTypeId: UUID): RosterView {
         val draft = service.createRoster(wardId, CreateRosterRequest(month), admin, UUID.randomUUID())
         service.replaceRequirements(draft.rosterId, tag(draft), ReplaceRequirementsRequest(listOf(

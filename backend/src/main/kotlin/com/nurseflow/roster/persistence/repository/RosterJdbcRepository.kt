@@ -94,6 +94,13 @@ class RosterJdbcRepository(
 
     // ── Slots ──
 
+    /** Code and kind of a slot, or of its type when the slot no longer exists. Null for an unknown type. */
+    fun slotShift(slotId: UUID, shiftTypeId: UUID): Pair<String, String>? = jdbc.query(
+        """SELECT COALESCE(s.shift_code,t.code) AS code,COALESCE(s.shift_kind,t.kind) AS kind FROM shift_types t
+            LEFT JOIN roster_slots s ON s.slot_id=? AND s.shift_type_id=t.shift_type_id WHERE t.shift_type_id=?""",
+        { rs, _ -> rs.getString("code") to rs.getString("kind") }, slotId, shiftTypeId,
+    ).firstOrNull()
+
     fun slots(rosterId: UUID): List<DbSlot> = jdbc.query(
         // The slot's own code and kind: a later shift type edit must not change a published roster.
         """SELECT s.*,COALESCE(s.shift_code,t.code) AS code,COALESCE(s.shift_kind,t.kind) AS kind,n.display_name FROM roster_slots s

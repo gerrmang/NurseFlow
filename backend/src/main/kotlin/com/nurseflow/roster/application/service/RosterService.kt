@@ -1,7 +1,9 @@
 package com.nurseflow.roster.application.service
 
 import tools.jackson.core.type.TypeReference
+import tools.jackson.databind.JsonNode
 import tools.jackson.databind.json.JsonMapper
+import tools.jackson.databind.node.ObjectNode
 import com.nurseflow.common.error.BusinessException
 import com.nurseflow.common.error.ErrorCode
 import com.nurseflow.roster.application.model.*
@@ -58,7 +60,7 @@ class RosterService(
         if (!repo.lockWard(wardId)) throw BusinessException(ErrorCode.WARD_NOT_FOUND)
         requireAdmin(wardId, subject)
         val action = "create-roster:$wardId"
-        replay(idempotencyKey, action, request, RosterView::class.java)?.let { return it }
+        replayView(idempotencyKey, action, request)?.let { return it }
         if (repo.draftExistsForMonth(wardId, request.month)) {
             throw BusinessException(ErrorCode.DRAFT_EXISTS)
         }
@@ -194,7 +196,7 @@ class RosterService(
         val roster = lockAuthorizedRoster(rosterId, subject)
         val action = "assign:$rosterId:$slotId"
         val payload = ifMatch to input
-        replay(idempotencyKey, action, payload, RosterView::class.java)?.let { return it }
+        replayView(idempotencyKey, action, payload)?.let { return it }
         checkRevision(roster, ifMatch)
         ensureDraft(roster)
         val slot = repo.slots(roster.id).firstOrNull { it.id == slotId }
@@ -616,6 +618,25 @@ class RosterService(
             ReplayLookup.Conflict -> throw BusinessException(ErrorCode.IDEMPOTENCY_KEY_REUSED)
             is ReplayLookup.Found -> result.value
         }
+
+    /**
+     * Roster responses saved before slots carried their code and kind (A8) lack both fields; a retry of such a
+     * request reads them from the slot's stored values, or from its type once the slot is gone.
+     */
+    private fun replayView(key: UUID, action: String, payload: Any): RosterView? {
+        val saved = replay(key, action, payload, JsonNode::class.java) ?: return null
+        val slots = saved.get("slots")
+        for (i in 0 until (slots?.size() ?: 0)) {
+            val slot = slots.get(i) as ObjectNode
+            if (slot.has("shiftCode") && slot.has("shiftKind")) continue
+            val (code, kind) = repo.slotShift(
+                UUID.fromString(slot.get("slotId").asString()), UUID.fromString(slot.get("shiftTypeId").asString()),
+            ) ?: continue
+            slot.put("shiftCode", code)
+            slot.put("shiftKind", kind)
+        }
+        return mapper.treeToValue(saved, RosterView::class.java)
+    }
 
     private fun recordReplay(key: UUID, action: String, payload: Any, response: Any) =
         replays.recordReplay(key, action, replays.requestHash(payload), response)
