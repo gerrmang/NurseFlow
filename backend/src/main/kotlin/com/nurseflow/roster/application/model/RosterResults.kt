@@ -13,6 +13,9 @@ data class SlotView(
     val slotId: UUID,
     val date: LocalDate,
     val shiftTypeId: UUID,
+    /** Code and kind stored with the slot: a published slot keeps them even after the type is edited. */
+    val shiftCode: String,
+    val shiftKind: String,
     val startAt: Instant,
     val endAt: Instant,
     val status: String,
@@ -28,6 +31,7 @@ data class RosterSummary(
     val timeZone: String,
     val staffing: StaffingSummary,
     val publishedAt: Instant? = null,
+    val needsRevalidation: Boolean = false,
 )
 
 data class RosterView(
@@ -40,6 +44,7 @@ data class RosterView(
     val staffing: StaffingSummary,
     val slots: List<SlotView>,
     val publishedAt: Instant? = null,
+    val needsRevalidation: Boolean = false,
 )
 
 data class ApprovedAbsenceView(

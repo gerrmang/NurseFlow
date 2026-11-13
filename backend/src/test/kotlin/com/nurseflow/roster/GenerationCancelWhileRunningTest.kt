@@ -20,6 +20,7 @@ import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Import
 import org.springframework.context.annotation.Primary
 import org.springframework.jdbc.core.JdbcTemplate
+import org.springframework.transaction.support.TransactionTemplate
 import tools.jackson.databind.json.JsonMapper
 import java.time.LocalDate
 import java.util.UUID
@@ -38,6 +39,7 @@ class GenerationCancelWhileRunningTest @Autowired constructor(
     private val jdbc: JdbcTemplate,
     private val service: RosterService,
     private val gate: Gate,
+    private val transactions: TransactionTemplate,
 ) {
     private val admin = "test-admin"
     private lateinit var wardId: UUID
@@ -199,6 +201,33 @@ class GenerationCancelWhileRunningTest @Autowired constructor(
             Thread.sleep(10)
         }
         return false
+    }
+
+    @Test
+    fun `a same-key cancel retry that waited for the job row gets the first result`() {
+        val draft = draft()
+        val job = service.startGeneration(draft.rosterId, tag(draft.rosterId, draft.revision), UUID.randomUUID(),
+            StartGenerationRequest(preserveLockedAssignments = true), admin)
+        assertTrue(service.markGenerationRunning(job.jobId))
+        val key = UUID.randomUUID()
+        val firstDone = CountDownLatch(1)
+        val commit = CountDownLatch(1)
+
+        // The first cancel holds the job row lock and its replay record uncommitted until the retry is waiting.
+        val first = CompletableFuture.supplyAsync {
+            transactions.execute {
+                service.cancelGeneration(job.jobId, key, admin).also {
+                    firstDone.countDown()
+                    commit.await(10, TimeUnit.SECONDS)
+                }
+            }!!
+        }
+        assertTrue(firstDone.await(10, TimeUnit.SECONDS))
+        val retry = CompletableFuture.supplyAsync { runCatching { service.cancelGeneration(job.jobId, key, admin) } }
+        assertTrue(awaitBlockedSession(), "the retry should wait on the job row lock")
+        commit.countDown()
+
+        assertEquals(first.get(10, TimeUnit.SECONDS), retry.get(10, TimeUnit.SECONDS).getOrThrow())
     }
 
     private fun draft(): com.nurseflow.roster.application.model.RosterView {
