@@ -104,7 +104,7 @@ fun NurseFlowRoot(container: AppContainer) {
                             }
                             val createState by createModel.state.collectAsStateWithLifecycle()
                             val enterCreate = { createModel.reset(); creatingWard = true }
-                            val leaveCreate = { createModel.reset(); creatingWard = false }
+                            val leaveCreate = { createModel.leave { wardsModel.reload(silent = true) }; creatingWard = false }
                             LaunchedEffect(createAfterLogin, pendingInvite != null) {
                                 val resolution = resolveCreateIntent(createAfterLogin, IntentPhase.SIGNED_IN, pendingInvite != null)
                                 if (resolution.clear) createAfterLogin = false
@@ -132,7 +132,7 @@ fun NurseFlowRoot(container: AppContainer) {
                                     WardCreateScreen(
                                         createModel,
                                         onClose = { leaveCreate() },
-                                        onShowWardList = { wardsModel.reload(); leaveCreate() },
+                                        onShowWardList = { leaveCreate() },
                                         onOpenRoster = { leaveCreate(); adminWardId = null; selectedWardId = it.wardId; wardEntry += 1 },
                                         onOpenInvites = { leaveCreate(); adminWardId = it.wardId },
                                     )

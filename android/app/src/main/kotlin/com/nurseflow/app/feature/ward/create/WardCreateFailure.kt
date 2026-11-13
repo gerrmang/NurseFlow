@@ -9,6 +9,7 @@ enum class WardCreateFailure(val searchMessage: String, val createMessage: Strin
     UNAVAILABLE("병원 정보 서비스에 일시적으로 연결할 수 없어요. 잠시 후 다시 검색해 주세요.", "병원 정보 서비스에 일시적으로 연결할 수 없어요."),
     NOT_CONFIGURED("서버에 병원 목록이 아직 준비되지 않았어요. 준비된 뒤에 이용할 수 있어요.", "서버에 병원 목록이 아직 준비되지 않아 병동을 만들 수 없어요."),
     INVALID_REQUEST("검색어를 확인해 주세요.", "병동 이름을 확인해 주세요."),
+    NAME_TOO_LONG("검색어를 확인해 주세요.", "병동 이름은 100자 이하로 입력해 주세요."),
     HOSPITAL_NOT_FOUND("선택한 병원을 찾을 수 없어요. 다시 검색해 주세요.", "선택한 병원을 찾을 수 없어요. 다시 검색해 주세요."),
     ALREADY_CREATED("이미 만든 병동이에요.", "같은 병원·이름의 병동을 이미 만들었어요. 병동 목록에서 확인해 주세요."),
     LIMIT_REACHED("만들 수 있는 병동 수에 도달했어요.", "만들 수 있는 병동 수에 도달했어요."),

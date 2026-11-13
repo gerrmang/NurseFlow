@@ -393,3 +393,11 @@ Claude와 Codex가 같은 진행 기록을 사용한다. PR 또는 정기 리뷰
 - 통합 후 WSL에서 오프라인 npm ci·api:check·lint·typecheck·테스트 55/55·build 모두 성공. git diff --check 통과. 기기·실제 Kakao·실서버·audit은 이번에 재실행하지 않았고, 개발 서버도 시작하지 않았다. 최종 GitHub CI는 푸시 후 확인한다.
 - A 진단·초대 계약 후속 be6d78c는 여전히 미반영이며 별도 후속으로 유지한다. B3a는 이미 병합됐고 B2만 최신 dev 기준으로 갱신한다. 병합·자동 병합·배포는 하지 않는다.
 - 공유 인계: C:\Users\jjang\IdeaProjects\NurseFlow, feat/web-foundation-session에서 통합 커밋·푸시한다. 기존 nurseflow.mv.db와 사용자 로컬 설정·잔여물을 보존한다.
+
+## B4a PR #44 리뷰 수정 (2026-11-13, Codex)
+
+- 검토 기준 f7ffc1e의 P2·P3를 수정했다. 닫기·뒤로가기·목록 확인을 공통 leave 경로로 연결해 reset 전에 소속 목록을 재조회한다. 성공한 서버 목록을 그대로 사용해 비활성 소속 잔존을 없앴고, 완전한 목록이 없으면 생성 후 재조회 실패를 표시한다. 병동명 100자 초과는 안내하고 전송하지 않는다.
+- 테스트 병원 source를 HIRA로 맞췄다. 자기 자신 상태 비교를 제거하고 고정 키 ViewModelProvider와 유지된 ViewModelStore에서 draft·유실 상태·재시도 키를 검사했다. 이는 실제 Activity 회전 검증과 구분한다. 응답 유실 후 종료·목록 권위·실패·100/101자 회귀를 추가했다.
+- JDK 21, android에서 .\gradlew.bat :app:testDebugUnitTest :app:assembleDebug :app:assembleDebugAndroidTest :app:lintDebug --no-daemon: BUILD SUCCESSFUL. 단위 XML 144개, 실패·오류·건너뜀 0. 최초 실행은 변경 전 기대값이 남은 테스트 1개가 실패해 서버 목록을 기준으로 기대값을 정정한 뒤 통과했다. git diff --check 통과.
+- 기기 UI·실서버·백엔드 전체 검사는 이번에 재실행하지 않았다(클라이언트 수정). 독립 재리뷰는 미실행, 병합하지 않는다. 서버의 기존 wardId 제공·INVALID_TIME_ZONE 계약 설명은 리뷰에 명시된 A 후속 범위로 남긴다.
+- API/DB/환경 변경 없음. Android 빌드에만 영향, 배포 없음. 롤백은 이번 수정 커밋 revert. 같은 공유 worktree에서 이 PR 브랜치에 커밋·푸시 후 B3b 브랜치로 이동해 #45를 처리한다. 사용자 nurseflow.mv.db는 보존한다.

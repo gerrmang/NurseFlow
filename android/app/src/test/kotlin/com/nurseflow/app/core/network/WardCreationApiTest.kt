@@ -104,7 +104,7 @@ class WardCreationApiTest {
             MockResponse().setResponseCode(status).setHeader("Content-Type", "application/problem+json").setBody("""{"status":$status,"code":"$code"}""")
     }
 
-    private fun candidate(id: String) = HospitalCandidateDto("TEST_SOURCE", id, "가상대학교병원", "가상시 가상구 1", "종합병원")
+    private fun candidate(id: String) = HospitalCandidateDto("HIRA", id, "가상대학교병원", "가상시 가상구 1", "종합병원")
 
     // ---- request shape ----
 
@@ -113,7 +113,7 @@ class WardCreationApiTest {
             server.dispatcher = object : Dispatcher() {
                 override fun dispatch(request: RecordedRequest) =
                     if (request.path!!.startsWith("/api/v1/auth/")) json(sessionJson)
-                    else json("""{"items":[{"source":"TEST_SOURCE","externalId":"h1","name":"가상대학교병원","address":"가상시 가상구 1","category":"종합병원"},{"source":"TEST_SOURCE","externalId":"h2","name":"가상대학교병원","address":"가상시 가상동 2"}],"page":1,"size":20,"totalCount":2,"attribution":"가상 출처"}""")
+                    else json("""{"items":[{"source":"HIRA","externalId":"h1","name":"가상대학교병원","address":"가상시 가상구 1","category":"종합병원"},{"source":"HIRA","externalId":"h2","name":"가상대학교병원","address":"가상시 가상동 2"}],"page":1,"size":20,"totalCount":2,"attribution":"가상 출처"}""")
             }
             val api = signedIn(server)
             val page = api.searchHospitals("가상 병원")
@@ -150,7 +150,7 @@ class WardCreationApiTest {
             val fake = FakeWardServer()
             server.dispatcher = fake
             val api = signedIn(server)
-            val created = api.createWard("0b5f8e0e-1111-4222-8333-444455556666", CreateWardBody(HospitalRefBody("TEST_SOURCE", "h1"), "가상 내과 병동"))
+            val created = api.createWard("0b5f8e0e-1111-4222-8333-444455556666", CreateWardBody(HospitalRefBody("HIRA", "h1"), "가상 내과 병동"))
             assertEquals("가상 내과 병동", created.wardName)
             assertTrue(created.isAdmin)
             assertEquals("가상대학교병원", created.hospitalName)
@@ -312,7 +312,7 @@ class WardCreationApiTest {
             server.dispatcher = object : Dispatcher() {
                 override fun dispatch(request: RecordedRequest) =
                     if (request.path!!.startsWith("/api/v1/auth/")) json(sessionJson)
-                    else json("""{"items":[{"source":"TEST_SOURCE","externalId":"h1","name":"가상대학교병원","address":"가상시 가상구 1"}],"page":1,"size":20,"totalCount":1,"attribution":"가상 출처"}""")
+                    else json("""{"items":[{"source":"HIRA","externalId":"h1","name":"가상대학교병원","address":"가상시 가상구 1"}],"page":1,"size":20,"totalCount":1,"attribution":"가상 출처"}""")
             }
             val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
             try {

@@ -95,6 +95,12 @@ class WardCreateViewModel(
         mutable.value = WardCreateState()
     }
 
+    /** All exit paths refresh memberships before forgetting an uncertain creation result. */
+    fun leave(refreshWards: () -> Unit) {
+        refreshWards()
+        reset()
+    }
+
     fun setQuery(text: String) { update { it.copy(queryInput = text, queryError = null) } }
 
     fun search() {
@@ -155,6 +161,7 @@ class WardCreateViewModel(
         val selected = s.selected ?: return
         val name = s.wardName.trim()
         if (name.isEmpty()) { update { it.copy(createError = WardCreateFailure.INVALID_REQUEST) }; return }
+        if (name.length > 100) { update { it.copy(createError = WardCreateFailure.NAME_TOO_LONG) }; return }
         val draft = Draft(selected.source, selected.externalId, name)
         if (draft != keyedDraft || key == null) {
             keyedDraft = draft

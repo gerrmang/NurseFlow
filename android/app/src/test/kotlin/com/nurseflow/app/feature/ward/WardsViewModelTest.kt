@@ -26,7 +26,7 @@ class WardsViewModelTest {
     }
     private fun WardsViewModel.loadedWards() = (state.value as WardsUiState.Loaded).wards.map { it.wardId }
 
-    @Test fun createdWardIsVisibleImmediatelyAndSurvivesAReloadThatDoesNotYetListIt() {
+    @Test fun createdWardIsVisibleImmediatelyButSuccessfulReloadIsAuthoritative() {
         val api = Api()
         val model = WardsViewModel(api, scope)
         api.finish(ward("ward-old", "WARD_MEMBER"), index = 0)
@@ -37,9 +37,9 @@ class WardsViewModelTest {
         assertEquals(listOf("ward-old", "ward-new"), model.loadedWards())
         assertEquals(2, api.mes.size)
 
-        // The refresh does not contain the new ward yet (stale read): it must not be dropped.
+        // Successful reload drops wards whose membership is no longer active.
         api.finish(ward("ward-old", "WARD_MEMBER"), index = 1)
-        assertEquals(listOf("ward-old", "ward-new"), model.loadedWards())
+        assertEquals(listOf("ward-old"), model.loadedWards())
     }
 
     @Test fun reloadContainingTheCreatedWardDoesNotDuplicateIt() {
@@ -72,12 +72,21 @@ class WardsViewModelTest {
         assertEquals(listOf("ward-old", "ward-new"), model.loadedWards())
     }
 
-    @Test fun createdBeforeFirstLoadIsShownAndMergedWithTheLaterList() {
+    @Test fun failedReloadAfterCreationWithoutACompleteListIsVisible() {
+        val api = Api()
+        val model = WardsViewModel(api, scope)
+        api.mes[0].completeExceptionally(ApiException(0, "NETWORK", "고정 메시지"))
+        model.onCreated(ward("ward-new"))
+        api.mes[1].completeExceptionally(ApiException(0, "NETWORK", "고정 메시지"))
+        assertTrue(model.state.value is WardsUiState.Failed)
+    }
+
+    @Test fun creationBeforeFirstLoadRequiresACompleteServerList() {
         val api = Api()
         val model = WardsViewModel(api, scope)
         model.onCreated(ward("ward-new")) // the initial load is still in flight
-        assertEquals(listOf("ward-new"), model.loadedWards())
-        api.finish(ward("ward-old", "WARD_MEMBER"), index = 1)
+        assertEquals(WardsUiState.Loading, model.state.value)
+        api.finish(ward("ward-old", "WARD_MEMBER"), ward("ward-new"), index = 1)
         assertEquals(listOf("ward-old", "ward-new"), model.loadedWards())
         assertEquals("가상 사용자", (model.state.value as WardsUiState.Loaded).displayName)
     }

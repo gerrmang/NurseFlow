@@ -21,7 +21,7 @@ import com.nurseflow.app.core.network.MembershipDto
  * Search an official hospital, name the ward, then see the setup guide. The server decides what
  * is valid; this screen only reflects its answers. There is no way to type a hospital by hand.
  *
- * [onClose] leaves without refreshing, [onShowWardList] leaves and reloads the list (used when
+ * [onClose] and [onShowWardList] leave and reload memberships (including when
  * the ward already exists), [onOpenRoster]/[onOpenInvites] open the created ward.
  */
 @Composable

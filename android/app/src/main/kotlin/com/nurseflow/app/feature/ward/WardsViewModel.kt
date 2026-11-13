@@ -25,8 +25,6 @@ class WardsViewModel(
     private val mutableState = MutableStateFlow<WardsUiState>(WardsUiState.Loading)
     val state = mutableState.asStateFlow()
     private var request: Job? = null
-    /** Wards created in this session. A reload keeps them until the server list contains them. */
-    private val created = LinkedHashMap<String, MembershipDto>()
     init { reload() }
 
     /** [silent]: keep showing the loaded list while refreshing, so open screens are not bounced. */
@@ -38,8 +36,7 @@ class WardsViewModel(
             try {
                 val user = apiCall { api.me() }
                 val wards = apiCall { api.wards() }.items
-                created.keys.removeAll(wards.map { it.wardId }.toSet())
-                mutableState.value = WardsUiState.Loaded(user.displayName, wards + created.values)
+                mutableState.value = WardsUiState.Loaded(user.displayName, wards)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -49,17 +46,16 @@ class WardsViewModel(
     }
 
     /**
-     * A ward was just created (201). Show it immediately, so opening it or its invitations never
-     * waits for (or loses to) the list reload, then refresh from the server without hiding it.
+     * Add a newly created ward immediately when a complete list is already loaded. Otherwise
+     * require a full reload so a failed request cannot masquerade as a complete membership list.
      */
     fun onCreated(membership: MembershipDto) {
-        created[membership.wardId] = membership
         val current = mutableState.value
         mutableState.value = if (current is WardsUiState.Loaded) {
             current.copy(wards = current.wards.filterNot { it.wardId == membership.wardId } + membership)
         } else {
             WardsUiState.Loaded("", listOf(membership))
         }
-        reload(silent = true)
+        reload(silent = current is WardsUiState.Loaded)
     }
 }

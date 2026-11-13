@@ -34,8 +34,8 @@ class WardCreateScreenUiTest {
         val createKeys = mutableListOf<String>()
         override suspend fun searchHospitals(query: String, page: Int, size: Int) = HospitalSearchPageDto(
             listOf(
-                HospitalCandidateDto("TEST_SOURCE", "h1", "가상대학교병원", "가상시 가상구 1", "종합병원"),
-                HospitalCandidateDto("TEST_SOURCE", "h2", "가상의료원", "가상시 가상구 2", "병원"),
+                HospitalCandidateDto("HIRA", "h1", "가상대학교병원", "가상시 가상구 1", "종합병원"),
+                HospitalCandidateDto("HIRA", "h2", "가상의료원", "가상시 가상구 2", "병원"),
             ),
             1, 20, 2, "가상 출처 · 기준 2026-01-01",
         )

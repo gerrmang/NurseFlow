@@ -21,7 +21,7 @@ class FakeWardCreationApi : WardCreationApi {
 }
 
 fun candidate(id: String, name: String = "가상대학교병원", address: String = "가상시 가상구 1") =
-    HospitalCandidateDto("TEST_SOURCE", id, name, address, "종합병원")
+    HospitalCandidateDto("HIRA", id, name, address, "종합병원")
 
 fun searchPage(vararg items: HospitalCandidateDto, total: Int = items.size, attribution: String? = "가상 출처 · 기준 2026-01-01") =
     HospitalSearchPageDto(items.toList(), 1, 20, total, attribution)
@@ -130,7 +130,7 @@ class WardCreateViewModelTest {
         m.pick(candidate("h1", name = "가상대학교병원"), "  가상 내과 병동  ")
         m.create()
         val (_, body, _) = api.creates.single()
-        assertEquals(CreateWardBody(HospitalRefBody("TEST_SOURCE", "h1"), "가상 내과 병동"), body)
+        assertEquals(CreateWardBody(HospitalRefBody("HIRA", "h1"), "가상 내과 병동"), body)
     }
 
     @Test fun duplicateTapsWhileCreatingAreIgnored() {
@@ -375,10 +375,18 @@ class WardCreateViewModelTest {
         assertEquals(api.creates[0].first, api.creates[1].first)
     }
 
-    // ---- lifetime: rotation vs re-entry ----
+    @Test fun nameLimitRejects101CharactersButAccepts100() {
+        val m = model()
+        m.pick(); m.setWardName("가".repeat(101)); m.create()
+        assertEquals(WardCreateFailure.NAME_TOO_LONG, m.state.value.createError)
+        assertTrue(api.creates.isEmpty())
+        m.setWardName("가".repeat(100)); m.create()
+        assertEquals(1, api.creates.size)
+    }
 
-    @Test fun recompositionOrRotationKeepsStateBecauseTheSameModelSurvives() {
-        // Rotation recreates the UI, not the ViewModel: state read again is unchanged.
+    // ---- lifetime: reset vs re-entry ----
+
+    @Test fun unchangedRetryAfterLossKeepsTheDraftAndKey() {
         val m = model()
         m.setQuery("가상 병원"); m.search()
         api.searches[0].second.complete(searchPage(candidate("h1")))
@@ -386,13 +394,46 @@ class WardCreateViewModelTest {
         m.create()
         api.creates[0].third.completeExceptionally(networkError())
         val before = m.state.value
-        assertEquals(before, m.state.value)
         assertEquals("가상 병원", before.queryInput)
         assertEquals("h1", before.selected!!.externalId)
         assertEquals("가상 내과 병동", before.wardName)
         assertTrue(before.lostResponse)
         m.create() // and the key survives with it
         assertEquals(api.creates[0].first, api.creates[1].first)
+    }
+
+    @Test fun leavingAfterLostResponseRefreshesBeforeClearingTheWarning() {
+        val m = model()
+        m.pick(); m.create()
+        api.creates[0].third.completeExceptionally(networkError())
+        var refreshed = false
+        m.leave {
+            assertTrue(m.state.value.lostResponse)
+            refreshed = true
+        }
+        assertTrue(refreshed)
+        assertEquals(WardCreateState(), m.state.value)
+        assertEquals(1, api.creates.size)
+    }
+
+    @Test fun newProviderWithRetainedStoreKeepsDraftAndRetryKey() {
+        val store = androidx.lifecycle.ViewModelStore()
+        val factory = object : androidx.lifecycle.ViewModelProvider.Factory {
+            override fun <T : androidx.lifecycle.ViewModel> create(modelClass: Class<T>): T {
+                @Suppress("UNCHECKED_CAST")
+                return model() as T
+            }
+        }
+        val first = androidx.lifecycle.ViewModelProvider(store, factory)["ward-create", WardCreateViewModel::class.java]
+        first.pick(); first.create()
+        api.creates[0].third.completeExceptionally(networkError())
+        val recreated = androidx.lifecycle.ViewModelProvider(store, factory)["ward-create", WardCreateViewModel::class.java]
+        assertSame(first, recreated)
+        assertEquals("가상 내과 병동", recreated.state.value.wardName)
+        assertTrue(recreated.state.value.lostResponse)
+        recreated.create()
+        assertEquals(api.creates[0].first, api.creates[1].first)
+        store.clear()
     }
 
     @Test fun resetOnReentryClearsEverythingIncludingTheKey() {
