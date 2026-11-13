@@ -4,6 +4,9 @@ import com.nurseflow.common.error.BusinessException
 import com.nurseflow.roster.application.model.*
 import com.nurseflow.roster.application.generation.GenerationCoordinator
 import com.nurseflow.roster.application.service.RosterService
+import com.nurseflow.policy.application.model.ShiftTypeCommand
+import com.nurseflow.policy.application.service.ShiftTypeService
+import com.nurseflow.roster.domain.model.ShiftKind
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertThrows
@@ -27,6 +30,7 @@ class RosterServiceIntegrationTest @Autowired constructor(
     private val jdbc: JdbcTemplate,
     private val service: RosterService,
     private val generation: GenerationCoordinator,
+    private val shiftTypes: ShiftTypeService,
 ) {
     private lateinit var wardId: UUID
     private lateinit var nurseId: UUID
@@ -37,7 +41,8 @@ class RosterServiceIntegrationTest @Autowired constructor(
     @BeforeEach
     fun setup() {
         listOf("mutation_replays", "generation_jobs", "approved_absences", "roster_slots", "rosters",
-            "shift_types", "nurses", "ward_memberships", "wards").forEach { jdbc.update("DELETE FROM $it") }
+            "shift_types", "nurses", "ward_memberships", "audit_events", "ward_policy_revisions", "wards")
+            .forEach { jdbc.update("DELETE FROM $it") }
         wardId = UUID.randomUUID()
         nurseId = UUID.randomUUID()
         dayTypeId = UUID.randomUUID()
@@ -70,6 +75,26 @@ class RosterServiceIntegrationTest @Autowired constructor(
         assertTrue(conflict.ruleViolations.filterIsInstance<RuleDiagnostic>().any { it.code == "REST_AFTER_NIGHT" })
         assertEquals("DRAFT", service.getRoster(november.rosterId, admin).status)
         assertThrows(BusinessException::class.java) { service.publishedWard(wardId, "2026-11", admin) }
+    }
+
+    @Test
+    fun `editing a shift type never rewrites a published roster or the rest rules checked against it`() {
+        val october = assign(newRoster("2026-10", LocalDate.parse("2026-10-31"), nightTypeId), nurseId)
+        val november = assign(newRoster("2026-11", LocalDate.parse("2026-11-01"), dayTypeId), nurseId)
+        service.confirm(october.rosterId, tag(october), UUID.randomUUID(), ConfirmRosterRequest(), admin)
+
+        // The published night type is turned into a day type with another code.
+        shiftTypes.update(wardId, nightTypeId, ShiftTypeCommand("N2", "데이로 바뀐 유형", ShiftKind.DAY,
+            java.time.LocalTime.of(7, 0), java.time.LocalTime.of(15, 0), false, null, null, null, null),
+            ShiftTypeService.policyEtag(0), admin)
+
+        val published = service.publishedMine(wardId, "2026-10", "test-nurse").assignments.single()
+        assertEquals("NIGHT", published.shiftType)
+        assertEquals(Instant.parse("2026-10-31T10:00:00Z"), published.startsAt)
+        val conflict = assertThrows(BusinessException::class.java) {
+            service.confirm(november.rosterId, tag(november), UUID.randomUUID(), ConfirmRosterRequest(), admin)
+        }
+        assertTrue(conflict.ruleViolations.filterIsInstance<RuleDiagnostic>().any { it.code == "REST_AFTER_NIGHT" })
     }
 
     @Test
@@ -229,6 +254,26 @@ class RosterServiceIntegrationTest @Autowired constructor(
         val current = service.getRoster(draft.rosterId, admin)
         assertEquals(draft.revision + 1, current.revision)
         assertEquals(nurseId, current.slots.single().assignment?.nurseId)
+    }
+
+    @Test
+    fun `assign retry replays a response saved before slots carried their code and kind`() {
+        val draft = newRoster("2026-11", LocalDate.parse("2026-11-02"), dayTypeId)
+        val key = UUID.randomUUID()
+        val slotId = draft.slots.single().slotId
+        val first = service.assign(draft.rosterId, slotId, tag(draft), key, AssignNurseRequest(nurseId), admin)
+        // The response as an earlier server stored it, and a later type edit the slot's own values do not follow.
+        val saved = jdbc.queryForObject(
+            "SELECT response_json FROM mutation_replays WHERE idempotency_key=?", String::class.java, key)!!
+        val legacy = saved.replace(""""shiftCode":"DAY",""", "").replace(""""shiftKind":"DAY",""", "")
+        assertFalse(legacy.contains("shiftCode") || legacy.contains("shiftKind"), legacy)
+        jdbc.update("UPDATE mutation_replays SET response_json=? WHERE idempotency_key=?", legacy, key)
+        jdbc.update("UPDATE shift_types SET code='D2',kind='EVENING' WHERE shift_type_id=?", dayTypeId)
+
+        val replayed = service.assign(draft.rosterId, slotId, tag(draft), key, AssignNurseRequest(nurseId), admin)
+        assertEquals(first, replayed)
+        assertEquals("DAY" to "DAY", replayed.slots.single().let { it.shiftCode to it.shiftKind })
+        assertEquals(draft.revision + 1, service.getRoster(draft.rosterId, admin).revision)
     }
 
     private fun newRoster(month: String, date: LocalDate, shiftTypeId: UUID): RosterView {

@@ -23,6 +23,7 @@ class GlobalExceptionHandler {
         ruleViolations = ex.ruleViolations,
     )
 
+    /** The transaction rolled back; the key belongs to a request that committed first elsewhere. */
     @ExceptionHandler(HttpMessageNotReadableException::class)
     fun unreadableBody(ex: HttpMessageNotReadableException): ResponseEntity<ApiProblem> {
         val mappingError = generateSequence(ex as Throwable) { it.cause }

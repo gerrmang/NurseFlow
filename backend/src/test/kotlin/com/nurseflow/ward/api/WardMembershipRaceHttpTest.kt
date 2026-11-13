@@ -129,4 +129,60 @@ class WardMembershipRaceHttpTest : ApiTestBase() {
         assertEquals("WARD_ADMIN_REQUIRED", second.code)
         assertEquals(0, jdbc.queryForObject("SELECT COUNT(*) FROM ward_teams WHERE ward_id=?", Int::class.java, wardId))
     }
+
+    @Test
+    fun `an admin revoked while a shift type change waits for the lock cannot finish it`() {
+        val wardId = insertWard("가상 병동")
+        val (a, aToken) = userToken("가상 관리자 A")
+        val (b, bToken) = userToken("가상 관리자 B")
+        grant(wardId, a, "WARD_ADMIN")
+        grant(wardId, b, "WARD_ADMIN")
+        grant(wardId, b, "WARD_MEMBER")
+        gate.arm()
+
+        val revokeB = patch(wardId, b, mapOf("admin" to false), aToken)
+        assertTrue(gate.firstLocked.await(10, TimeUnit.SECONDS), "A should hold the ward lock")
+        val bCreates = CompletableFuture.supplyAsync {
+            http.post("/api/v1/wards/$wardId/shift-types", mapOf(
+                "code" to "N", "displayName" to "나이트", "kind" to "NIGHT",
+                "startTime" to "22:00", "endTime" to "07:00", "spansMidnight" to true,
+            ), bToken, mapOf("Idempotency-Key" to UUID.randomUUID().toString(), "If-Match" to "\"policy-0\""))
+        }
+        assertTrue(gate.secondArrived.await(10, TimeUnit.SECONDS), "B's shift type change should reach the ward lock")
+        gate.release.countDown()
+
+        assertEquals(200, revokeB.get(10, TimeUnit.SECONDS).status)
+        val second = bCreates.get(10, TimeUnit.SECONDS)
+        assertEquals(403, second.status, second.body)
+        assertEquals("WARD_ADMIN_REQUIRED", second.code)
+        assertEquals(0, jdbc.queryForObject("SELECT COUNT(*) FROM shift_types WHERE ward_id=?", Int::class.java, wardId))
+    }
+
+    @Test
+    fun `an admin revoked while a same-key shift type retry waits for the lock gets no replay`() {
+        val wardId = insertWard("가상 병동")
+        val (a, aToken) = userToken("가상 관리자 A")
+        val (b, bToken) = userToken("가상 관리자 B")
+        grant(wardId, a, "WARD_ADMIN")
+        grant(wardId, b, "WARD_ADMIN")
+        grant(wardId, b, "WARD_MEMBER")
+        val key = mapOf("Idempotency-Key" to UUID.randomUUID().toString(), "If-Match" to "\"policy-0\"")
+        val body = mapOf(
+            "code" to "N", "displayName" to "나이트", "kind" to "NIGHT",
+            "startTime" to "22:00", "endTime" to "07:00", "spansMidnight" to true,
+        )
+        assertEquals(201, http.post("/api/v1/wards/$wardId/shift-types", body, bToken, key).status)
+        gate.arm()
+
+        val revokeB = patch(wardId, b, mapOf("admin" to false), aToken)
+        assertTrue(gate.firstLocked.await(10, TimeUnit.SECONDS), "A should hold the ward lock")
+        val bRetries = CompletableFuture.supplyAsync { http.post("/api/v1/wards/$wardId/shift-types", body, bToken, key) }
+        assertTrue(gate.secondArrived.await(10, TimeUnit.SECONDS), "B's retry should reach the ward lock before any replay")
+        gate.release.countDown()
+
+        assertEquals(200, revokeB.get(10, TimeUnit.SECONDS).status)
+        val second = bRetries.get(10, TimeUnit.SECONDS)
+        assertEquals(403, second.status, second.body)
+        assertEquals("WARD_ADMIN_REQUIRED", second.code)
+    }
 }
