@@ -44,3 +44,17 @@ button:disabled { opacity: 0.6; cursor: default; }
 .ward-list li { display: flex; flex-wrap: wrap; gap: 8px; justify-content: space-between; align-items: center; }
 .ward-name { font-weight: 600; overflow-wrap: anywhere; }
 .badge { display: inline-block; padding: 2px 10px; border-radius: 999px; border: 1px solid var(--border); font-size: 0.85rem; margin-left: 4px; }
+a.button { display: inline-block; font: inherit; padding: 10px 16px; border-radius: 8px; border: 1px solid var(--primary); background: var(--primary); color: #fff; text-decoration: none; }
+a.button.secondary { background: transparent; color: var(--primary); }
+button.link { padding: 0; border: 0; background: transparent; color: var(--primary); text-decoration: underline; }
+.field { display: flex; flex-direction: column; gap: 4px; margin: 12px 0; }
+input, select { font: inherit; padding: 10px 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface); color: var(--text); max-width: 100%; }
+.paste-form { display: flex; flex-direction: column; gap: 4px; }
+.summary { display: grid; grid-template-columns: max-content 1fr; gap: 4px 12px; margin: 12px 0; }
+.summary dt { color: var(--muted); }
+.summary dd { margin: 0; overflow-wrap: anywhere; }
+.invite-list { list-style: none; padding: 0; }
+.invite-list li { display: flex; flex-direction: column; gap: 8px; overflow-wrap: anywhere; }
+.confirm p { margin: 0; }
+.highlight { border-color: var(--primary); }
+.card p, .card .error, .card .notice { overflow-wrap: anywhere; }

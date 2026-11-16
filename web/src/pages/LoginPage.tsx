@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Navigate, useLocation } from 'react-router'
 import { asApiError } from '../api/http'
+import { RestoreNotice } from '../invite/InviteWidgets'
 import { cookiesDisabledMessage, errorMessage, noticeMessage } from '../messages'
 import { useSessionManager, useSessionState } from '../session/SessionContext'
 import { SessionStatusView } from './SessionStatusView'
@@ -36,6 +37,7 @@ export function LoginPage() {
       <section className="card">
         <h1>NurseFlow</h1>
         <p>카카오로 로그인하고 내 병동을 확인하세요.</p>
+        <RestoreNotice />
         {notice && !errorCode && (
           <p role="status" className="notice">
             {noticeMessage(notice)}

@@ -481,3 +481,37 @@ describe('session lock', () => {
     expect(order).toEqual(['first:start', 'first:end', 'failing', 'third'])
   })
 })
+
+describe('refresh identity boundary for invitation writes', () => {
+  it.each(['redeem', 'issue', 'reissue', 'revoke'] as const)('aborts %s before transmission when the refresh cookie belongs to another account', async (op) => {
+    const server = new FakeAuthServer()
+    server.accessTtlMs = 10_000
+    const manager = managerFor(server)
+    await signedIn(server, manager)
+    const previous = manager.getState()
+    server.signInAs(USER_B) // Another tab replaced only the cookie; no logout broadcast.
+    const fetchSpy = vi.spyOn(server, 'fetch')
+    const requests = {
+      redeem: () => manager.api.redeemInvitation({ token: 'fictional-invite' }),
+      issue: () => manager.api.createInvitation('ward', { role: 'WARD_ADMIN' }),
+      reissue: () => manager.api.reissueInvitation('ward', 'invite'),
+      revoke: () => manager.api.revokeInvitation('ward', 'invite'),
+    }
+    await expect(requests[op]()).rejects.toMatchObject({ code: 'ABORTED' })
+    expect(fetchSpy).not.toHaveBeenCalled()
+    expect(manager.getState()).toMatchObject({ status: 'signedIn', user: USER_B })
+    expect(manager.getState()).not.toMatchObject({ epoch: 'epoch' in previous ? previous.epoch : -1 })
+  })
+
+  it('never retries a rejected write with a different account after a 401 refresh', async () => {
+    const server = new FakeAuthServer()
+    const manager = managerFor(server)
+    await signedIn(server, manager)
+    server.expireAllAccessTokens()
+    server.signInAs(USER_B)
+    const fetchSpy = vi.spyOn(server, 'fetch')
+    await expect(manager.api.redeemInvitation({ token: 'fictional-invite' })).rejects.toMatchObject({ code: 'ABORTED' })
+    expect(fetchSpy).toHaveBeenCalledTimes(1)
+    expect(manager.getState()).toMatchObject({ status: 'signedIn', user: USER_B })
+  })
+})
