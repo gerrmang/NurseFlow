@@ -7,6 +7,7 @@ import { LoginPage } from './pages/LoginPage'
 import { NotFoundPage } from './pages/NotFoundPage'
 import { SessionStatusView } from './pages/SessionStatusView'
 import { WardsPage } from './pages/WardsPage'
+import { WardCreatePage } from './pages/WardCreatePage'
 import { INVITE_PATH } from './invite/inviteLink'
 import { useSessionState } from './session/SessionContext'
 import { CALLBACK_PATH, type SessionUser } from './session/SessionManager'
@@ -23,6 +24,7 @@ export function AppRoutes() {
         element={<RequireSession>{(user, epoch) => <WardsPage key={`${user.userId}:${epoch}`} user={user} />}</RequireSession>}
       />
       <Route path="/wards/:wardId/invitations" element={<InvitationAdminRoute />} />
+      <Route path="/wards/new" element={<RequireSession>{(user, epoch) => <WardCreatePage key={`${user.userId}:${epoch}`} epoch={epoch} />}</RequireSession>} />
       <Route path="*" element={<NotFoundPage />} />
     </Routes>
   )

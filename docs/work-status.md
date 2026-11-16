@@ -1,5 +1,23 @@
 # 공유 작업 현황
 
+## B4b PR 게시 준비 (2026-11-16, Codex)
+
+- 사용자 요청으로 `feat/web-ward-create`를 커밋·푸시하고 `dev` 대상 일반 PR을 게시한다. 병합·자동 병합·배포는 하지 않는다. `git fetch origin` 후 `origin/dev`와 시작 HEAD가 모두 `9d4799156b13b6214e5e4f116d86b224dd5e1898`, 같은 head의 기존 PR 없음 확인.
+- 직전 구현 이후 앱 코드 변경 없음. 앞 절의 계약·Lint·타입·277개·빌드 및 실제 backend opt-in 1개 통과 결과를 사용하고 불필요하게 재실행하지 않았다. 게시 전 `git diff --check` 통과. PR CI·독립 리뷰는 게시 뒤 확인하며 사전 통과로 기록하지 않는다.
+- 같은 문서의 기존 `로컬 H2 기존 DB 복구` 절과 루트 DB·trace는 관련 없는 사용자 변경이므로 커밋 대상에서 제외하고 작업 폴더에 보존한다. 인계는 같은 브랜치에서 PR 리뷰 대응이며 다음 기능 코드는 이 PR에 섞지 않는다.
+- 다음 웹 기능 후보는 B5b(팀·간호사·구성원 관리, 선행 A5·A6·B2)와 B9b(공개 근무표 조회, 선행 B2)다. 선행 커밋은 현재 dev에 포함된다. B4b 병합 없이 dev 기반 별도 기능 브랜치에서 착수할 수 있으나 이번 요청에서는 안내만 한다. B7b 전체는 A9·A10, B6는 A7을 기다린다.
+
+## B4b 웹 병원 검색·병동 생성 (2026-11-16, Codex)
+
+- 사용자 요청으로 기존 `feat/web-ward-create`의 미커밋 B4b 초안을 이어 완성했다. 시작 HEAD `9d47991`은 로컬 `origin/dev`와 동일하다. 같은 공유 worktree `C:\Users\jjang\IdeaProjects\NurseFlow`를 사용했고 새 브랜치·worktree를 만들지 않았다. 아래 기존 로컬 DB 복구 기록과 루트 DB·trace는 보존했다.
+- 구현: 내 병동→`/wards/new`, 실행형 병원 검색·주소/출처·페이지·빈 결과/장애 안내, 병원 선택·병동명 1~100자·Asia/Seoul 생성, 설정 안내 골격과 초대 관리 연결. 요청 중 중복 전송 차단, 결과 미확인 입력 잠금과 동일 키/본문 수동 재시도, SPA 목록 왕복 보존, 확인 후 새 요청, 세션 경계 분리. API/DB·서버 설정 계약 변경 없음. 서버가 상한·중복·권한을 판정한다.
+- 최종 Windows `web`: `npm run api:check`, `npm run lint`, `npm run typecheck`, `npm test -- --run`, `npm run build` 모두 성공. 테스트 **10파일 277개 통과**, 별도 실서버 opt-in **1개 기본 건너뜀**, 실패 0. JS gzip 97.34 kB. 초기 타입 검사에서 초안 timeZone 누락과 새 서버 테스트의 Node 타입 참조 누락을 수정했고 최종 전체 명령을 다시 통과했다. `git diff --check` 통과.
+- 실제 backend(JDK 21, 18091, 별도 메모리 DB)·동봉 목록 79,899행과 가상 OIDC(18090)·웹(5174)로 브라우저 검증: 로그인·빈 목록, 빈 검색/출처, 365 검색 840곳, 동명 병원 주소 선택, 가상 병동 생성·설정 안내, 재조회 목록의 관리자/병원명, 초대 관리 연결 성공. 스크린샷으로 성공 화면 레이아웃 확인. 최초 샌드박스 소켓 제한은 검증용 프로세스 권한을 분리해 해결했고 보안 설정은 바꾸지 않았다.
+- `NURSEFLOW_B4B_E2E=1 npm test -- --run src/ward/WardCreationFlow.server.test.ts`에 해당하는 PowerShell 환경변수 설정 후 실제 연동 검사 **1개 통과**. 실제 flow/API에 전송 전 오류·서버 201 후 응답 폐기를 주입해 동일 키/본문 재시도, 병동 각각 1개·총 2개 증가, 같은 키 재생, 새 키 중복과 다른 본문 키 충돌 409를 확인했다. 실제 물리망 단절·실제 Kakao 검증과 구분한다.
+- 미검증: 실제 Kakao, 모바일 크기, 실제 종료 경고, 실서비스 검색 장애/미적재/계정 상한, Android·backend 전체 회귀(웹 기능 단위이므로 미실행), 독립 재리뷰·GitHub CI. 오류 경로 목업 테스트와 구분한다. 원격 최신 상태·PR·보호 설정도 이번에 조회하지 않았다. 상세·재현: `web/B4b-verification.md`.
+- 배포 없음. 웹 정적 빌드에만 영향, 되돌리기는 B4b 웹 변경을 이전 버전으로 복원한다. 커밋·푸시·PR·병합 없음. 검증용 세 프로세스는 종료했고 5174/18090/18091 LISTENING 없음 확인. 가상 데이터는 메모리 DB와 함께 소멸했다.
+- 인계: 같은 `feat/web-ward-create`, HEAD `9d47991`의 미커밋 구현·테스트·문서에서 이어간다. 서버·OpenAPI diff 없음. 다음 단계는 변경 전체의 독립 리뷰와 PR/CI이며 기존 사용자 DB 복구 기록을 B4b 커밋에 섞지 않는다.
+
 ## 갱신 규칙
 
 - Claude와 Codex는 기능 단위, PR, 리뷰를 마친 뒤 같은 작업 브랜치에서 이 문서를 갱신한다.
@@ -27,6 +45,7 @@
 | B3a Android 초대 관리·가입 | `feat/android-invite-join` | [#38](https://github.com/gerrmang/NurseFlow/pull/38) | `dev` 병합 완료 (2026-11-11, `e4ca9bf`). GitHub merged=true 확인 | 수정 head `691312c`: 단위 76개·빌드·Lint 성공, CI Backend·Android 성공. 기기 실행 제한은 기존 기록 유지 | 기존 알려진 제한은 android/B3a-verification.md 참조 |
 | B4a Android 병원 검색·병동 생성 | `feat/android-ward-create` (`405a8e5`에 dev `b352759` 통합) | [#44](https://github.com/gerrmang/NurseFlow/pull/44) (Ready) | 구현·목업·로컬 실서버 핵심 흐름 검증 완료. 기존 Android 17 콜드 부팅 후 실제 Kakao 로그인·검색·생성·목록·초대 관리 연결 확인. Espresso 3.7.0 명시 의존성으로 UI 테스트 오류 수정 | 2026-11-12 단위 140개(실패·오류·건너뜀 0, 재실행), Compose UI 2개 통과(직접 instrumentation), 테스트 APK·Lint 성공(오류 0·경고 35). 실제 서버 응답 유실 (a)·(b) 재시도·키 재생·각 병동 1개 확인. [B4a 검증 기록](../android/B4a-verification.md) | 상한·키 충돌·미적재/외부 장애·유실 뒤 입력 변경 등의 실서버 검사는 미실행. 운영·전체 기기 회귀·CI 미검증 |
 | B3b 웹 초대 관리·가입 | `feat/web-invite-join` (`b352759` 기반 구현 `ff63354`) | [#45](https://github.com/gerrmang/NurseFlow/pull/45) (Ready) | 구현·코드 재리뷰 완료. 실제 Kakao 1계정 로그인, 가상 OIDC 3사용자+실제 backend의 발급·재발급·철회·간호사/관리자 가입을 브라우저에서 확인. 실제 Kakao 2계정 완료 조건은 미충족 | 2026-11-12 Windows 계약·Lint·타입·테스트 8파일 241개·빌드 성공. 실제 복사→붙여넣기·URL 정리·390×844 화면 확인. 개발용 재현 도구 추가. [B3b 검증 기록](../web/B3b-verification.md) | 두 번째 실제 Kakao 계정 없음. 실제 2계정 가입·저장소 값/Referer·실제 만료/응답 유실 등과 최종 CI는 미검증 |
+| B4b 웹 병원 검색·병동 생성 | `feat/web-ward-create` | 미개설 | 미커밋 구현·목업·실제 backend/가상 OIDC 브라우저 핵심 흐름 검증 완료 | 2026-11-16 계약·Lint·타입·277개·빌드 통과, 별도 실제 backend 응답 유실/재시도 1개 통과. [B4b 검증 기록](../web/B4b-verification.md) | 독립 리뷰·CI·실제 Kakao·모바일 크기 미검증 |
 | 에이전트 지침 정합성 | `docs/agent-guidance-alignment` | #32 | `dev` 병합 완료 (2026-11-09, 일반 병합 커밋 `ab8347d`. 스쿼시 원칙에서 벗어남) | `git diff --check` 통과. GitHub Actions `Verify` PR 실행 성공, `dev` push 실행 성공 | 없음 |
 | A3 병원 검색 API | `feat/hospital-search` | #35 | `dev` 병합 완료 (2026-11-10, 스쿼시 병합 커밋 `23af850`) | 병합 전 `./gradlew test --offline` 134건 통과, CI 통과. 실제 2026.9. 파일 79,899곳 적재 0.7초, 검색 15~40ms | 없음 |
 | A4 병동 생성 | `feat/ward-self-create` | #36 | `dev` 병합 완료 (2026-11-10, 스쿼시 병합 커밋 `6a2cf29`) | 2026-11-10 `./gradlew test --offline` 138건 통과(건너뜀 4). 같은 키 동시 요청 테스트는 중복 키 처리 제거 변이 3/3 실패로 검출력 확인. 이전 스키마 H2에 schema.sql 두 번 적용 테스트 통과 | 없음 |

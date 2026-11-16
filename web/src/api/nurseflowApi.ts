@@ -3,6 +3,8 @@ import type {
   CreateInvitationRequest,
   CreatedInvitation,
   CurrentUser,
+  CreateWardRequest,
+  HospitalSearchPage,
   InvitationList,
   InvitationPreview,
   RedeemInvitationRequest,
@@ -17,6 +19,8 @@ export type AuthorizedFetch = (path: string, init?: RequestInit) => Promise<Resp
 export interface NurseFlowApi {
   getMe(): Promise<CurrentUser>
   getWards(): Promise<WardList>
+  searchHospitals(query: string, page: number): Promise<HospitalSearchPage>
+  createWard(request: CreateWardRequest, key: string): Promise<WardMembership>
   /** Admin: invitations of a ward, newest first. The list never contains tokens. */
   listInvitations(wardId: string): Promise<InvitationList>
   /** Admin: issues a 24h single-use invitation. The raw token is only in this response. */
@@ -43,6 +47,11 @@ export function createNurseFlowApi(authorizedFetch: AuthorizedFetch): NurseFlowA
   return {
     getMe: async () => readJson(await authorizedFetch('/me')),
     getWards: async () => readJson(await authorizedFetch('/wards')),
+    searchHospitals: async (query, page) =>
+      readJson(await authorizedFetch(`/hospitals/search?${new URLSearchParams({ query, page: String(page), size: '10' })}`)),
+    createWard: async (request, key) => readJson(await authorizedFetch('/wards', {
+      ...jsonInit('POST', request), headers: { 'Content-Type': 'application/json', 'Idempotency-Key': key },
+    })),
     listInvitations: async (wardId) => readJson(await authorizedFetch(`${ward(wardId)}/invitations`)),
     createInvitation: async (wardId, request) =>
       readJson(await authorizedFetch(`${ward(wardId)}/invitations`, jsonInit('POST', request))),
