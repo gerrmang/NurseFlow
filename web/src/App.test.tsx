@@ -4,6 +4,8 @@ import { StrictMode } from 'react'
 import { MemoryRouter, useLocation } from 'react-router'
 import { ApiError } from './api/http'
 import { AppRoutes } from './App'
+import { InviteProvider } from './invite/InviteContext'
+import { PendingInviteStore } from './invite/pendingInvite'
 import { SessionProvider } from './session/SessionContext'
 import { SessionManager } from './session/SessionManager'
 import { createInTabLock } from './session/sessionLock'
@@ -18,6 +20,7 @@ function setup(path: string, configure?: (server: FakeAuthServer) => void) {
   const server = new FakeAuthServer()
   configure?.(server)
   const redirect = vi.fn()
+  const invites = new PendingInviteStore({ storage: () => window.sessionStorage })
   const manager = new SessionManager({
     auth: server.auth,
     lock: createInTabLock(),
@@ -31,10 +34,12 @@ function setup(path: string, configure?: (server: FakeAuthServer) => void) {
   render(
     <StrictMode>
       <SessionProvider manager={manager}>
-        <MemoryRouter initialEntries={[path]}>
-          <AppRoutes />
-          <LocationProbe />
-        </MemoryRouter>
+        <InviteProvider store={invites}>
+          <MemoryRouter initialEntries={[path]}>
+            <AppRoutes />
+            <LocationProbe />
+          </MemoryRouter>
+        </InviteProvider>
       </SessionProvider>
     </StrictMode>,
   )

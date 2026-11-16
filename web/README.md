@@ -1,6 +1,6 @@
 # NurseFlow 웹
 
-React + TypeScript + Vite로 만든 SPA입니다. 현재 범위(B2)는 Kakao 로그인, 쿠키 기반 세션 복원·갱신·로그아웃, 내 병동 목록과 역할 표시입니다. 초대 가입(B3b), 병동 생성(B4b), 공개 근무표(B9b), 관리자 화면은 아직 없습니다.
+React + TypeScript + Vite로 만든 SPA입니다. 현재 범위는 Kakao 로그인, 쿠키 기반 세션 복원·갱신·로그아웃, 내 병동 목록과 역할 표시(B2), 관리자 초대 관리와 초대 링크 가입(B3b)입니다. 병동 생성(B4b), 구성원 관리(B5b), 공개 근무표(B9b)는 아직 없습니다.
 
 ## 구조
 
@@ -11,7 +11,8 @@ React + TypeScript + Vite로 만든 SPA입니다. 현재 범위(B2)는 Kakao 로
 | `src/api/authApi.ts` | `/api/v1/auth/web/*` 호출. 항상 `X-NurseFlow-Client: web`과 `credentials: 'same-origin'`을 보냅니다 |
 | `src/session/SessionManager.ts` | 세션 상태 기계. access token은 메모리에만 둡니다 |
 | `src/session/sessionLock.ts` | 쿠키를 바꾸는 호출(refresh, 코드 교환, logout)을 직렬화하는 공통 락 `nurseflow-web-session` |
-| `src/pages/*` | 로그인, Kakao 콜백, 내 병동, 404 화면 |
+| `src/pages/*` | 로그인, Kakao 콜백, 내 병동, 초대 가입(`JoinInvitePage`), 초대 관리(`InvitationAdminPage`), 404 화면 |
+| `src/invite/*` | 초대 링크 만들기·읽기(`inviteLink.ts`), 초대 상태와 로그인 왕복 저장(`pendingInvite.ts`), 콜백 이동 결정(`callbackDestination.ts`), 서버 코드별 안내 문구(`invitationMessages.ts`) |
 | `src/messages.ts` | 오류 코드와 안내 문구 표 |
 
 ## 세션 규칙
@@ -19,7 +20,8 @@ React + TypeScript + Vite로 만든 SPA입니다. 현재 범위(B2)는 Kakao 로
 - **토큰 보관**
   - access token은 `SessionManager`의 메모리에만 있습니다.
   - refresh token은 서버가 HttpOnly·Secure·SameSite=Strict 쿠키(`nf_refresh`, `Path=/api/v1/auth/web`)로만 다룹니다.
-  - localStorage, sessionStorage, IndexedDB에는 아무것도 저장하지 않습니다.
+  - localStorage, sessionStorage, IndexedDB에는 인증 토큰이나 사용자 정보를 저장하지 않습니다.
+  - **유일한 예외**는 초대 가입의 로그인 왕복용 sessionStorage 항목 하나입니다(아래 "초대 링크와 가입 (B3b)").
 - **state·nonce**: 서버가 만듭니다. 웹은 `POST /auth/web/kakao/authorization`이 돌려준 `authorizationUrl`로 이동하기만 합니다.
 - **공통 세션 락**
   - refresh, 코드 교환, logout은 모두 Web Locks API의 `nurseflow-web-session` 락 안에서만 실행합니다. 이 API가 없는 브라우저에서는 탭 안의 대기열로 대신합니다.
@@ -43,6 +45,44 @@ React + TypeScript + Vite로 만든 SPA입니다. 현재 범위(B2)는 Kakao 로
   3. 성공하면 로그인 화면으로 갑니다. 실패하면 `LogoutFailed` 화면에서 재시도할 수 있습니다.
   - 시작 시 `BroadcastChannel`(`nurseflow-web-logout`)로 로그아웃 신호만 보내 다른 탭의 access token·화면과 진행 중 응답을 즉시 정리합니다. 다른 탭은 서버 logout을 중복 호출하지 않습니다. 사용자 ID나 토큰을 채널에 보내지 않습니다.
   - BroadcastChannel 미지원·차단 환경에서는 다음 refresh 실패 전까지 다른 탭에 기존 access token과 화면이 남을 수 있습니다. 전파는 서버 logout 성공의 대체가 아니며, 서버 logout이 실패하면 해당 탭에서 재시도해야 합니다.
+
+## 초대 링크와 가입 (B3b)
+
+### 웹 초대 링크
+
+- 관리자가 만든 직후 화면에서 복사하는 링크는 **현재 웹 출처**로 직접 만듭니다: `${window.location.origin}/invite#token=${encodeURIComponent(token)}`.
+  - 서버 응답의 `inviteUrl`은 웹 링크에 쓰지 않습니다. Android 개발 스킴(`nurseflow://invite#token=`)이거나 없을 수 있습니다.
+  - 운영 도메인은 정하지 않았습니다. 운영 HTTPS App Links(웹·앱 링크 통합)는 후속 작업입니다(기능 분해 §7 #6).
+- "앱 붙여넣기용 복사"는 Android 앱이 받는 `nurseflow://invite#token=…` 문구를 복사합니다(개발 단계 결합).
+- 원문 토큰과 링크는 화면에 상시 표시하지 않습니다. 클립보드 복사가 실패할 때만 읽기 전용 입력란에 보여 줍니다. 토큰은 발급·재발급 응답에서 한 번만 받으며, 저장소·로그·오류에 남기지 않습니다. 패널을 닫거나 화면을 벗어나면 사라집니다.
+- 출처가 `localhost`/`127.0.0.1`이면 "이 PC에서만 열린다"는 안내를 보입니다. 다른 기기에서 열려면 그 기기가 접근할 수 있는 주소(HTTPS 호스트)에서 웹을 제공해야 합니다.
+
+### 링크 읽기와 토큰 보호
+
+- 토큰은 URL fragment(`#token=`)로만 받습니다. 형식은 43자 `[A-Za-z0-9_-]`이고 그 밖의 형식(추가 파라미터 포함)은 거절합니다.
+- 읽기와 제거를 분리합니다. 렌더 중에는 `location.hash`를 읽기만 하고, 효과 단계에서 초대를 등록(같은 토큰이면 멱등)하고 주소의 fragment를 `replace`로 제거합니다. React StrictMode의 이중 실행에서도 초대는 하나만 등록됩니다.
+- 토큰은 router state, URL, 로그, 오류 객체에 넣지 않습니다. 미리보기·가입 요청은 본문으로만 보냅니다. `index.html`의 `no-referrer`와 fragment 특성으로 Referer·서버 접근 로그에 토큰이 남지 않습니다.
+- 붙여넣기는 이 출처의 `/invite#token=…`, `nurseflow://invite#token=…`, 43자 토큰 원문만 받습니다. 읽은 직후 입력란을 비웁니다.
+
+### 로그인 왕복과 sessionStorage 예외
+
+미리보기·가입은 로그인이 필요하고, Kakao 로그인은 페이지 전체 이동이라 메모리의 초대가 사라집니다. 그래서 다음 **예외 하나**를 승인받아 둡니다(2026-11-11).
+
+- **저장 내용**: 키 `nurseflow.inviteReturn.v1`에 `{v, token, expiresAt}`만. 초대 토큰 1개와 만료 시각뿐입니다. 인증 access/refresh 토큰의 정책은 바뀌지 않습니다.
+- **저장 시점**: 로그아웃 상태의 초대 화면에서 사용자가 로그인 버튼을 누를 때만. 저장에 실패하면 "로그인한 뒤 링크를 다시 열거나 붙여넣어 달라"고 안내하고, 사용자가 "그래도 로그인"을 눌러야 이동합니다.
+- **읽기**: Kakao 콜백 화면이 앱 로드당 한 번만 읽습니다(첫 결과를 기억해 두 번째 호출이 덮어쓰지 않음). 순서는 읽기 → **삭제** → 형식·만료 검증 → 복원입니다. 삭제에 실패하면 읽은 것으로 보지 않고 자동 복원하지 않으며 링크 재진입·붙여넣기 안내로 전환합니다.
+- **유효기간 10분은 논리적 만료**입니다. 읽을 때 `expiresAt`과 10분 한도를 검증해 거절할 뿐, 그 시각에 항목이 물리적으로 지워진다고 보장하지 않습니다. 탭이 닫히거나 삭제가 실패하면 항목이 남을 수 있고, 콜백이 아닌 경로로 앱이 시작될 때(최선 노력)와 다음 읽기에서 정리됩니다.
+- **정리**: 초대 취소, 가입 완료, 로그아웃, 세션 종료·만료, 다른 탭의 로그아웃에서 메모리와 항목을 지웁니다(삭제 실패는 무시하되 메모리는 항상 지움).
+- **계정**: 로그아웃 상태에서 받은 초대는 **첫 로그인한 계정이 이어받습니다**(정상 복귀). 로그인된 뒤에는 그 계정(userId·epoch)에 묶이고, 다른 계정·새 세션이 되면 폐기합니다.
+- **복구**: 저장 실패·읽기 실패·삭제 실패·만료·값 손상 때는 초대를 복원하지 않고 "받은 초대 링크를 다시 열거나 붙여넣어 주세요"를 보입니다.
+- **알려진 제한**: 공용 PC에서 로그인 이동 중 탭을 닫으면 최대 10분(논리적) 분량의 초대 토큰이 그 탭의 sessionStorage에 남을 수 있습니다. 탭을 닫으면 sessionStorage는 브라우저가 지웁니다.
+
+### 화면 수명과 쓰기 요청
+
+- 가입 화면은 `key=userId:epoch:seq`로 그려 계정·세션·초대가 바뀌면 처음부터 시작하고, 이전 요청의 늦은 응답은 버립니다. 링크를 여러 개 열면 마지막 링크가 이전 것을 대체하지만 가입 요청이 진행 중일 때는 대체하지 않습니다.
+- 쓰기(발급·재발급·철회·가입)는 **자동 재시도하지 않습니다**. 예외는 기존 `authorizedFetch`의 "401이면 갱신 후 한 번 다시 전송"뿐이며, 서버가 처리하기 전에 거절한 경우입니다. 쓰기는 한 번에 하나이고 진행 중에는 버튼을 막습니다(렌더 전 연속 클릭도 ref로 막음).
+- 응답을 받지 못한 쓰기는 결과를 단정하지 않습니다. 관리자 화면은 쓰기 뒤 목록을 다시 불러오고, **다시 불러오기에 성공했을 때만** "목록을 새로 불러왔어요"라고 합니다. 가입은 "결과 확인"으로 `/wards`를 조회하고, 병동이 없으면 미리보기를 다시 조회해 초대가 유효할 때만 수동 가입을 제공합니다. 조회가 실패하거나 결과가 충돌하면 "결과 미확인" 상태를 유지합니다.
+- 서버의 `detail`과 사용자 입력은 화면에 그대로 쓰지 않습니다. 안내 문구는 `src/invite/invitationMessages.ts`의 서버 `code` 기준 표뿐입니다.
 
 ## 로컬 실행
 
@@ -106,7 +146,7 @@ API와 웹은 **같은 출처**에서 제공해야 합니다. 이유는 다음�
 리버스 프록시 하나가 HTTPS를 종료합니다. 경로별 처리는 다음과 같습니다.
 
 - `/api/v1/*` → Spring(8080)
-- 나머지 → `web/dist` 정적 파일. 파일이 없으면 `index.html`로 응답합니다(SPA 폴백). 그래야 `/wards`와 `/auth/kakao/callback`을 새로고침하거나 직접 열어도 동작합니다.
+- 나머지 → `web/dist` 정적 파일. 파일이 없으면 `index.html`로 응답합니다(SPA 폴백). 그래야 `/wards`, `/invite`, `/wards/<id>/invitations`, `/auth/kakao/callback`을 새로고침하거나 직접 열어도 동작합니다. 초대 링크(`/invite#token=…`)의 fragment는 서버로 전송되지 않으므로 서버 경로는 `/invite`입니다.
 
 캐시 정책:
 
