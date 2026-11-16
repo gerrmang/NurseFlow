@@ -58,3 +58,16 @@ input, select { font: inherit; padding: 10px 12px; border-radius: 8px; border: 1
 .confirm p { margin: 0; }
 .highlight { border-color: var(--primary); }
 .card p, .card .error, .card .notice { overflow-wrap: anywhere; }
+.staff-page { max-width: 1040px; }
+.admin-fields { border: 0; padding: 0; margin: 0; min-width: 0; }
+.staff-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr)); gap: 0 16px; }
+.team-editor { padding: 12px 0; border-top: 1px solid var(--border); margin-top: 16px; }
+.check { display: flex; gap: 8px; align-items: center; margin: 12px 0; }
+.staff-list, .history-list { padding: 0; list-style: none; }
+.staff-list li, .history-list li { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; padding: 12px 0; border-bottom: 1px solid var(--border); overflow-wrap: anywhere; }
+.order-list { padding-left: 28px; }
+.order-list li { padding: 10px; margin: 8px 0; border: 1px solid var(--border); border-radius: 8px; overflow-wrap: anywhere; }
+.order-list li[draggable="true"] { cursor: grab; }
+.order-list .actions { margin-top: 4px; }
+textarea { font: inherit; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); color: var(--text); min-height: 90px; resize: vertical; max-width: 100%; }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
