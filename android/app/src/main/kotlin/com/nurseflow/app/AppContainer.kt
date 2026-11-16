@@ -18,6 +18,7 @@ class AppContainer(
     val session = SessionManager(ApiFactory.authApi(apiBaseUrl), tokenStore)
     val api = ApiFactory.nurseFlowApi(apiBaseUrl, session)
     val invitationApi = ApiFactory.invitationApi(apiBaseUrl, session)
+    val wardCreationApi = ApiFactory.wardCreationApi(apiBaseUrl, session)
     /** Invitation link being handled; memory only, never persisted. */
     val invites = PendingInvitationStore()
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)

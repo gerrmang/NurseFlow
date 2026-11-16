@@ -17,6 +17,7 @@ fun WardListScreen(
     onSelect: (MembershipDto) -> Unit,
     onManageInvitations: (MembershipDto) -> Unit,
     onPasteInvitation: () -> Unit,
+    onCreateWard: () -> Unit,
     onLogout: () -> Unit,
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -29,6 +30,7 @@ fun WardListScreen(
             TextButton(onClick = viewModel::reload) { Text("새로고침") }
             TextButton(onClick = onPasteInvitation) { Text("초대 링크 붙여넣기") }
         }
+        OutlinedButton(onClick = onCreateWard) { Text("병동 만들기") }
         when (val current = state) {
             WardsUiState.Loading -> CircularProgressIndicator()
             is WardsUiState.Failed -> {
@@ -36,12 +38,13 @@ fun WardListScreen(
                 Button(onClick = viewModel::reload) { Text("다시 시도") }
             }
             is WardsUiState.Loaded -> LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                item { Text("${current.displayName}님, 안녕하세요.") }
+                if (current.displayName.isNotBlank()) item { Text("${current.displayName}님, 안녕하세요.") }
                 if (current.wards.isEmpty()) item {
                     Card {
                         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                             Text("아직 소속된 병동이 없어요.")
-                            Text("병동 만들기: 관리자는 병원을 선택하고 새 병동을 만들 수 있어요. 이 앱의 병동 생성 화면은 준비 중이에요.")
+                            Text("병동 만들기: 공식 병원 목록에서 병원을 고르고 새 병동을 만들면 내가 관리자가 돼요.")
+                            Button(onClick = onCreateWard) { Text("병동 만들기") }
                             Text("초대 수락: 병동 관리자에게 받은 초대 링크를 열거나, 위의 '초대 링크 붙여넣기'로 입력해 주세요.")
                         }
                     }

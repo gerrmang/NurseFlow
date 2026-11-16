@@ -25,6 +25,10 @@ import com.nurseflow.app.feature.roster.PublishedRosterViewModel
 import com.nurseflow.app.feature.ward.WardListScreen
 import com.nurseflow.app.feature.ward.WardsUiState
 import com.nurseflow.app.feature.ward.WardsViewModel
+import com.nurseflow.app.feature.ward.create.IntentPhase
+import com.nurseflow.app.feature.ward.create.WardCreateScreen
+import com.nurseflow.app.feature.ward.create.WardCreateViewModel
+import com.nurseflow.app.feature.ward.create.resolveCreateIntent
 
 @Composable
 fun NurseFlowRoot(container: AppContainer) {
@@ -40,6 +44,21 @@ fun NurseFlowRoot(container: AppContainer) {
     var adminWardId by rememberSaveable(sessionKey) { mutableStateOf<String?>(null) }
     var wardEntry by rememberSaveable(sessionKey) { mutableStateOf(0) }
     var pasting by remember(sessionKey) { mutableStateOf(false) }
+    var creatingWard by rememberSaveable(sessionKey) { mutableStateOf(false) }
+    // "Log in, then create a ward": set only from the login screen and consumed (or dropped) on the
+    // first sign-in, so it is deliberately independent of the session key. See resolveCreateIntent.
+    var createAfterLogin by rememberSaveable { mutableStateOf(false) }
+    val intentPhase = when (session) {
+        SessionState.SignedOut, SessionState.Restoring -> IntentPhase.WAITING
+        is SessionState.SignedIn -> IntentPhase.SIGNED_IN
+        else -> IntentPhase.ENDED
+    }
+    LaunchedEffect(intentPhase, createAfterLogin) {
+        // A failed logout/restore means the login the intent belonged to did not happen.
+        if (resolveCreateIntent(createAfterLogin, intentPhase, invitationPending = false).clear && intentPhase != IntentPhase.SIGNED_IN) {
+            createAfterLogin = false
+        }
+    }
     Column(Modifier.fillMaxSize().safeDrawingPadding()) {
         if (demo) {
             BackHandler { demo = false }
@@ -55,6 +74,9 @@ fun NurseFlowRoot(container: AppContainer) {
                             viewModel { LoginViewModel(container.session, container.kakao) },
                             invitationWaiting = pendingInvite != null,
                             onCancelInvitation = { container.invites.clear() },
+                            createIntentArmed = createAfterLogin,
+                            onCreateWard = { createAfterLogin = true },
+                            onCancelCreateIntent = { createAfterLogin = false },
                         )
                         SessionState.LogoutFailed -> Column(Modifier.padding(24.dp)) {
                             Text("저장된 로그인 정보를 지우지 못했어요. 로그아웃을 다시 시도해 주세요.")
@@ -72,6 +94,22 @@ fun NurseFlowRoot(container: AppContainer) {
                             val ward = loaded?.firstOrNull { it.wardId == selectedWardId }
                             val adminWard = loaded?.firstOrNull { it.wardId == adminWardId && it.isAdmin }
                             // Created for the whole session so a newer link replaces, not duplicates, the flow.
+                            // One fixed-key model; reset() on entry and exit means flows never pile up in the store.
+                            val createModel = viewModel(key = "ward-create") {
+                                WardCreateViewModel(
+                                    container.wardCreationApi,
+                                    onSessionInvalid = { container.logout() },
+                                    onCreated = wardsModel::onCreated,
+                                )
+                            }
+                            val createState by createModel.state.collectAsStateWithLifecycle()
+                            val enterCreate = { createModel.reset(); creatingWard = true }
+                            val leaveCreate = { createModel.leave { wardsModel.reload(silent = true) }; creatingWard = false }
+                            LaunchedEffect(createAfterLogin, pendingInvite != null) {
+                                val resolution = resolveCreateIntent(createAfterLogin, IntentPhase.SIGNED_IN, pendingInvite != null)
+                                if (resolution.clear) createAfterLogin = false
+                                if (resolution.open) enterCreate()
+                            }
                             val join = viewModel(key = "join") {
                                 JoinInvitationViewModel(
                                     container.invitationApi, container.api, container.invites,
@@ -88,6 +126,16 @@ fun NurseFlowRoot(container: AppContainer) {
                                         selectedWardId = wardId
                                         wardEntry += 1
                                     }
+                                }
+                                creatingWard -> {
+                                    BackHandler { if (!createState.creating) leaveCreate() }
+                                    WardCreateScreen(
+                                        createModel,
+                                        onClose = { leaveCreate() },
+                                        onShowWardList = { leaveCreate() },
+                                        onOpenRoster = { leaveCreate(); adminWardId = null; selectedWardId = it.wardId; wardEntry += 1 },
+                                        onOpenInvites = { leaveCreate(); adminWardId = it.wardId },
+                                    )
                                 }
                                 adminWard != null -> {
                                     BackHandler { adminWardId = null }
@@ -109,6 +157,7 @@ fun NurseFlowRoot(container: AppContainer) {
                                     onSelect = { selectedWardId = it.wardId; wardEntry += 1 },
                                     onManageInvitations = { adminWardId = it.wardId },
                                     onPasteInvitation = { pasting = true },
+                                    onCreateWard = enterCreate,
                                     onLogout = container::logout,
                                 )
                                 else -> {
