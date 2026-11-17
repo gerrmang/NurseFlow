@@ -108,6 +108,7 @@ export function WardsPage({ user }: { user: SessionUser }) {
                 {ward.hospitalName && <div className="notice">{ward.hospitalName}</div>}
               </div>
               <span className="roles">
+                <Link className="button secondary" to={`/wards/${encodeURIComponent(ward.wardId)}/published-roster`}>공개 근무표</Link>
                 {ward.roles.map((role) => (
                   <span key={role} className="badge">
                     {roleLabel(role)}
