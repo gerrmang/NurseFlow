@@ -173,14 +173,42 @@ class RosterJdbcRepository(
      * A record linked to an account is rostered only while that account is an active WARD_MEMBER and not an
      * active admin (admins are never rostered; a deactivated member has no ward access). Membership and staff
      * rules keep such records inactive; this predicate also covers data from before those rules, so candidates,
-     * manual and automatic assignment, confirmation and staffing counts agree. Records without an account
-     * (fictional demo staff) keep their current behaviour until A7 decides demo mode.
+     * manual and automatic assignment, confirmation and staffing counts agree. An unlinked fictional record
+     * requires the ward's explicit demo mode.
      */
-    private val rosterable = """nurses.active=TRUE AND (nurses.subject IS NULL OR (
+    private val rosterable = """nurses.active=TRUE AND ((nurses.subject IS NULL AND EXISTS (
+        SELECT 1 FROM wards w WHERE w.ward_id=nurses.ward_id AND w.demo_mode=TRUE)) OR (
         EXISTS (SELECT 1 FROM ward_memberships m WHERE m.ward_id=nurses.ward_id AND m.subject=nurses.subject
             AND m.role='WARD_MEMBER' AND m.active=TRUE)
         AND NOT EXISTS (SELECT 1 FROM ward_memberships m WHERE m.ward_id=nurses.ward_id AND m.subject=nurses.subject
             AND m.role='WARD_ADMIN' AND m.active=TRUE)))"""
+
+    fun demoMode(wardId: UUID): Boolean? = jdbc.query(
+        "SELECT demo_mode FROM wards WHERE ward_id=?", { rs, _ -> rs.getBoolean(1) }, wardId,
+    ).firstOrNull()
+
+    fun setDemoMode(wardId: UUID, enabled: Boolean) {
+        jdbc.update("UPDATE wards SET demo_mode=? WHERE ward_id=?", enabled, wardId)
+    }
+
+    fun invalidateDraftsForEligibility(wardId: UUID) {
+        jdbc.update("UPDATE rosters SET revision=revision+1,needs_revalidation=TRUE WHERE ward_id=? AND status='DRAFT'", wardId)
+    }
+
+    data class EligibilityRow(val id: UUID, val displayName: String, val staffActive: Boolean, val subject: String?,
+        val memberActive: Boolean, val adminActive: Boolean, val eligible: Boolean)
+
+    fun eligibilityRows(wardId: UUID): List<EligibilityRow> = jdbc.query(
+        """SELECT nurses.nurse_id,nurses.display_name,nurses.active,nurses.subject,
+                  EXISTS(SELECT 1 FROM ward_memberships m WHERE m.ward_id=nurses.ward_id AND m.subject=nurses.subject
+                      AND m.role='WARD_MEMBER' AND m.active=TRUE) AS member_active,
+                  EXISTS(SELECT 1 FROM ward_memberships m WHERE m.ward_id=nurses.ward_id AND m.subject=nurses.subject
+                      AND m.role='WARD_ADMIN' AND m.active=TRUE) AS admin_active,
+                  ($rosterable) AS eligible
+           FROM nurses WHERE nurses.ward_id=? ORDER BY nurses.display_name,nurses.nurse_id""",
+        { rs, _ -> EligibilityRow(uuid(rs,"nurse_id"),rs.getString("display_name"),rs.getBoolean("active"),
+            rs.getString("subject"),rs.getBoolean("member_active"),rs.getBoolean("admin_active"),rs.getBoolean("eligible")) }, wardId,
+    )
 
     fun findNurse(id: UUID, wardId: UUID): DbNurse? = jdbc.query(
         "SELECT nurse_id,qualifications,($rosterable) AS active FROM nurses WHERE nurse_id=? AND ward_id=?",

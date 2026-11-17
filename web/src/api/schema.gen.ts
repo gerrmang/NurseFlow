@@ -663,6 +663,36 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/wards/{wardId}/roster-eligibility": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                wardId: components["parameters"]["WardId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * 병동의 편성 대상과 제외 사유 조회 (관리자)
+         * @description 기본 모드에서는 활성 간호사 기록이 있고 해당 병동의 활성 WARD_MEMBER로 초대를 수락했으며
+         *     활성 WARD_ADMIN이 아닌 사람만 편성한다. 계정에 연결되지 않은 가상 간호사 기록은 병동 시연 모드가
+         *     켜졌을 때만 포함한다. 후보 검증·수동 저장·자동 생성·확정·충원 계산은 같은 판정을 사용한다.
+         *     demoMode=true는 가상 데이터 시연 상태이므로 클라이언트에 명확히 표시한다.
+         */
+        get: operations["getRosterEligibility"];
+        /**
+         * 병동 시연 모드 설정 (관리자)
+         * @description 시연 모드가 바뀌면 병동 정책 revision을 올리고 영향받는 비공개 초안을 재검증 대상으로 표시한다.
+         *     공개 근무표는 관리자 재확정 전까지 바꾸지 않는다. 서버가 최신 정책 ETag를 비교한다.
+         */
+        put: operations["updateRosterEligibility"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/wards/{wardId}/shift-types": {
         parameters: {
             query?: never;
@@ -1246,6 +1276,23 @@ export interface components {
             admin?: boolean;
             /** @description false면 비활성화, true면 재활성화 */
             active?: boolean;
+        };
+        UpdateRosterEligibilityRequest: {
+            /** @description true면 계정이 연결되지 않은 가상 간호사도 편성할 수 있는 시연 모드 */
+            demoMode: boolean;
+        };
+        RosterEligibility: {
+            demoMode: boolean;
+            policyRevision: number;
+            items: components["schemas"]["RosterEligibilityItem"][];
+        };
+        RosterEligibilityItem: {
+            /** Format: uuid */
+            nurseId: string;
+            displayName: string;
+            eligible: boolean;
+            /** @enum {string} */
+            reason: "ELIGIBLE" | "STAFF_INACTIVE" | "DEMO_MODE_DISABLED" | "MEMBERSHIP_INACTIVE_OR_MISSING" | "ADMIN_EXCLUDED";
         };
         StaffPage: {
             items: components["schemas"]["StaffMember"][];
@@ -3497,6 +3544,70 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ApiProblem"];
                 };
             };
+        };
+    };
+    getRosterEligibility: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                wardId: components["parameters"]["WardId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 편성 대상 판정과 병동 정책 revision */
+            200: {
+                headers: {
+                    ETag: components["headers"]["PolicyETag"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RosterEligibility"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    updateRosterEligibility: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description 마지막으로 받은 병동 근무 유형 정책 ETag.
+                 * @example "policy-3"
+                 */
+                "If-Match": components["parameters"]["PolicyIfMatch"];
+            };
+            path: {
+                wardId: components["parameters"]["WardId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateRosterEligibilityRequest"];
+            };
+        };
+        responses: {
+            /** @description 갱신된 편성 대상 판정 */
+            200: {
+                headers: {
+                    ETag: components["headers"]["PolicyETag"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RosterEligibility"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            412: components["responses"]["PreconditionFailed"];
         };
     };
     listShiftTypes: {

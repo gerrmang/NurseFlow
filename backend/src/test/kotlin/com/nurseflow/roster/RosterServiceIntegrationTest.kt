@@ -4,6 +4,7 @@ import com.nurseflow.common.error.BusinessException
 import com.nurseflow.roster.application.model.*
 import com.nurseflow.roster.application.generation.GenerationCoordinator
 import com.nurseflow.roster.application.service.RosterService
+import com.nurseflow.roster.application.service.RosterEligibilityService
 import com.nurseflow.policy.application.model.ShiftTypeCommand
 import com.nurseflow.policy.application.service.ShiftTypeService
 import com.nurseflow.roster.domain.model.ShiftKind
@@ -31,12 +32,40 @@ class RosterServiceIntegrationTest @Autowired constructor(
     private val service: RosterService,
     private val generation: GenerationCoordinator,
     private val shiftTypes: ShiftTypeService,
+    private val eligibility: RosterEligibilityService,
 ) {
     private lateinit var wardId: UUID
     private lateinit var nurseId: UUID
     private lateinit var dayTypeId: UUID
     private lateinit var nightTypeId: UUID
     private val admin = "test-admin"
+
+    @Test
+    fun `unlinked staff cannot be validated assigned or confirmed until demo mode is enabled`() {
+        val fictional = UUID.randomUUID()
+        jdbc.update("INSERT INTO nurses(nurse_id,ward_id,display_name,qualifications,active) VALUES(?,?,?,'[]',TRUE)",
+            fictional, wardId, "가상 미가입 간호사")
+        val draft = newRoster("2026-11", LocalDate.parse("2026-11-02"), dayTypeId)
+        val slot = draft.slots.single().slotId
+
+        val candidate = service.validate(draft.rosterId, tag(draft), ValidateAssignmentRequest(slot, fictional), admin)
+        assertFalse(candidate.allowed)
+        assertTrue(candidate.hardViolations.any { it.code == "NURSE_INACTIVE" })
+        assertThrows(BusinessException::class.java) { assign(draft, fictional) }
+        // A stored assignment from before the policy changed must also fail at publication.
+        jdbc.update("UPDATE roster_slots SET nurse_id=? WHERE slot_id=?", fictional, slot)
+        assertThrows(BusinessException::class.java) {
+            service.confirm(draft.rosterId, tag(draft), UUID.randomUUID(), ConfirmRosterRequest(), admin)
+        }
+        jdbc.update("UPDATE roster_slots SET nurse_id=NULL WHERE slot_id=?", slot)
+
+        eligibility.setDemoMode(wardId, true, ShiftTypeService.policyEtag(0), admin)
+        val refreshed = service.getRoster(draft.rosterId, admin)
+        assertTrue(service.validate(refreshed.rosterId, tag(refreshed), ValidateAssignmentRequest(slot, fictional), admin).allowed)
+        val assigned = assign(refreshed, fictional)
+        service.confirm(assigned.rosterId, tag(assigned), UUID.randomUUID(), ConfirmRosterRequest(), admin)
+        assertEquals("PUBLISHED", service.getRoster(assigned.rosterId, admin).status)
+    }
 
     @BeforeEach
     fun setup() {
