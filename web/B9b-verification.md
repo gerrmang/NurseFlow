@@ -86,3 +86,5 @@ Remove-Item Env:NURSEFLOW_B9B_E2E
 - Android·backend 전체 회귀는 변경 없는 웹 기능 단위라 재실행하지 않았다. API·DB·운영 설정 변경 없음. 수동 배포 없음. 롤백은 B9b 변경 revert와 이전 웹 빌드 복원.
 - 검증용 backend·OIDC·웹 프로세스 3개 종료, 18090/18091/5174 LISTENING 없음 확인. 메모리 검증 데이터는 종료로 소멸했다.
 - 같은 `feat/web-published-roster`에서 미커밋 구현과 검증 기록으로 인계한다. 커밋·푸시·PR 게시·병합 없음. PR 설명 초안은 `B9b-pr-draft.md`. 기존 사용자 DB·trace·DB 복구 미커밋 기록을 보존한다.
+
+위 미커밋 인계는 구현 완료 시점 기록이다. 이후 사용자 요청으로 구현 `783bdd0`을 커밋·푸시하고 [PR #49](https://github.com/gerrmang/NurseFlow/pull/49)를 dev 대상으로 게시했다. 게시 후 코드 변경·로컬 검사 재실행·병합 없음. 게시 시점 및 최종 CI·공유 인계 상태는 `docs/work-status.md`의 B9b PR 게시 기록을 따른다.
