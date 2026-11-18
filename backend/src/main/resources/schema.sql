@@ -13,6 +13,8 @@ ALTER TABLE wards ADD COLUMN IF NOT EXISTS hospital_name VARCHAR(200);
 ALTER TABLE wards ADD COLUMN IF NOT EXISTS hospital_address VARCHAR(500);
 ALTER TABLE wards ADD COLUMN IF NOT EXISTS created_by VARCHAR(255);
 ALTER TABLE wards ADD COLUMN IF NOT EXISTS created_at VARCHAR(40);
+-- A7: fictional, unlinked staff are rosterable only when the ward explicitly enables demo mode.
+ALTER TABLE wards ADD COLUMN IF NOT EXISTS demo_mode BOOLEAN DEFAULT FALSE NOT NULL;
 CREATE INDEX IF NOT EXISTS ix_wards_created_by ON wards(created_by);
 
 CREATE TABLE IF NOT EXISTS ward_memberships (

@@ -84,6 +84,8 @@ class MembershipRosterInvariantTest : ApiTestBase() {
     fun `admins and members without access are never rostered under any sequence of operations`(seed: Int) {
         val random = Random(seed)
         wardId = insertWard("불변 조건 병동")
+        // This fixture intentionally mixes account-linked and fictional unlinked staff.
+        jdbc.update("UPDATE wards SET demo_mode=TRUE WHERE ward_id=?", wardId)
         tokens.clear()
         members.clear()
         val (founder, founderToken) = userToken("가상 수간호사")
