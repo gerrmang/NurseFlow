@@ -9,13 +9,13 @@
 | [`backend/`](backend/) | Kotlin + Spring Boot API, 로컬 H2 시연 DB | IntelliJ IDEA, JDK 21 |
 | [`android/`](android/) | Kotlin + Jetpack Compose 앱 | Android Studio, Android SDK 35 |
 | [`docs/`](docs/) | 제품 범위, 편성 규칙, API 계약, 개발 안내 | 편집기 |
-| [`web/`](web/) | React + TypeScript + Vite 웹 클라이언트 (로그인·세션·초대·병원 검색·병동 생성) | Node.js 24 |
+| [`web/`](web/) | React + TypeScript + Vite 웹 클라이언트 (로그인·세션·초대·병원 검색·병동 생성·팀/구성원 관리) | Node.js 24 |
 
 ## 현재 상태
 
 - **백엔드:** 로그인·세션, 병동 소속·초대, 팀·프로필, 기본 근무표 작성과 공개 API가 있습니다. 일부 기능은 아직 구현되지 않았습니다. 특히 근무 유형 설정 API가 없어, 근무표 기능을 쓰려면 로컬 H2에 근무 유형을 준비해야 합니다.
 - **Android:** 현재 `dev`의 근무표 화면은 `DemoRoster` 시연 데이터를 앱 안에서 사용합니다. 입력한 변경은 서버에 저장되거나 다른 사용자와 공유되지 않습니다.
-- **웹:** Kakao 로그인·쿠키 기반 세션·내 병동 목록(B2), 관리자 초대 관리·초대 링크 가입(B3b), 병원 검색·병동 생성·설정 안내 골격(B4b)이 있습니다. 근무표 화면은 아직 없습니다. 검증 상태는 [B2](web/B2-verification.md), [B3b](web/B3b-verification.md), [B4b 검증 기록](web/B4b-verification.md)을 확인하세요.
+- **웹:** Kakao 로그인·쿠키 기반 세션·내 병동 목록(B2), 관리자 초대 관리·초대 링크 가입(B3b), 병원 검색·병동 생성·설정 안내 골격(B4b), 팀·간호사·구성원 관리(B5b)가 있습니다. 근무표 화면은 아직 없습니다. 검증 상태는 [B2](web/B2-verification.md), [B3b](web/B3b-verification.md), [B4b](web/B4b-verification.md), [B5b 검증 기록](web/B5b-verification.md)을 확인하세요.
 - **외부 연동:** 로그인 테스트는 가짜 OIDC 공급자를 사용합니다. 실제 Kakao 앱 설정을 이용한 로그인 E2E는 확인되지 않았습니다. 운영 DB·호스팅도 시연 범위에 포함되지 않습니다.
 
 자세한 기능 범위는 [MVP 안내](docs/mvp-scope.md), 편성 정책은 [월간 편성 규칙과 2인 분담](docs/monthly-roster-rules-and-two-person-plan.md), 서버 설정과 구현 상태는 [백엔드 안내](backend/README.md)에서 확인할 수 있습니다.
