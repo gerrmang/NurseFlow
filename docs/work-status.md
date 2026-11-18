@@ -1,5 +1,12 @@
 # 공유 작업 현황
 
+## B9b PR #49 고정 오프셋 시간대 리뷰 수정 (2026-11-18, Codex)
+
+- P3: 서버가 반환하는 `Z`, `UTC+09:00` 등을 Intl에 직접 전달해 배정 표시 중 RangeError가 발생하는 문제를 수정했다. Java 고정 오프셋(UTC/GMT/UT 접두사, 부호·시·분·초)을 초로 변환해 시작·종료 시각에 적용하고 UTC로 포맷한다. 날짜 비교와 종료일도 같은 변환을 사용한다. 지역 시간대는 기존 Intl 처리로 서머타임을 유지한다. 같은 패턴 검색 결과 웹 Intl 사용은 이 공통 함수의 두 포맷터뿐이며 날짜 상세·월 목록 모두 이 함수를 사용한다.
+- 회귀 테스트 20개 추가: Z·UTC+09:00, 접두사·축약형, 음수·초 단위 오프셋, 자정·월·연 경계, 동일 날짜와 지역 서머타임. 수정 전 12개 실패(RangeError)·8개 통과, 수정 후 웹 전체 **301개 통과·실서버 opt-in 1개 건너뜀·실패 0**. `web`에서 `npm run api:check`, `npm run lint`, `npm run typecheck`, `npm test -- --run`, `npm run build` 모두 exit 0. `git diff --check` 통과.
+- 브라우저·실서버·Android·backend 전체 검사는 표시 유틸리티 수정 범위라 재실행하지 않았다. 독립 재리뷰·수정 후 GitHub CI는 미실행이다. API/DB/환경 변경 없음. 웹 정적 빌드에 영향, 배포 없음. 롤백은 이번 유틸리티 수정 revert·이전 웹 빌드 복원.
+- 공유 인계: 작업 도중 다른 작업이 `feat/web-ward-create`로 전환해 중단했으나 사용자가 해당 작업 중지·복귀를 지시했다. 전환 충돌 문서와 원래 local(stage 3) 문서를 저장소 밖 `C:\Users\jjang\.codex\visualizations\2026\11\18\01a1ec4d-982b-78b2-b8b5-0aa13e723517\branch-recovery`에 백업한 뒤, 같은 worktree의 `feat/web-published-roster`로 복귀하고 전환 전 미커밋 기록 16줄을 복원했다. DB·trace 보존. 사용자 요청으로 코드·회귀 테스트·이 현황 절만 커밋·푸시한다. 기존 A7 리뷰·DB 복구 기록 16줄은 커밋에서 제외해 작업 폴더에 보존한다. 앱 코드는 직전 검증 이후 변경하지 않아 로컬 검사를 반복하지 않았다. PR 병합·자동 병합·수동 배포 없음. 다음 단계는 수정 diff 재리뷰와 최종 head CI 확인이다.
+
 ## B9b PR #49 게시 (2026-11-18, Codex)
 
 - 사용자 요청으로 B9b 구현·검증 기록 14파일을 `783bdd0b92a3198f556651fe51ebdec4114198d3`에 커밋·푸시하고 [PR #49](https://github.com/gerrmang/NurseFlow/pull/49)를 게시했다. GitHub CLI 조회로 OPEN·일반 PR(`isDraft=false`)·대상 dev·head 일치·autoMergeRequest=null 확인. GitHub 연결 도구는 생성 권한 403이어서 기존 인증된 gh로 게시했다. 병합·자동 병합 설정 없음.
