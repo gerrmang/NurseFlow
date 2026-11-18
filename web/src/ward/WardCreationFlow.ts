@@ -34,12 +34,13 @@ const creationErrors: Record<string, string> = {
   FORBIDDEN: '병동을 만들 권한이 없어요. 계정 상태를 확인해 주세요.',
 }
 
-function isWardMembership(value: unknown): value is WardMembership {
+function isCreatedWardMembership(value: unknown): value is WardMembership {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) return false
   const ward = value as Record<string, unknown>
   return typeof ward.wardId === 'string' && ward.wardId.trim().length > 0 &&
     typeof ward.wardName === 'string' && ward.wardName.trim().length > 0 &&
-    Array.isArray(ward.roles) && ward.roles.every((role) => role === 'WARD_ADMIN' || role === 'WARD_MEMBER') &&
+    Array.isArray(ward.roles) && ward.roles.includes('WARD_ADMIN') &&
+    ward.roles.every((role) => role === 'WARD_ADMIN' || role === 'WARD_MEMBER') &&
     typeof ward.canViewWardCalendar === 'boolean' &&
     (ward.hospitalName === undefined || ward.hospitalName === null || typeof ward.hospitalName === 'string')
 }
@@ -124,7 +125,7 @@ export class WardCreationFlow {
     this.update({ busy: true, error: null })
     try {
       const created = await this.api.createWard(pending.request, pending.key)
-      if (!isWardMembership(created)) throw new ApiError(201, ClientErrorCode.INVALID_RESPONSE)
+      if (!isCreatedWardMembership(created)) throw new ApiError(201, ClientErrorCode.INVALID_RESPONSE)
       this.pending = null
       this.update({ created, busy: false, uncertain: false })
     } catch (error) {

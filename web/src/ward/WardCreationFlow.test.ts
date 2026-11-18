@@ -90,6 +90,7 @@ describe('ward creation', () => {
     { ...ward, wardName: null }, { ...ward, wardName: '' },
     { ...ward, roles: undefined }, { ...ward, roles: 'WARD_ADMIN' },
     { ...ward, roles: ['UNKNOWN'] },
+    { ...ward, roles: [] }, { ...ward, roles: ['WARD_MEMBER'] },
     { ...ward, canViewWardCalendar: undefined }, { ...ward, canViewWardCalendar: 'true' },
     { ...ward, hospitalName: 123 },
   ].map((response) => [response]))('retains the exact retry and reports an uncertain result for malformed success %j', async (response) => {
