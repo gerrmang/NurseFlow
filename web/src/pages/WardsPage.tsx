@@ -71,6 +71,7 @@ export function WardsPage({ user }: { user: SessionUser }) {
         </p>
       )}
       <PendingInviteBanner />
+      <div className="actions"><Link className="button" to="/wards/new">병동 만들기</Link></div>
       {load.status === 'loading' && <p role="status">병동 목록을 불러오고 있어요…</p>}
       {load.status === 'error' && (
         <section className="card">
@@ -88,7 +89,7 @@ export function WardsPage({ user }: { user: SessionUser }) {
         <section className="card">
           <p>아직 소속된 병동이 없어요.</p>
           <ul className="hints">
-            <li>병동 만들기: 준비 중이에요.</li>
+            <li>병동 만들기: 병원을 검색하고 새 병동의 관리자가 될 수 있어요.</li>
             <li>초대 수락: 받은 초대 링크를 열거나 아래에 붙여넣어 가입해요.</li>
           </ul>
         </section>

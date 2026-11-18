@@ -58,6 +58,10 @@ input, select { font: inherit; padding: 10px 12px; border-radius: 8px; border: 1
 .confirm p { margin: 0; }
 .highlight { border-color: var(--primary); }
 .card p, .card .error, .card .notice { overflow-wrap: anywhere; }
+.hospital-results { border: 0; padding: 0; margin: 16px 0; min-width: 0; }
+.hospital-option { display: flex; gap: 12px; align-items: flex-start; padding: 12px 0; border-bottom: 1px solid var(--border); cursor: pointer; }
+.hospital-option input { flex-shrink: 0; margin-top: 6px; }
+.hospital-option span { display: block; overflow-wrap: anywhere; }
 .staff-page { max-width: 1040px; }
 .admin-fields { border: 0; padding: 0; margin: 0; min-width: 0; }
 .staff-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr)); gap: 0 16px; }

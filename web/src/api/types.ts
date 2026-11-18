@@ -8,6 +8,9 @@ export type CurrentUser = Schemas['CurrentUser']
 export type WardMembership = Schemas['WardMembership']
 export type WardRole = WardMembership['roles'][number]
 export type ApiProblem = Schemas['ApiProblem']
+export type HospitalCandidate = Schemas['HospitalCandidate']
+export type HospitalSearchPage = Schemas['HospitalSearchPage']
+export type CreateWardRequest = Schemas['CreateWardRequest']
 export interface WardList {
   items: WardMembership[]
 }
