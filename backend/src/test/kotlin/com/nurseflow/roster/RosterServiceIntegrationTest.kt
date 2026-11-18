@@ -67,6 +67,41 @@ class RosterServiceIntegrationTest @Autowired constructor(
         assertEquals("PUBLISHED", service.getRoster(assigned.rosterId, admin).status)
     }
 
+    @Test
+    fun `disabling demo mode invalidates fictional assignments but preserves the published roster`() {
+        val fictional = UUID.randomUUID()
+        jdbc.update("INSERT INTO nurses(nurse_id,ward_id,display_name,qualifications,active) VALUES(?,?,?,'[]',TRUE)",
+            fictional, wardId, "가상 미가입 간호사")
+        val publishedDraft = assign(newRoster("2026-10", LocalDate.parse("2026-10-30"), dayTypeId), nurseId)
+        service.confirm(publishedDraft.rosterId, tag(publishedDraft), UUID.randomUUID(), ConfirmRosterRequest(), admin)
+        val publishedBefore = service.publishedWard(wardId, "2026-10", admin)
+
+        eligibility.setDemoMode(wardId, true, ShiftTypeService.policyEtag(0), admin)
+        val assigned = assign(newRoster("2026-11", LocalDate.parse("2026-11-02"), dayTypeId), fictional)
+        val disabled = eligibility.setDemoMode(wardId, false, ShiftTypeService.policyEtag(1), admin)
+
+        assertFalse(disabled.demoMode)
+        assertEquals(2, disabled.policyRevision)
+        assertEquals("DEMO_MODE_DISABLED", disabled.items.single { it.nurseId == fictional }.reason)
+        val changed = service.getRoster(assigned.rosterId, admin)
+        assertEquals(assigned.revision + 1, changed.revision)
+        assertTrue(changed.needsRevalidation)
+        assertEquals(fictional, changed.slots.single().assignment?.nurseId)
+
+        val stale = assertThrows(BusinessException::class.java) {
+            service.confirm(assigned.rosterId, tag(assigned), UUID.randomUUID(), ConfirmRosterRequest(), admin)
+        }
+        assertEquals("STALE_ROSTER_REVISION", stale.errorCode.name)
+        val rejected = assertThrows(BusinessException::class.java) {
+            service.confirm(changed.rosterId, tag(changed), UUID.randomUUID(), ConfirmRosterRequest(), admin)
+        }
+        assertEquals("RULE_VIOLATION", rejected.errorCode.name)
+        assertTrue(rejected.ruleViolations.filterIsInstance<RuleDiagnostic>().any { it.code == "NURSE_INACTIVE" })
+        assertEquals("DRAFT", service.getRoster(changed.rosterId, admin).status)
+        assertEquals(publishedBefore, service.publishedWard(wardId, "2026-10", admin))
+        assertThrows(BusinessException::class.java) { service.publishedWard(wardId, "2026-11", admin) }
+    }
+
     @BeforeEach
     fun setup() {
         listOf("mutation_replays", "generation_jobs", "approved_absences", "roster_slots", "rosters",

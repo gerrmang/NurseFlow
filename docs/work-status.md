@@ -5,6 +5,7 @@
 - 최신 개발 기준은 `origin/dev` `9d47991`이다. PR #43(A8 근무 유형), #45(B3b 웹 초대), #44(B4a Android 병동 생성)가 차례로 병합됐다. 아래 긴 기능 기록 중 이 PR들을 진행 중으로 적은 행은 병합 전 기록으로 읽는다.
 - A7 편성 대상 판정을 `feat/roster-eligibility`에서 구현해 PR #48을 열었다. 기본은 활성 `WARD_MEMBER` 연결 간호사만 포함하고, 계정 없는 가상 간호사는 병동별 시연 모드를 켠 경우에만 포함한다. 후보·수동·자동·확정·충원은 같은 서버 판정을 쓴다. 2026-11-18 로컬 백엔드 `test`·`check`, 웹 API 계약·타입·린트·252개 테스트·빌드가 성공했고 PR #48의 Backend tests·Android debug build·Web checks도 통과했다. 독립 코드 리뷰와 사람 승인은 아직 대기 중이다.
 - PR #48 독립 리뷰의 P3: 조회 중 시연 모드 변경이 커밋되면 응답의 `demoMode=false`와 `eligible=true`가 섞일 수 있었다. 응답의 포함 여부를 같은 `demoMode` 값과 제외 사유로 계산하도록 수정하고, 읽기 사이 모드 변경을 강제하는 회귀 테스트를 추가했다. 2026-11-18 해당 테스트와 백엔드 전체 `test --offline --no-daemon` 성공. 수정 커밋의 GitHub CI·재리뷰는 대기 중이다.
+- 2026-11-18 PR #48 후속 리뷰의 P4·P5 보완: 최신 정책 ETag로 시연 모드 `true → false` 성공 경로와 가상 간호사 제외, 저장된 가상 배정의 확정 차단, 초안 revision·재검증 표시, 기존 공개본 보존을 HTTP·서비스 통합 테스트로 확인했다. 모드 변경 시 모든 DRAFT revision이 올라 기존 초안 ETag가 412가 된다는 계약을 OpenAPI와 생성된 웹 타입 설명에 추가했다. 로컬 대상 테스트, 백엔드 전체 `./gradlew check --offline --no-daemon`, 웹 `npm run api:check`·`npm run typecheck`, `git diff --check` 모두 성공. Android·실기기·운영 환경은 변경 범위 밖이라 재검증하지 않았다. 이 보완의 PR CI와 사람 리뷰는 푸시 후 별도 확인한다.
 - 앞으로 설계·구현·검증·리뷰는 Codex가 맡되, 변경은 기능별 브랜치와 `dev` 대상 PR로 남긴다. 사람의 GitHub 승인과 CI는 별도로 확인한다. 기존 Claude 수행 기록은 이력으로 보존한다.
 
 ## 갱신 규칙

@@ -1456,6 +1456,8 @@ paths:
       summary: 병동 시연 모드 설정 (관리자)
       description: |
         시연 모드가 바뀌면 병동 정책 revision을 올리고 영향받는 비공개 초안을 재검증 대상으로 표시한다.
+        이 병동의 모든 DRAFT 근무표 revision도 증가하므로 기존 초안 ETag로 편집·확정하면
+        412 STALE_ROSTER_REVISION이 발생한다. 변경 후 초안을 다시 조회해 새 ETag를 사용해야 한다.
         공개 근무표는 관리자 재확정 전까지 바꾸지 않는다. 서버가 최신 정책 ETag를 비교한다.
       x-required-role: WARD_ADMIN
       parameters:
