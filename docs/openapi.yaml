@@ -1421,6 +1421,74 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiProblem'
 
+  /wards/{wardId}/roster-eligibility:
+    parameters:
+      - $ref: '#/components/parameters/WardId'
+    get:
+      tags: [Rosters]
+      operationId: getRosterEligibility
+      summary: 병동의 편성 대상과 제외 사유 조회 (관리자)
+      description: |
+        기본 모드에서는 활성 간호사 기록이 있고 해당 병동의 활성 WARD_MEMBER로 초대를 수락했으며
+        활성 WARD_ADMIN이 아닌 사람만 편성한다. 계정에 연결되지 않은 가상 간호사 기록은 병동 시연 모드가
+        켜졌을 때만 포함한다. 후보 검증·수동 저장·자동 생성·확정·충원 계산은 같은 판정을 사용한다.
+        demoMode=true는 가상 데이터 시연 상태이므로 클라이언트에 명확히 표시한다.
+      x-required-role: WARD_ADMIN
+      responses:
+        '200':
+          description: 편성 대상 판정과 병동 정책 revision
+          headers:
+            ETag:
+              $ref: '#/components/headers/PolicyETag'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RosterEligibility'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    put:
+      tags: [Rosters]
+      operationId: updateRosterEligibility
+      summary: 병동 시연 모드 설정 (관리자)
+      description: |
+        시연 모드가 바뀌면 병동 정책 revision을 올리고 영향받는 비공개 초안을 재검증 대상으로 표시한다.
+        이 병동의 모든 DRAFT 근무표 revision도 증가하므로 기존 초안 ETag로 편집·확정하면
+        412 STALE_ROSTER_REVISION이 발생한다. 변경 후 초안을 다시 조회해 새 ETag를 사용해야 한다.
+        공개 근무표는 관리자 재확정 전까지 바꾸지 않는다. 서버가 최신 정책 ETag를 비교한다.
+      x-required-role: WARD_ADMIN
+      parameters:
+        - $ref: '#/components/parameters/PolicyIfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateRosterEligibilityRequest'
+      responses:
+        '200':
+          description: 갱신된 편성 대상 판정
+          headers:
+            ETag:
+              $ref: '#/components/headers/PolicyETag'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RosterEligibility'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '412':
+          $ref: '#/components/responses/PreconditionFailed'
+
   /wards/{wardId}/shift-types:
     parameters:
       - $ref: '#/components/parameters/WardId'
@@ -2739,6 +2807,41 @@ components:
         active:
           type: boolean
           description: false면 비활성화, true면 재활성화
+    UpdateRosterEligibilityRequest:
+      type: object
+      additionalProperties: false
+      required: [demoMode]
+      properties:
+        demoMode:
+          type: boolean
+          description: true면 계정이 연결되지 않은 가상 간호사도 편성할 수 있는 시연 모드
+    RosterEligibility:
+      type: object
+      required: [demoMode, policyRevision, items]
+      properties:
+        demoMode:
+          type: boolean
+        policyRevision:
+          type: integer
+          minimum: 0
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/RosterEligibilityItem'
+    RosterEligibilityItem:
+      type: object
+      required: [nurseId, displayName, eligible, reason]
+      properties:
+        nurseId:
+          type: string
+          format: uuid
+        displayName:
+          type: string
+        eligible:
+          type: boolean
+        reason:
+          type: string
+          enum: [ELIGIBLE, STAFF_INACTIVE, DEMO_MODE_DISABLED, MEMBERSHIP_INACTIVE_OR_MISSING, ADMIN_EXCLUDED]
     StaffPage:
       type: object
       required: [items, page, pageSize, totalItems]

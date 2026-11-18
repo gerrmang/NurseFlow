@@ -1,5 +1,13 @@
 # 공유 작업 현황
 
+## 2026-11-16 현재 기준
+
+- 최신 개발 기준은 `origin/dev` `9d47991`이다. PR #43(A8 근무 유형), #45(B3b 웹 초대), #44(B4a Android 병동 생성)가 차례로 병합됐다. 아래 긴 기능 기록 중 이 PR들을 진행 중으로 적은 행은 병합 전 기록으로 읽는다.
+- A7 편성 대상 판정을 `feat/roster-eligibility`에서 구현해 PR #48을 열었다. 기본은 활성 `WARD_MEMBER` 연결 간호사만 포함하고, 계정 없는 가상 간호사는 병동별 시연 모드를 켠 경우에만 포함한다. 후보·수동·자동·확정·충원은 같은 서버 판정을 쓴다. 2026-11-18 로컬 백엔드 `test`·`check`, 웹 API 계약·타입·린트·252개 테스트·빌드가 성공했고 PR #48의 Backend tests·Android debug build·Web checks도 통과했다. 독립 코드 리뷰와 사람 승인은 아직 대기 중이다.
+- PR #48 독립 리뷰의 P3: 조회 중 시연 모드 변경이 커밋되면 응답의 `demoMode=false`와 `eligible=true`가 섞일 수 있었다. 응답의 포함 여부를 같은 `demoMode` 값과 제외 사유로 계산하도록 수정하고, 읽기 사이 모드 변경을 강제하는 회귀 테스트를 추가했다. 2026-11-18 해당 테스트와 백엔드 전체 `test --offline --no-daemon` 성공. 수정 커밋의 GitHub CI·재리뷰는 대기 중이다.
+- 2026-11-18 PR #48 후속 리뷰의 P4·P5 보완: 최신 정책 ETag로 시연 모드 `true → false` 성공 경로와 가상 간호사 제외, 저장된 가상 배정의 확정 차단, 초안 revision·재검증 표시, 기존 공개본 보존을 HTTP·서비스 통합 테스트로 확인했다. 모드 변경 시 모든 DRAFT revision이 올라 기존 초안 ETag가 412가 된다는 계약을 OpenAPI와 생성된 웹 타입 설명에 추가했다. 로컬 대상 테스트, 백엔드 전체 `./gradlew check --offline --no-daemon`, 웹 `npm run api:check`·`npm run typecheck`, `git diff --check` 모두 성공. Android·실기기·운영 환경은 변경 범위 밖이라 재검증하지 않았다. 이 보완의 PR CI와 사람 리뷰는 푸시 후 별도 확인한다.
+- 앞으로 설계·구현·검증·리뷰는 Codex가 맡되, 변경은 기능별 브랜치와 `dev` 대상 PR로 남긴다. 사람의 GitHub 승인과 CI는 별도로 확인한다. 기존 Claude 수행 기록은 이력으로 보존한다.
+
 ## 갱신 규칙
 
 - Claude와 Codex는 기능 단위, PR, 리뷰를 마친 뒤 같은 작업 브랜치에서 이 문서를 갱신한다.
@@ -35,7 +43,8 @@
 | A6 구성원 관리 | `feat/membership-admin` (`/private/tmp/NurseFlow-a6`) | PR #41 dev 병합 완료(`1205f04`) | 구현·Codex 리뷰 완료. 구성원 목록·관리자 지정/해제·비활성화·재활성화, 마지막 활성 관리자 보호(결정 4, 복구 절차 미구현), 비활성 구성원 즉시 접근 차단. dev 반영 후 두 가지 수정: 구성원 비활성화 시 연결 간호사의 팀 순번 정리(`7dae5c0`), 잠금 대기 중 권한 해제된 관리자의 변경 차단 `WardService.lockAsAdmin`과 초대 재발급·수락 잠금 순서 정정(`b1def48`) | 2026-11-11 `./gradlew test --offline` 209건 중 통과 204, 건너뜀 5, 실패 0(최신 dev `#40` 반영 후). 리뷰 P1(비활성 구성원 기록 재활성화로 편성 복귀) 수정 `d81916e`(MEMBER_INACTIVE, 편성 필터에 활성 WARD_MEMBER 요구), 본인 근무표 조회에도 같은 필터 `b674f92`. 외부 리뷰 P1(관리자 승격 시 활성 간호사 기록 → 편성 계산) 수정 `71dd50e`·`0d1c502`(결과 상태 검사, 관리자 역할 기록 재활성화 차단, 편성 조회 방어 필터), 예외 경로 취소·대기 테스트 DB 잠금 확인 `ac3005b`. PR #41 리뷰 P2(실행 중 자동배치 취소가 병동 잠금에 막힘) 수정 `4ca4e0d`, 재리뷰 P2·P3(취소와 결과 반영·조기 실패 경합, 테스트 동기화) 수정 `2b5640d`·이번 커밋. 순번 정리 제거 시 새 테스트 6건 실패, 잠금 뒤 재확인 제거 시 경합 테스트 2건 실패로 검출력 확인  2026-11-12 불변 조건 무작위 테스트 `77e2eae`(보호 코드 7개 중 6개 제거 시 검출). PR #41 재리뷰 P2(구성원 비활성화와 본인 프로필 쓰기 경합) 수정: 본인 쓰기도 `WardService.lockAsMember`로 병동 잠금 뒤 소속 재확인, 순서 강제 회귀 테스트 추가(수정 제거 시 200으로 실패 확인). P5(관리자 지정 충돌 조건 문서) 정정. `./gradlew test --offline` 218건 중 통과 213, 건너뜀 5, 실패 0 | A8 병합 시 근무 유형 쓰기도 `lockAsAdmin` 사용 필요 |
 | 병원 목록 동봉(A3 후속) | `feat/hospital-bundled-list` (`/private/tmp/NurseFlow-hospital`) | PR #42 dev 병합 완료(`b352759`) | B 개발 환경에서 경로 설정 없이 병원 검색·병동 생성이 되도록 공식 목록 5개 열(2026.9., 79,899행, gzip 약 2.5MB)을 서버에 동봉. 경로가 없으면 시작 시 같은·더 새 목록이 없을 때만 가져옴. 갱신 스크립트 `backend/scripts/extract_hospital_list.py`. Codex P4 2건 수정 `1a24ff9`. PR 리뷰 P3·P4·P5 수정: 동봉 목록이 마지막 적재와 다르면 가져오고(같은 기간 정정본 반영) 더 이전 기간·기간 미상이면 건너뜀, 스크립트는 1만 행 미만이면 기존 목록을 건드리지 않고 종료, 기간 미상 적재 뒤 복구 방법 문서화 | 2026-11-12 dev `1205f04` 반영 후 `./gradlew test --offline` 223건 중 통과 218, 건너뜀 5, 실패 0(리뷰 수정 후). web `api:check` 통과. 패키징된 jar를 별도 DB로 두 번 실행해 첫 실행 79,899행 가져옴, 두 번째 건너뜀 확인 | 없음 |
 | A8 근무 유형 설정 | `feat/shift-type-settings` (`/private/tmp/NurseFlow-a8`) | PR 개설(최신 dev `b352759` 반영) | 구현·Codex 리뷰 완료. `/wards/{id}/shift-types` 조회·생성·수정·비활성화, 휴게·인정·월 환산 시간, 병동 정책 revision(`policyRevision`), 사용 중 유형 변경 시 DRAFT `needsRevalidation`·칸 시각 재계산, OTHER 입력 차단, 생성 Idempotency-Key. dev 반영 후 쓰기를 `lockAsAdmin`으로(`a16d751`), 멱등 재생을 잠금·재확인 뒤로(`6fbaa45`, 같은 패턴인 `cancelGeneration` 같은 키 재시도 500 수정 포함). 미결: 결정 14·23(휴일·목표 시간)은 범위 밖, 비활성 유형 코드는 재사용 불가 | 2026-11-13 `./gradlew test --offline` 262건 중 통과 257, 건너뜀 5, 실패 0(외부 리뷰 P2 생성·no-op 비활성화 If-Match 수정 후). web `api:check`·lint·typecheck·test·build 통과. 경합 테스트 3건은 각 보호 코드 제거 시 실패 확인 | 없음 |
-| A7 이후 | 해당 없음 | 미개설 | 미착수. A7은 A8 다음 | 해당 없음 | 없음 |
+| A7 편성 대상 | `feat/roster-eligibility` | [#48](https://github.com/gerrmang/NurseFlow/pull/48) | 기본 편성 대상, 병동별 시연 모드, 제외 사유 API 구현. 후보·수동·확정 회귀 테스트 추가 | 2026-11-18 백엔드 test/check, 웹 API 계약·타입·린트·252개 테스트·빌드, PR CI 3작업 성공 | 독립 PR 리뷰·사람 승인 대기 |
+| A9 이후 | 해당 없음 | 미개설 | A7 병합 뒤 선행 조건 순서로 착수 | 해당 없음 | 없음 |
 
 ## B4a 최신 dev 통합 (2026-11-12, Codex)
 
