@@ -1,4 +1,4 @@
-import { useEffect, useState, useSyncExternalStore } from 'react'
+import { useState, useSyncExternalStore } from 'react'
 import { Link } from 'react-router'
 import { useSessionManager } from '../session/SessionContext'
 import { getWardCreationFlow } from '../ward/WardCreationFlow'
@@ -9,12 +9,6 @@ export function WardCreatePage({ epoch }: { epoch: number }) {
   const state = useSyncExternalStore(flow.subscribe, flow.getSnapshot)
   const [confirmNew, setConfirmNew] = useState(false)
   const locked = state.busy || state.uncertain
-  useEffect(() => {
-    if (!locked) return
-    const warn = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = '' }
-    window.addEventListener('beforeunload', warn)
-    return () => window.removeEventListener('beforeunload', warn)
-  }, [locked])
 
   if (state.created) return (
     <main className="page">

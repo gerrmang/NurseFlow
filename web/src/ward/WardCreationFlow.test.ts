@@ -76,6 +76,35 @@ describe('hospital search', () => {
 })
 
 describe('ward creation', () => {
+  it.each([undefined, null])('accepts an optional hospital name %j', async (hospitalName) => {
+    const { flow, api } = setup()
+    const response = { ...ward, hospitalName }
+    api.createWard.mockResolvedValueOnce(response)
+    await flow.create()
+    expect(flow.getSnapshot()).toMatchObject({ created: response, busy: false, uncertain: false, error: null })
+  })
+
+  it.each([
+    null, {}, [], 'invalid',
+    { ...ward, wardId: undefined }, { ...ward, wardId: ' ' },
+    { ...ward, wardName: null }, { ...ward, wardName: '' },
+    { ...ward, roles: undefined }, { ...ward, roles: 'WARD_ADMIN' },
+    { ...ward, roles: ['UNKNOWN'] },
+    { ...ward, canViewWardCalendar: undefined }, { ...ward, canViewWardCalendar: 'true' },
+    { ...ward, hospitalName: 123 },
+  ].map((response) => [response]))('retains the exact retry and reports an uncertain result for malformed success %j', async (response) => {
+    const { flow, api, key } = setup()
+    api.createWard.mockResolvedValueOnce(response)
+    await flow.create()
+    expect(flow.getSnapshot()).toMatchObject({ created: null, busy: false, uncertain: true })
+    expect(flow.getSnapshot().error).toContain('생성 결과를 확인하지 못했어요')
+    flow.setWardName('바뀌면 안 되는 이름')
+    await flow.create()
+    expect(api.createWard.mock.calls[1]).toEqual(api.createWard.mock.calls[0])
+    expect(key).toHaveBeenCalledTimes(1)
+    expect(flow.getSnapshot()).toMatchObject({ created: ward, busy: false, uncertain: false })
+  })
+
   it('coalesces double clicks and submits only the hospital identity and trimmed name', async () => {
     const { flow, api } = setup()
     const response = deferred<WardMembership>()

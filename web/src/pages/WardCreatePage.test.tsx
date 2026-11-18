@@ -32,6 +32,94 @@ async function fill(app: ReturnType<typeof open>) {
   await app.user.type(screen.getByLabelText('병동 이름'), '검증 병동')
 }
 
+function unloadIsBlocked() {
+  const event = new Event('beforeunload', { cancelable: true })
+  window.dispatchEvent(event)
+  return event.defaultPrevented
+}
+
+it('tracks a pending creation and its late success after navigating to the ward list', async () => {
+  const app = open()
+  let complete!: (response: Response) => void
+  app.create.mockReturnValueOnce(new Promise<Response>((resolve) => { complete = resolve }))
+  await fill(app)
+  await app.user.click(screen.getByRole('button', { name: '병동 만들기' }))
+  await screen.findByRole('button', { name: '생성 결과 확인 중…' })
+  expect(unloadIsBlocked()).toBe(true)
+  await app.user.click(screen.getByRole('link', { name: '내 병동 목록 확인' }))
+  await screen.findByRole('heading', { name: '내 병동' })
+  expect(unloadIsBlocked()).toBe(true)
+  await act(async () => { complete(json(201, created)) })
+  await waitFor(() => expect(unloadIsBlocked()).toBe(false))
+})
+
+it.each(['logout', 'unmount'])('removes the pending warning on %s', async (boundary) => {
+  const app = open()
+  app.create.mockRejectedValueOnce(new ApiError(0, 'NETWORK'))
+  await fill(app)
+  await app.user.click(screen.getByRole('button', { name: '병동 만들기' }))
+  await screen.findByRole('button', { name: '같은 요청 재시도' })
+  expect(unloadIsBlocked()).toBe(true)
+  if (boundary === 'logout') await act(async () => { await app.manager.logout() })
+  else app.unmount()
+  expect(unloadIsBlocked()).toBe(false)
+})
+
+it('keeps the unload warning on the ward list until a successful retry or explicit abandonment', async () => {
+  const app = open()
+  expect(unloadIsBlocked()).toBe(false)
+  app.create.mockRejectedValueOnce(new ApiError(0, 'NETWORK'))
+  await fill(app)
+  await app.user.click(screen.getByRole('button', { name: '병동 만들기' }))
+  await screen.findByRole('button', { name: '같은 요청 재시도' })
+  expect(unloadIsBlocked()).toBe(true)
+  await app.user.click(screen.getAllByRole('link', { name: '내 병동 목록 확인' })[0]!)
+  await screen.findByRole('heading', { name: '내 병동' })
+  expect(unloadIsBlocked()).toBe(true)
+  await app.user.click(screen.getByRole('link', { name: '병동 만들기' }))
+  await app.user.click(await screen.findByRole('button', { name: '같은 요청 재시도' }))
+  await screen.findByRole('heading', { name: '병동을 만들었어요' })
+  expect(unloadIsBlocked()).toBe(false)
+  await app.user.click(screen.getByRole('button', { name: '다른 병동 만들기' }))
+  app.create.mockRejectedValueOnce(new ApiError(0, 'NETWORK'))
+  await app.user.click(screen.getByRole('button', { name: '병동 만들기' }))
+  await screen.findByRole('button', { name: '같은 요청 재시도' })
+  expect(unloadIsBlocked()).toBe(true)
+  await app.user.click(screen.getByRole('button', { name: '입력을 바꿔 새 요청' }))
+  await app.user.click(screen.getByRole('button', { name: '확인하고 새 요청 시작' }))
+  expect(unloadIsBlocked()).toBe(false)
+})
+
+it('removes the previous session unload warning when the account changes', async () => {
+  const app = open()
+  app.create.mockRejectedValueOnce(new ApiError(0, 'NETWORK'))
+  await fill(app)
+  await app.user.click(screen.getByRole('button', { name: '병동 만들기' }))
+  await screen.findByRole('button', { name: '같은 요청 재시도' })
+  expect(unloadIsBlocked()).toBe(true)
+  app.server.signInAs(USER_B)
+  await act(async () => { app.server.expireAllAccessTokens(); await app.manager.api.getMe().catch(() => undefined) })
+  await waitFor(() => expect(screen.getByLabelText('병동 이름')).toHaveValue(''))
+  expect(unloadIsBlocked()).toBe(false)
+  app.unmount()
+  expect(unloadIsBlocked()).toBe(false)
+})
+
+it.each([null, {}])('shows a retry for malformed 201 JSON %j and reuses the original key', async (body) => {
+  const app = open()
+  app.create.mockResolvedValueOnce(json(201, body))
+  await fill(app)
+  await app.user.click(screen.getByRole('button', { name: '병동 만들기' }))
+  await screen.findByRole('button', { name: '같은 요청 재시도' })
+  expect(screen.getByRole('alert')).toHaveTextContent('생성 결과를 확인하지 못했어요')
+  expect(screen.getByLabelText('병동 이름')).toBeDisabled()
+  expect(screen.queryByRole('heading', { name: '병동을 만들었어요' })).not.toBeInTheDocument()
+  await app.user.click(screen.getByRole('button', { name: '같은 요청 재시도' }))
+  await screen.findByRole('heading', { name: '병동을 만들었어요' })
+  expect(app.create.mock.calls[1]![1].body).toEqual(app.create.mock.calls[0]![1].body)
+  expect(new Headers(app.create.mock.calls[1]![1].headers).get('Idempotency-Key')).toBe(new Headers(app.create.mock.calls[0]![1].headers).get('Idempotency-Key'))
+})
+
 it('selects same-named hospitals by address, sends the contract and shows setup status', async () => {
   const app = open()
   await fill(app)

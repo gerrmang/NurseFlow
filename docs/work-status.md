@@ -1,5 +1,13 @@
 # 공유 작업 현황
 
+## B4b PR #46 재시도 정보 보호 리뷰 수정 (2026-11-18, Codex)
+
+- 사용자 요청의 P3 두 건 수정. `WardCreationGuard`를 `AppRoutes`의 라우트 바깥에 두고 세션 epoch별 flow를 구독해 요청 중·결과 미확인 상태의 `beforeunload` 경고를 목록 이동 후에도 유지한다. 성공·명시적 새 요청·계정 전환·로그아웃·컴포넌트 해제에서는 경고를 제거한다.
+- 생성 성공 응답의 객체 형태, 비어 있지 않은 wardId/wardName, roles 배열·역할 값, canViewWardCalendar boolean과 선택적 hospitalName 타입을 검사한 뒤에만 pending 키를 지운다. `201 null`, `{}`·필수 필드 누락/잘못된 타입은 `INVALID_RESPONSE`로 처리해 결과 미확인 안내·입력 잠금·동일 키/본문 재시도를 유지한다. null/생략 hospitalName은 기존 계약대로 허용한다. 같은 패턴 검색 결과 생성 응답을 소비하는 운영 flow와 종료 경고 등록은 이 경로뿐이다.
+- 회귀 검사 23개 추가. 수정 전 최초 대상 검사 43개 중 17개 실패·26개 통과로 목록 이동 후 경고 유실과 비정상 응답 수락을 재현했고, 수정 후 대상 43개 모두 통과했다. 이후 요청 중 목록 이동·늦은 성공·로그아웃/해제와 선택적 병원명 검사를 추가했다. 최종 Windows `web`: `npm run api:check`, `npm run lint`, `npm run typecheck`, `npm test -- --run`, `npm run build` 모두 exit 0. **300개 통과·실서버 opt-in 1개 건너뜀·실패 0**, JS gzip 97.53 kB. `git diff --check` 통과.
+- jsdom에서 취소 가능한 beforeunload 이벤트로 차단 여부를 검사했다. 실제 브라우저 종료 대화상자·Kakao·실서버·Android·backend 전체 회귀는 웹 상태/응답 검증 수정 범위라 재실행하지 않았다. 수정 diff 자체 검토 완료, 독립 재리뷰·수정 후 GitHub CI는 미확인이다. API/DB/환경 계약 변경 없음. 웹 정적 빌드에 영향, 배포 없음. 롤백은 이번 웹 수정 revert·이전 웹 빌드 복원.
+- 공유 인계: 사용자 재개 지시 후 같은 `C:\Users\jjang\IdeaProjects\NurseFlow`에서 기존 `feat/web-ward-create`로 복귀해 수정했다. 전환 전 현황 문서를 저장소 밖 `C:\Users\jjang\.codex\visualizations\2026\11\18\01a1ec4e-15f6-7233-8a52-5426c4c42845\work-status-resume-pr46.md`에 백업하고, 전환 충돌은 B4b 기록과 기존 A7 리뷰·DB 복구 미커밋 기록 16줄을 모두 보존해 해결했다. PR #49 코드·커밋은 포함하지 않았으며 DB·trace 보존. 사용자 푸시 요청으로 이 수정의 코드·회귀 검사·검증 기록과 이 현황 절만 커밋해 origin/feat/web-ward-create에 푸시한다. 기존 A7 리뷰·DB 복구 기록 16줄과 DB·trace는 커밋에서 제외해 작업 폴더에 보존한다. 앱 코드는 최종 검증 이후 변경하지 않아 로컬 검사는 반복하지 않았다. 게시 단계 git diff --cached --check로 확인하며 수정 후 CI·독립 재리뷰는 별도 확인한다. 같은 브랜치에서 리뷰 대응으로 인계하며 PR 병합·자동 병합·수동 배포 없음.
+
 ## B4b PR #46 게시 (2026-11-16, Codex)
 
 - 구현을 `c4904dcde33d9706add9f015c36889fe8e0ec5ed`에 커밋하고 `origin/feat/web-ward-create`에 푸시했다. [PR #46](https://github.com/gerrmang/NurseFlow/pull/46) 생성 후 `OPEN`, `isDraft=false`, 대상 `dev`, head 일치를 확인했다. GitHub 연결 도구가 생성 권한 403을 반환해 인증된 로컬 `gh`로 게시했다. 병합·자동 병합 설정 없음.

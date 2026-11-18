@@ -1,5 +1,12 @@
 # B4b 웹 병원 검색·병동 생성 검증
 
+## PR #46 리뷰 수정 (2026-11-18)
+
+- 종료 경고를 라우트 바깥 `WardCreationGuard`에서 세션별로 관리한다. 생성 중·결과 미확인 상태로 목록에 이동해도 유지되며, 늦은 성공·재시도 성공·새 요청 확인·계정 전환·로그아웃·해제에서 정리된다.
+- 생성 응답 필수 필드와 타입을 검증한 뒤에만 재시도 키를 지운다. `201 null`·`{}` 등 비정상 응답에서는 오류 안내와 입력 잠금을 표시하고 같은 키·본문을 재사용한다. 선택적 병원명의 null/생략은 허용한다.
+- 회귀 23개 추가. 최종 Windows `web`에서 `npm run api:check`, `npm run lint`, `npm run typecheck`, `npm test -- --run`, `npm run build` 모두 exit 0. **300개 통과·실서버 opt-in 1개 건너뜀·실패 0**, JS gzip 97.53 kB. `git diff --check` 통과. 아래 2026-11-16 결과와 구분한다.
+- beforeunload 차단은 jsdom 이벤트로 검증했다. 실제 브라우저 종료 대화상자·실제 Kakao·실서버·Android·backend 전체 검사는 이번 웹 상태/응답 검증 수정에서 재실행하지 않았다. 독립 재리뷰·수정 후 CI는 미확인이다. API/DB/환경 변경·배포 없음. 되돌리기는 이번 웹 수정 revert·이전 웹 빌드 복원.
+
 2026-11-16, Codex. 공유 worktree `C:\Users\jjang\IdeaProjects\NurseFlow`, 기존 `feat/web-ward-create`에서 미커밋 초안을 이어 구현했다. 시작 HEAD `9d47991`은 로컬 `origin/dev`와 같다. 원격 최신 상태·GitHub CI·PR 리뷰는 이번에 조회하지 않았다.
 
 ## 구현 범위

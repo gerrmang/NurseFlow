@@ -1,4 +1,4 @@
-import { asApiError, ClientErrorCode } from '../api/http'
+import { ApiError, asApiError, ClientErrorCode } from '../api/http'
 import type { NurseFlowApi } from '../api/nurseflowApi'
 import type { CreateWardRequest, HospitalCandidate, HospitalSearchPage, WardMembership } from '../api/types'
 import type { SessionManager } from '../session/SessionManager'
@@ -32,6 +32,16 @@ const creationErrors: Record<string, string> = {
   HOSPITAL_SEARCH_NOT_CONFIGURED: '서버에 병원 목록이 준비되지 않아 만들 수 없어요. 잠시 후 다시 시도해 주세요.',
   INVALID_REQUEST: '병원 선택과 병동 이름을 확인해 주세요.',
   FORBIDDEN: '병동을 만들 권한이 없어요. 계정 상태를 확인해 주세요.',
+}
+
+function isWardMembership(value: unknown): value is WardMembership {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return false
+  const ward = value as Record<string, unknown>
+  return typeof ward.wardId === 'string' && ward.wardId.trim().length > 0 &&
+    typeof ward.wardName === 'string' && ward.wardName.trim().length > 0 &&
+    Array.isArray(ward.roles) && ward.roles.every((role) => role === 'WARD_ADMIN' || role === 'WARD_MEMBER') &&
+    typeof ward.canViewWardCalendar === 'boolean' &&
+    (ward.hospitalName === undefined || ward.hospitalName === null || typeof ward.hospitalName === 'string')
 }
 
 /** Memory only, scoped to a session epoch. Navigation within the SPA retains the exact retry. */
@@ -114,6 +124,7 @@ export class WardCreationFlow {
     this.update({ busy: true, error: null })
     try {
       const created = await this.api.createWard(pending.request, pending.key)
+      if (!isWardMembership(created)) throw new ApiError(201, ClientErrorCode.INVALID_RESPONSE)
       this.pending = null
       this.update({ created, busy: false, uncertain: false })
     } catch (error) {
