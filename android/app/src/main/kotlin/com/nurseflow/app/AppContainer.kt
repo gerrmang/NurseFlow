@@ -11,7 +11,7 @@ import kotlinx.coroutines.*
 
 class AppContainer(
     context: Context,
-    apiBaseUrl: String = BuildConfig.API_BASE_URL,
+    private val apiBaseUrl: String = BuildConfig.API_BASE_URL,
     tokenStore: TokenStore = SecureTokenStore(context),
     val kakao: KakaoLoginClient = KakaoLoginClient(),
 ) {
@@ -19,6 +19,8 @@ class AppContainer(
     val api = ApiFactory.nurseFlowApi(apiBaseUrl, session)
     val invitationApi = ApiFactory.invitationApi(apiBaseUrl, session)
     val wardCreationApi = ApiFactory.wardCreationApi(apiBaseUrl, session)
+    /** Created inside the session-owned ViewModel factory, so queued writes keep that identity. */
+    fun staffAdminApi() = ApiFactory.staffAdminApi(apiBaseUrl, session)
     /** Invitation link being handled; memory only, never persisted. */
     val invites = PendingInvitationStore()
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)

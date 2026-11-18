@@ -31,6 +31,7 @@ fun WardCreateScreen(
     onShowWardList: () -> Unit,
     onOpenRoster: (MembershipDto) -> Unit,
     onOpenInvites: (MembershipDto) -> Unit,
+    onOpenStaff: (MembershipDto) -> Unit = {},
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val created = state.created
@@ -40,7 +41,7 @@ fun WardCreateScreen(
             if (created == null) TextButton(onClick = onClose, enabled = !state.creating) { Text("닫기") }
         }
         when {
-            created != null -> WardSetupGuide(created, onClose, onOpenRoster, onOpenInvites, Modifier.weight(1f))
+            created != null -> WardSetupGuide(created, onClose, onOpenRoster, onOpenInvites, Modifier.weight(1f), onOpenStaff)
             state.step == CreateStep.SEARCH -> SearchStep(state, viewModel, Modifier.weight(1f))
             else -> NameStep(state, viewModel, onShowWardList, Modifier.weight(1f))
         }
@@ -174,6 +175,7 @@ private fun WardSetupGuide(
     onOpenRoster: (MembershipDto) -> Unit,
     onOpenInvites: (MembershipDto) -> Unit,
     modifier: Modifier = Modifier,
+    onOpenStaff: (MembershipDto) -> Unit = {},
 ) {
     LazyColumn(modifier, verticalArrangement = Arrangement.spacedBy(12.dp)) {
         item {
@@ -192,8 +194,9 @@ private fun WardSetupGuide(
                 OutlinedButton(onClick = { onOpenInvites(created) }) { Text("초대 관리 열기") }
             }
         }
-        item { GuideItem("팀 구성", "앱에서 곧 설정할 수 있어요") }
-        item { GuideItem("간호사 경력·편성 단계", "앱에서 곧 설정할 수 있어요") }
+        item { GuideItem("팀·간호사 경력·편성 단계", "지금 가능해요") {
+            OutlinedButton(onClick = { onOpenStaff(created) }) { Text("팀·간호사·구성원 관리 열기") }
+        } }
         item { GuideItem("근무 유형·필요 인원", "앱에서 곧 설정할 수 있어요") }
         item { GuideItem("휴가·반차 입력", "앱에서 곧 설정할 수 있어요") }
         item {

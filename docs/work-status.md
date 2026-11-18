@@ -1,5 +1,24 @@
 # 공유 작업 현황
 
+## B5a 커밋·푸시 인계 (2026-11-18, Codex)
+
+- 사용자 요청으로 B5a Android 구현·테스트·검증 문서·PR 초안과 이 기능 현황만 커밋해 `origin/feat/android-staff-team`에 푸시한다. 기존 dev 점검·A7 리뷰·DB 복구 미커밋 기록과 로컬 DB·trace는 커밋에서 제외해 공유 작업 폴더에 보존한다.
+- 직전 최종 검증은 단위/API/실서버 171개·기기 4개 통과, 앱·테스트 APK·Lint 성공(오류 0·경고 28). 제품·테스트 코드는 그 뒤 변경하지 않아 이번 게시 단계에서는 재실행하지 않는다. 게시 전 staged diff 공백·포함 파일·기존 기록 제외를 확인하고, 푸시 후 원격 branch SHA와 로컬 HEAD 일치를 확인한다.
+- 같은 공유 worktree·`feat/android-staff-team`에서 후속 리뷰로 인계한다. 독립 리뷰·GitHub CI는 별도이며 PR 개설·병합·자동 병합·배포는 이번 요청에 포함하지 않는다. API/DB/환경 추가 변경 없음. 되돌리기는 B5a 커밋 revert와 이전 Android 빌드 사용이다.
+
+## B5a Android 팀·간호사·구성원 관리 구현·검증 (2026-11-18, Codex)
+
+- 사용자 승인 계획을 구현했다. `git fetch origin` 후 최신 dev `4ecedd1a2aa5a39a9cf93a22ee1381f4a83da52c` 기반 `feat/android-staff-team` 생성. 같은 공유 worktree 사용, 추가 worktree 없음. 기존 미커밋 dev 점검·A7 리뷰·DB 복구 기록과 DB·trace를 보존했다.
+- 관리자 병동 카드·병동 생성 후 안내에서 관리 진입. 팀 추가·이름·표시 순서·삭제, 간호사 기록 등록/이름·자격·활성/팀 배치, 활성 팀원 전체 드래그·버튼 경력순 저장. 병원 입사 연월 조회와 실제 경력·직급 입력/확인 분리, 선임·단계 조정·이력, 구성원 관리자 지정/해제·접근 비활성/재활성. 팀 수는 기존 추가/삭제 API로 조절한다. 근무 형태·근무 설정·경력 정책 편집·시연 모드는 제외했다.
+- A5·A6 기존 계약 소비. 세션·병동별 ViewModel, 진입·재조회·쓰기 전 관리자 소속 확인, 직렬 쓰기·서버 재조회, 유실 결과 확인 전 재전송 차단, 재조회 실패 중 편집 차단·이력 재시도, 권한 상실 데이터 폐기. API를 생성 당시 계정·세션 세대에 묶어 대기 요청과 401 갱신 뒤 계정 전환 재전송을 막았다. 명시적 null로 팀/단계 초기화, PATCH는 변경 속성만 전송. 서버의 기본 경력순을 유지하며 수동 저장 후 순서를 반영한다. 일반 편집의 마지막 저장 우선 한계는 안내한다.
+- 최종 JDK 21 Android `:app:testDebugUnitTest :app:assembleDebug :app:assembleDebugAndroidTest :app:lintDebug --offline --no-daemon`, NURSEFLOW_B5A_E2E=1: BUILD SUCCESSFUL. XML **171개 통과·실패/오류/건너뜀 0**(기존 144 + B5a 27). Lint 오류 0·경고 28·Information 4. 기본 실행에서는 실서버 opt-in 1개를 건너뛴다. 변경 없는 backend·웹 전체 회귀는 재실행하지 않았다.
+- 실제 backend 18091·별도 메모리 DB와 루프백 가상 OIDC 18090으로 API/DB·인증 서명 검증을 수행했다. 팀·정렬·경력·선임·이력, 마지막 관리자·활성 기록 충돌·비활성 구성원 보호, 접근만 재활성화, 본인 권한 상실 시 데이터 폐기 확인. 사용자 파일 DB는 사용하지 않았다. 공급자·계정만 가상이며 실제 Kakao·운영 검증은 아니다. 재현은 android/B5a-verification.md와 android/scripts/b5a-oidc-fixture.mjs 참조.
+- 최종 Pixel_10 Android 17 `:app:connectedDebugAndroidTest`에 B5a 두 클래스를 지정: **4/4 통과·실패/건너뜀 0, BUILD SUCCESSFUL(45초)**. 드래그·버튼 정렬 저장, 마지막 관리자 확인/거절 안내, 실제 MainActivity 진입·재생성 뒤 미저장 팀 입력과 정렬 보존. 직접 instrumentation도 앞서 4개 성공. 실제 물리 회전·실서버 기기 E2E와 구분한다.
+- 중간 검증의 가상 API 예외 전달, 기기의 기존 프록시, 테스트 앱 초기 세션 복원과 로그인 순서를 보완했다. 기기 시스템 응답 정지로 이번 검증용 에뮬레이터를 데이터 초기화 없이 콜드 부팅했다. 기기 프록시는 변경하지 않고 테스트 프로세스에서 루프백만 직접 연결·복원했다. 장시간 메모리 서버의 시계 변경 경고 이후 실서버 HTTP 500 1건이 있었고, 새 메모리 서버에서 동일 제품 코드와 최종 코드 모두 재실행 통과했다. 내부 원인·제품 결함으로 단정하지 않는다.
+- 자체 전체 diff·관련 경로 검토와 git diff --check 완료. 독립 리뷰·최종 GitHub CI·실제 Kakao·물리 기기·운영·모든 화면 크기·다중 관리자 실기기 동시 편집은 미완료. 앱/서버 계약·DB·환경변수·의존성 추가 변경 없음. Android 빌드에 영향, 배포 없음. 되돌리기는 B5a 변경 revert와 이전 Android 빌드 복원.
+- 공유 인계: 같은 C:\Users\jjang\IdeaProjects\NurseFlow, feat/android-staff-team, HEAD 4ecedd1에서 구현·검증 문서와 PR 초안(android/B5a-pr-draft.md)을 미커밋으로 남긴다. 기존 미커밋 기록·DB·trace는 기능 변경과 구분해 보존한다. 커밋·푸시·PR 개설·병합·자동 병합·배포 없음. 다음 단계는 이 변경 전체의 독립 리뷰와 지적 수정, 검증 기록을 포함한 Android 단독 dev 대상 PR 게시다. 검증용 서버·공급자·이번 에뮬레이터는 종료해 인계한다.
+
+
 ## B9b PR #49 최신 dev B4b·B5b 통합 (2026-11-18, Codex)
 
 - 사용자 요청으로 기존 `feat/web-published-roster`의 `2e83302`에 최신 `origin/dev` `5319ec6`(B4b PR #46, B5b PR #47 병합 포함)을 반영했다. 기존 공유 worktree에서 진행했으며 새 브랜치·worktree 없음. 충돌은 `web/src/App.tsx`와 이 문서에서 해결했다. 공개 근무표·병동 생성·팀 관리 경로를 모두 유지하고 전역 생성 경고와 세션별 화면 키도 보존했다. 자동 병합된 목록의 공개 조회·관리 링크와 두 기능 스타일을 검토했다. 루트/웹 README에 통합된 공개 조회 현황과 검증 링크를 반영했다.
