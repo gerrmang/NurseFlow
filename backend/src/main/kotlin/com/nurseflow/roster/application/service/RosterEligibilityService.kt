@@ -48,6 +48,8 @@ class RosterEligibilityService(
         val revision = policy.policyRevision(wardId)
         val demoMode = roster.demoMode(wardId) ?: throw BusinessException(ErrorCode.WARD_NOT_FOUND)
         val items = roster.eligibilityRows(wardId).map { row ->
+            // Keep the displayed mode, reason and inclusion decision on one logical snapshot.
+            // A concurrent mode update can commit between demoMode() and eligibilityRows().
             val reason = when {
                 !row.staffActive -> "STAFF_INACTIVE"
                 row.subject == null && !demoMode -> "DEMO_MODE_DISABLED"
@@ -55,7 +57,7 @@ class RosterEligibilityService(
                 row.subject != null && !row.memberActive -> "MEMBERSHIP_INACTIVE_OR_MISSING"
                 else -> "ELIGIBLE"
             }
-            EligibilityItem(row.id, row.displayName, row.eligible, reason)
+            EligibilityItem(row.id, row.displayName, reason == "ELIGIBLE", reason)
         }
         return EligibilityResult(demoMode, revision, items)
     }

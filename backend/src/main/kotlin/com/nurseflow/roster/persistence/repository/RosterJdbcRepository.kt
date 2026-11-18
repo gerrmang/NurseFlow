@@ -196,18 +196,17 @@ class RosterJdbcRepository(
     }
 
     data class EligibilityRow(val id: UUID, val displayName: String, val staffActive: Boolean, val subject: String?,
-        val memberActive: Boolean, val adminActive: Boolean, val eligible: Boolean)
+        val memberActive: Boolean, val adminActive: Boolean)
 
     fun eligibilityRows(wardId: UUID): List<EligibilityRow> = jdbc.query(
         """SELECT nurses.nurse_id,nurses.display_name,nurses.active,nurses.subject,
                   EXISTS(SELECT 1 FROM ward_memberships m WHERE m.ward_id=nurses.ward_id AND m.subject=nurses.subject
                       AND m.role='WARD_MEMBER' AND m.active=TRUE) AS member_active,
                   EXISTS(SELECT 1 FROM ward_memberships m WHERE m.ward_id=nurses.ward_id AND m.subject=nurses.subject
-                      AND m.role='WARD_ADMIN' AND m.active=TRUE) AS admin_active,
-                  ($rosterable) AS eligible
+                      AND m.role='WARD_ADMIN' AND m.active=TRUE) AS admin_active
            FROM nurses WHERE nurses.ward_id=? ORDER BY nurses.display_name,nurses.nurse_id""",
         { rs, _ -> EligibilityRow(uuid(rs,"nurse_id"),rs.getString("display_name"),rs.getBoolean("active"),
-            rs.getString("subject"),rs.getBoolean("member_active"),rs.getBoolean("admin_active"),rs.getBoolean("eligible")) }, wardId,
+            rs.getString("subject"),rs.getBoolean("member_active"),rs.getBoolean("admin_active")) }, wardId,
     )
 
     fun findNurse(id: UUID, wardId: UUID): DbNurse? = jdbc.query(
