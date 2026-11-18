@@ -1,5 +1,12 @@
 # 공유 작업 현황
 
+## B5a PR #50 게시 (2026-11-18, Codex)
+
+- 사용자 요청으로 [PR #50](https://github.com/gerrmang/NurseFlow/pull/50)을 게시했다. GitHub 조회로 OPEN·일반 PR(`draft=false`)·대상 dev·구현 head `037552cbf9d9afca1bd28b56b679cc6f78433c92` 일치를 확인했다. 연결 도구의 생성 권한 403으로 기존 인증된 gh를 사용했다. 병합·자동 병합·배포 없음.
+- PR 템플릿에 실제 backend/가상 OIDC 구분, 171개·기기 4개 성공, 미실행 항목, API/DB 변경 없음·Android 배포 영향·되돌리기·Squash and merge를 기록했다. 구현 head의 [Verify 44303614249](https://github.com/gerrmang/NurseFlow/actions/runs/44303614249)는 조회 시 queued·결과 미정이었다. 이 게시 기록 커밋 이후 최종 CI는 별도 확인한다.
+- 제품·테스트 코드 변경 없이 게시 기록만 추가하므로 로컬 앱 검사를 반복하지 않는다. 같은 공유 worktree·feat/android-staff-team에서 이 PR 리뷰 대응으로 인계한다. 기존 dev 점검·A7 리뷰·DB 복구 기록과 DB·trace는 이 문서 커밋에서도 제외해 보존한다. 독립 리뷰와 기존 미검증 제한은 유지한다.
+
+
 ## B5a 커밋·푸시 인계 (2026-11-18, Codex)
 
 - 사용자 요청으로 B5a Android 구현·테스트·검증 문서·PR 초안과 이 기능 현황만 커밋해 `origin/feat/android-staff-team`에 푸시한다. 기존 dev 점검·A7 리뷰·DB 복구 미커밋 기록과 로컬 DB·trace는 커밋에서 제외해 공유 작업 폴더에 보존한다.
