@@ -7,6 +7,7 @@ import { LoginPage } from './pages/LoginPage'
 import { NotFoundPage } from './pages/NotFoundPage'
 import { SessionStatusView } from './pages/SessionStatusView'
 import { WardsPage } from './pages/WardsPage'
+import { PublishedRosterPage } from './pages/PublishedRosterPage'
 import { WardCreatePage } from './pages/WardCreatePage'
 import { StaffAdminPage } from './pages/StaffAdminPage'
 import { INVITE_PATH } from './invite/inviteLink'
@@ -30,10 +31,16 @@ export function AppRoutes() {
         <Route path="/wards/:wardId/invitations" element={<InvitationAdminRoute />} />
         <Route path="/wards/new" element={<RequireSession>{(user, epoch) => <WardCreatePage key={`${user.userId}:${epoch}`} epoch={epoch} />}</RequireSession>} />
         <Route path="/wards/:wardId/staff" element={<StaffAdminRoute />} />
+        <Route path="/wards/:wardId/published-roster" element={<PublishedRosterRoute />} />
         <Route path="*" element={<NotFoundPage />} />
       </Routes>
     </>
   )
+}
+
+function PublishedRosterRoute() {
+  const { wardId = '' } = useParams()
+  return <RequireSession>{(user, epoch) => <PublishedRosterPage key={`${user.userId}:${epoch}:${wardId}`} wardId={wardId} />}</RequireSession>
 }
 
 function StaffAdminRoute() {

@@ -57,6 +57,17 @@ input, select { font: inherit; padding: 10px 12px; border-radius: 8px; border: 1
 .invite-list li { display: flex; flex-direction: column; gap: 8px; overflow-wrap: anywhere; }
 .confirm p { margin: 0; }
 .highlight { border-color: var(--primary); }
+.roster-page { max-width: 960px; }
+.roster-month { align-items: center; }
+.roster-month label { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.roster-calendar { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; margin: 16px 0; }
+.roster-weekday { text-align: center; color: var(--muted); }
+button.roster-day { padding: 8px 2px; min-height: 64px; display: flex; flex-direction: column; gap: 6px; align-items: center; overflow-wrap: anywhere; min-width: 0; }
+.roster-day-code { font-size: .75rem; max-width: 100%; }
+button[aria-pressed="true"] { outline: 2px solid var(--primary); outline-offset: 1px; background: var(--surface); font-weight: 700; }
+.roster-shifts { padding: 0; list-style: none; }
+.roster-shifts li { display: flex; flex-wrap: wrap; gap: 8px 16px; padding: 12px 0; border-bottom: 1px solid var(--border); overflow-wrap: anywhere; }
+.roster-page summary { cursor: pointer; padding: 8px 0; }
 .card p, .card .error, .card .notice { overflow-wrap: anywhere; }
 .hospital-results { border: 0; padding: 0; margin: 16px 0; min-width: 0; }
 .hospital-option { display: flex; gap: 12px; align-items: flex-start; padding: 12px 0; border-bottom: 1px solid var(--border); cursor: pointer; }
