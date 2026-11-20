@@ -68,9 +68,11 @@ try {
     const show = async () => {
       try {
         const result = await seed(await runtime.login());
+        process.exitCode = 0;
         console.log(`[시연 모드 ON / 가상 데이터] ${runtime.baseUrl} / 병동 ${result.wardId}`);
         console.log('A/B팀·간호사 10명(팀별 1~5단계)·D/E/N·편성 대상 10명 조회 검증 성공.');
       } catch (error) {
+        process.exitCode = 1;
         console.error(error instanceof DemoError ? error.message : '가상 데이터 조회·생성 검증 실패.');
         console.error('메모리 DB는 유지됩니다. r로 상태를 다시 조회하거나 q로 종료하세요.');
       }

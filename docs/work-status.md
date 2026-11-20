@@ -1,5 +1,22 @@
 # 공유 작업 현황
 
+## B6 P3 종료 코드 수정·인수 상태 정정 (2026-11-20, Codex)
+
+- 사용자 수정 요청으로 같은 `chore/demo-seed-script`에서 일반 실행의 마지막 시드 검증 결과를 `process.exitCode`에 반영했다. 실패 후 q/EOF는 1, r로 복구·검증까지 성공하면 0, 최초 성공 뒤 재실패하면 1이다. 오류를 알린 뒤 메모리 DB를 유지하는 재시도 흐름은 보존했다. 같은 오류 처리 패턴을 검색했으며 최상위 catch는 이미 exitCode=1, API/runtime catch는 호출자에게 실패를 전달한다.
+- `scripts/demo/local.test.mjs`에 실제 CLI+Spring+별도 메모리 H2의 검색 503 주입 회귀 4개 추가. JDK 21, `NURSEFLOW_B6_TEST_JAR` opt-in으로 `node --test scripts/demo/api.test.mjs scripts/demo/runtime.test.mjs scripts/demo/local.test.mjs`: **11개 통과·실패/오류/건너뜀 0**, 43초. 새 회귀 단독 실행도 4개 통과했다. 수정 전 q/EOF exit 0 재현은 아래 자체 검토 절에 있다.
+- 수정 후 `node scripts/demo/local.mjs --jar backend/build/libs/nurseflow-backend-0.1.0-SNAPSHOT.jar --verify` exit 0: 기존 4종 생성 응답 유실 복구·시드 데이터 쓰기 0건·시연 모드 제외/복구·412·비소속 404·근무 설정 보존 통과. mjs 구문·`git diff --check` 통과. 검증용 Java/JWKS는 모두 종료하고 해당 포트 해제를 확인했다. 서버/클라이언트 전체 회귀·기기·실제 Kakao·운영·macOS/Linux는 스크립트 종료 상태 수정 범위라 재실행하지 않았다.
+- README·PR 초안에서 Android/웹 시연 모드 표시를 임의로 범위 밖이라 적었던 표현을 제거하고 결정 9·21의 **미완료 인수 조건**으로 명시했다. 가상 관리자 1명·검증용 비소속 1명은 실제 Kakao 계정 운용 결정이 아니다. B6의 `scripts/demo/**` 경계를 유지하며 클라이언트 UI·실제 계정 시연까지 완료했다고 주장하지 않는다. 해당 구현·운용 결정 및 검증 기록 연결은 아직 남아 있다.
+- API·DB·환경변수 계약·의존성 및 배포 영향 없음. 되돌리기는 이번 종료 코드 수정 revert, 서버/DB 롤백 없음. 수정 diff 자체 재검토 완료, 독립 재리뷰·GitHub CI는 미확인이다. 아래 자체 검토의 P3 미수정 판정은 당시 기록이며 이 수정으로 대응했다.
+- 공유 인계: 같은 `C:\Users\jjang\IdeaProjects\NurseFlow`, `chore/demo-seed-script`에서 수정·회귀 검사·README·PR 초안·자체 검토 및 이 현황 기록을 함께 커밋·푸시한다. 원격 SHA 일치를 확인하고 다음은 수정 diff 독립 재리뷰다. 기존 DB·trace와 로컬 문서 보존 브랜치는 보존하며 PR 게시·병합·배포 없음.
+
+## B6 문서·구현 자체 검토 (2026-11-20 16:50 KST, Codex)
+
+- 검토 기준: 같은 공유 worktree `C:\Users\jjang\IdeaProjects\NurseFlow`, `chore/demo-seed-script`, HEAD `977eaecc19779dfcea4df277fbe7813f201ca829`. 검토 전 상태 기록 외 tracked diff 없음(SHA-256 `e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855`, 빈 diff). AGENTS·Git 흐름·공유 인계·리뷰 절차, breakdown B6/선행/결정 9·21, 제품 범위·정책·테스트 및 소비 API와 변경 12파일을 대조했다. 현재 브랜치명·dev 시작점·소유 경로·서버 API/권한 사용·가상 데이터 분리는 기준에 맞는다. 최초 잘못된 브랜치명은 푸시 전에 정정됐다.
+- **P3(런타임) 1건, 미수정:** `scripts/demo/local.mjs:73-76`의 일반 실행 catch가 실패를 출력만 하고 종료 상태에 반영하지 않는다. 저장소 수정 없이 별도 Node 프로세스의 fetch에 병원 검색 HTTP 503을 주입했다. 생성 성공 문구 없음·HTTP 503 출력인데 q 종료와 stdin EOF 각각 exit 0 재현. 일반 `run.ps1`은 이 종료 코드를 성공으로 판단한다. 실패 후 재조회/복구는 유지하되 마지막 시드 검증 결과를 종료 코드에 반영하고, 실패→종료/실패→r 복구 회귀 검사를 추가해야 한다.
+- 완료 판정 정정: API 시드 구현·새 H2 조회 검증은 끝났지만 B6 전체 인수 완료로 단정하지 않는다. breakdown 결정 9와 OpenAPI는 클라이언트 시연 모드 표시를 요구하는데 현재는 터미널 표시만 있고 Android/웹 배너·설정 UI가 없다. 결정 21의 실제 Kakao 시연 계정 수/관리도 미정이다. README에서 후속으로 적은 사실만으로 해당 인수 조건이 충족되거나 범위 변경이 합의된 것은 아니다. 실제 계정·클라이언트 시연 완료와 구분한다.
+- 재검증: `node --test scripts/demo/api.test.mjs scripts/demo/runtime.test.mjs` 7개 통과·실패/건너뜀 0. JDK 21 `scripts/demo/run.ps1 -Verify -Offline` bootJar BUILD SUCCESSFUL·최종 확장 통합 검증 exit 0(4종 응답 유실 복구·쓰기 0건·시연 모드 제외/복구·412·비소속 404·근무 설정 보존). 원격 dev `139b609`와 작업 브랜치 `977eaec` 일치 확인. GitHub PR·해당 브랜치 workflow run 조회 결과 각각 0건이며 CI 성공·독립 승인으로 표현하지 않는다.
+- 리뷰 절차에 따라 제품 코드 수정·커밋·푸시·PR 게시·병합 없음. 이 검토 기록만 같은 작업 현황에 추가한다. 검증용 서버는 종료됐고 사용자 DB·trace·기존 로컬 문서 보존 브랜치는 보존했다. 다음 인계는 위 P3 수정과 회귀 검사, 시연 모드 UI/실제 계정 인수 범위 정리 후 재리뷰다.
+
 ## B6 공개 API 가상 데이터 시드 구현·검증 (2026-11-20, Codex)
 
 - 같은 공유 worktree에서 최신 dev `139b609` 기반 `chore/demo-seed-script`로 작업한다. 최초 브랜치명을 breakdown에 명시된 이름으로 정정했다. 소유 범위 `scripts/demo/**`에 Node.js 시드·가상 JWKS/Java 런타임·PowerShell 한 명령 진입점·CP949 가상 병원 fixture·사용법·검사를 추가했다. backend·OpenAPI·클라이언트·breakdown은 수정하지 않았다.
