@@ -1,5 +1,20 @@
 # 공유 작업 현황
 
+## B5a PR #50 계정 전환 토큰 경합 수정 (2026-11-20, Codex)
+
+- P2 `discussion_r4639136298` 수정: SessionManager가 계정 ID·세션 세대·액세스 토큰을 불변 SessionCredentials 하나로 구성해 volatile 참조로 발행한다. UI 상태에는 토큰을 넣지 않는다. 로그아웃·복원 실패 시 스냅샷을 제거하고 기존 accessToken 조회도 이 참조를 사용한다.
+- 같은 패턴을 최초 BearerInterceptor와 401 RefreshAuthenticator에서 함께 수정했다. 요청의 세션 바인딩을 검증한 스냅샷의 토큰으로 헤더를 만든다. staff API 생성도 같은 스냅샷에서 세션 식별자를 얻는다. 계정 변경을 읽은 요청은 차단하고, 변경 전 스냅샷을 읽은 요청은 원래 계정 토큰만 사용한다.
+- 신규 SessionCredentialRaceTest 5개: latch로 최초 요청·401 재시도의 스냅샷 읽기 직전/직후 계정 전환을 강제한 4개와 로그인·갱신·로그아웃 스냅샷 일관성 1개. 토큰을 별도로 재조회하는 변이를 임시 적용한 대상 검사에서 5개 중 2개가 새 계정 토큰 혼용으로 예상대로 실패했다. finally에서 원본을 복원한 뒤 최종 전체 검사를 다시 통과했다.
+- 최종 JDK 21 android `:app:testDebugUnitTest :app:assembleDebug :app:assembleDebugAndroidTest :app:lintDebug --offline --no-daemon`: BUILD SUCCESSFUL(49초). XML 181개 중 180개 통과·실서버 opt-in 1개 건너뜀·실패/오류 0. Lint 오류 0·기존 경고 28·Information 4. git diff --check 통과. 기기 UI·실서버·실제 Kakao·backend·웹 전체 검사는 Android 세션/네트워크 수정 범위라 재실행하지 않았다.
+- API/DB/환경·서버 근무 규칙 변경 없음. Android의 공통 인증 요청 경로에 영향, 배포 없음. 롤백은 이번 수정 커밋 revert와 이전 Android 빌드 복원이다. 자체 수정 diff·관련 경로 재검토 완료, 독립 재리뷰·최종 head CI는 별도 확인 대상이며 리뷰 스레드를 독립 검토 완료로 처리하지 않는다.
+- 공유 인계: 같은 `C:\Users\jjang\IdeaProjects\NurseFlow`, `feat/android-staff-team`에서 이번 코드·회귀 검사·PR #50 확인/수정 기록만 커밋·푸시한다. 기존 dev 점검·A7 리뷰·DB 복구 미커밋 기록과 DB·trace는 제외해 보존한다. 원격 head 일치를 확인하고 PR 본문에 최신 검증 결과를 반영한다. PR 병합·자동 병합 없음. 다음 단계는 수정 diff 재리뷰다.
+
+## B5a PR #50 추가 코멘트 확인 (2026-11-20, Codex)
+
+- GitHub 연결 도구로 PR 대화와 리뷰 스레드를 조회했다. head `f15631c0b05afb8c83975b8b90d5e1d21930dc15`에 미해결·현재 유효한 인라인 지적 1건(`discussion_r4639136298`, P2)이 있다. 별도 리뷰 본문은 같은 지적의 요약이며 나머지 대화는 Vercel Ready 알림이다.
+- 코드를 대조해 지적이 아직 남아 있음을 확인했다. ApiFactory의 BearerInterceptor는 bound.matches(session) 뒤 accessToken을 별도로 읽고, SessionManager.apply는 토큰과 SignedIn을 따로 발행한다. 계정 전환 중 이전 요청이 새 계정 토큰을 선택할 수 있는 실행 순서다. 기존 StaffAdminApiTest는 로그인 완료 뒤의 차단을 검사하며 두 읽기 사이 전환을 강제하지 않는다. 자격 보존 수정 f15631c는 이 경로를 수정하지 않았다.
+- 검증은 코멘트 조회·관련 코드/테스트 정적 대조만 수행했다. 경합 실행 재현·로컬 테스트·최종 head CI는 이번 확인에서 실행/조회하지 않았다. 앱·API·DB 변경, GitHub 답글·스레드 해결·커밋·푸시·병합 없음. 같은 공유 worktree·feat/android-staff-team에서 미해결 P2 수정과 순서 강제 회귀 검사로 인계하며 기존 미커밋 기록·DB·trace를 보존한다.
+
 ## B5a PR #50 자격 문자열 보존 수정 (2026-11-20, Codex)
 
 - P2 데이터 보존 결함 수정: 기존 자격 표시값을 변경하지 않으면 원래 배열을 그대로 전송한다. 이름·활성 상태만 수정할 때 `자격 A,B`가 두 자격으로 분리되는 것을 방지했다. 화면 입력 검증과 저장이 같은 변환 함수를 사용해 쉼표를 포함한 50개 자격도 잘못 차단하지 않는다. 자격 입력 자체를 변경하거나 새 기록을 등록할 때는 기존 쉼표 구분 방식을 유지한다.
