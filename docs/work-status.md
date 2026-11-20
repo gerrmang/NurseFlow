@@ -1,5 +1,16 @@
 # 공유 작업 현황
 
+## B6 공개 API 가상 데이터 시드 구현·검증 (2026-11-20, Codex)
+
+- 같은 공유 worktree에서 최신 dev `139b609` 기반 `chore/demo-seed-script`로 작업한다. 최초 브랜치명을 breakdown에 명시된 이름으로 정정했다. 소유 범위 `scripts/demo/**`에 Node.js 시드·가상 JWKS/Java 런타임·PowerShell 한 명령 진입점·CP949 가상 병원 fixture·사용법·검사를 추가했다. backend·OpenAPI·클라이언트·breakdown은 수정하지 않았다.
+- `scripts/demo/run.ps1`이 bootJar 빌드 후 루프백·별도 메모리 H2로 기존 Spring 서버를 실행한다. 가상 병원/병동, A/B팀, 팀별 단계 1~5 간호사 총 10명, 가상 경력 확인·단계 조정·선임·팀 내 순서, D/E/N 시간·휴게·인정·환산을 공개 API로 생성하고 `demoMode=true`와 서버 편성 판정을 재조회한다. 서버 규칙·인증 검증 우회 없음. 터미널에 가상 데이터·시연 모드 표시, 완료 후 r 재실행 쓰기 0건, 실패 뒤에도 r로 조회·복구 가능하다.
+- 검증: JDK 21·Node v24.15.0, `scripts/demo/run.ps1 -Verify -Offline` bootJar BUILD SUCCESSFUL 및 초기 통합 시나리오 성공. 최종 확장 검증 `node scripts/demo/local.mjs --jar backend/build/libs/nurseflow-backend-0.1.0-SNAPSHOT.jar --verify` exit 0: 병동·팀·간호사·근무 유형 성공 응답 유실 4종의 중복 없는 복구, 팀/경력/선임/순서/근무 시간·편성 대상 전체 조회, 재실행 쓰기 0건, 오래된 ETag 412, 비소속 계정 404, 시연 모드 해제 시 10명 전원 제외·복구, 기존 Day 인정시간 변경값 덮어쓰기 거부 확인.
+- `node --test scripts/demo/api.test.mjs scripts/demo/runtime.test.mjs`: 7개 통과·실패/건너뜀 0. API 외부 주소/경로 차단, 결과 유실 비재전송·오류 비밀값 비노출, HTTP 오류·리다이렉트·제한시간·비정상 JSON, 점유 포트 보존·잘못된 실행 인수 검사. 모든 mjs 구문·텍스트 공백 검사 및 `git diff --check` 통과. 최종 일반 진입점의 최초 생성→r 동일 병동 재조회→q exit 0·포트 해제, 시작 중 취소→Java 종료·포트 해제도 실제 프로세스로 별도 확인했다.
+- 중간 실패: 샌드박스 Gradle 캐시 잠금 접근 거부 후 권한 확장으로 빌드 완료. 비소속 병동 응답을 403으로 기대하던 검사를 현행 서버 계약 404로 정정했다. 덮어쓰기 방지 검사에 사용한 인정시간 451분은 서버 상한 450분을 넘어 422였으며, 유효한 449분으로 정정 후 최종 통합 검증 통과. 제품 서버 코드는 바꾸지 않았다.
+- 미검증/후속: 실제 Kakao·Android/웹 UI·물리 기기·운영·macOS/Linux·전체 backend/클라이언트 회귀·독립 리뷰·GitHub CI는 실행하지 않았다. 이번 범위는 가상 공급자+실제 서버의 API 데이터 준비다. Android/웹 시연 모드 배너·설정 UI, 실제 계정 수/관리(결정 21), 초안/수요/자동배치/공개·통합 E2E는 후속이다.
+- API·DB 스키마·환경변수 계약·의존성 추가 변경 및 배포 없음. 설정은 전용 자식 프로세스에만 적용한다. 되돌리기는 시연 종료 후 B6 변경 제거/revert다. 검증용 Java/JWKS 서버는 종료했으며 기존 DB·trace와 로컬 문서 보존 브랜치 `codex/docs-preserve-handoff-records`의 `9a01332`는 그대로 뒀다.
+- 공유 인계: `C:\Users\jjang\IdeaProjects\NurseFlow`, `chore/demo-seed-script`에서 사용자 요청으로 B6 코드·사용법·PR 초안과 이 현황 기록을 함께 커밋·푸시한다. 게시 전 staged diff·공백·대상 파일을 확인하고 푸시 후 원격 SHA를 확인한다. 기존 로컬 문서 보존 브랜치와 DB·trace는 포함하지 않는다. PR 게시·병합·배포는 하지 않으며 다음 단계는 B6 diff 리뷰 및 후속 UI 범위 분리 확인이다. 별도 worktree를 만들지 않는다.
+
 ## B5a PR #50 공통 401 재시도 계정 혼용 회귀 수정 (2026-11-20, Codex)
 
 - 새 P2 `discussion_r4639296654` 대응. 이전 스냅샷 수정 aefb24f가 staff 태그 없는 공통 요청에서 만든 회귀임을 확인했다. 이전 P2 스레드는 리뷰어가 해결 표시했으나 새 P2는 미해결 상태였다. 초대 발급·철회·병동 생성도 공통 BearerInterceptor에서 실제 전송 토큰의 계정·세션 세대를 RequestSessionIdentity 태그로 기록하게 했다. 기존 staff 클라이언트 생성 시 바인딩은 유지한다.
