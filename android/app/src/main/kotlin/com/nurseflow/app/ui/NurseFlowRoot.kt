@@ -29,6 +29,8 @@ import com.nurseflow.app.feature.ward.create.IntentPhase
 import com.nurseflow.app.feature.ward.create.WardCreateScreen
 import com.nurseflow.app.feature.ward.create.WardCreateViewModel
 import com.nurseflow.app.feature.ward.create.resolveCreateIntent
+import com.nurseflow.app.feature.staff.StaffAdminScreen
+import com.nurseflow.app.feature.staff.StaffAdminViewModel
 
 @Composable
 fun NurseFlowRoot(container: AppContainer) {
@@ -42,6 +44,7 @@ fun NurseFlowRoot(container: AppContainer) {
     val sessionKey = (session as? SessionState.SignedIn)?.let { "${it.userId}:${it.generation}" }
     var selectedWardId by rememberSaveable(sessionKey) { mutableStateOf<String?>(null) }
     var adminWardId by rememberSaveable(sessionKey) { mutableStateOf<String?>(null) }
+    var staffWardId by rememberSaveable(sessionKey) { mutableStateOf<String?>(null) }
     var wardEntry by rememberSaveable(sessionKey) { mutableStateOf(0) }
     var pasting by remember(sessionKey) { mutableStateOf(false) }
     var creatingWard by rememberSaveable(sessionKey) { mutableStateOf(false) }
@@ -93,6 +96,7 @@ fun NurseFlowRoot(container: AppContainer) {
                             val loaded = (wards as? WardsUiState.Loaded)?.wards
                             val ward = loaded?.firstOrNull { it.wardId == selectedWardId }
                             val adminWard = loaded?.firstOrNull { it.wardId == adminWardId && it.isAdmin }
+                            val staffWard = loaded?.firstOrNull { it.wardId == staffWardId && it.isAdmin }
                             // Created for the whole session so a newer link replaces, not duplicates, the flow.
                             // One fixed-key model; reset() on entry and exit means flows never pile up in the store.
                             val createModel = viewModel(key = "ward-create") {
@@ -124,6 +128,7 @@ fun NurseFlowRoot(container: AppContainer) {
                                         wardsModel.reload()
                                         adminWardId = null
                                         selectedWardId = wardId
+                                        staffWardId = null
                                         wardEntry += 1
                                     }
                                 }
@@ -135,7 +140,19 @@ fun NurseFlowRoot(container: AppContainer) {
                                         onShowWardList = { leaveCreate() },
                                         onOpenRoster = { leaveCreate(); adminWardId = null; selectedWardId = it.wardId; wardEntry += 1 },
                                         onOpenInvites = { leaveCreate(); adminWardId = it.wardId },
+                                        onOpenStaff = { leaveCreate(); staffWardId = it.wardId },
                                     )
+                                }
+                                staffWard != null -> {
+                                    val staff = viewModel(key = "staff-${staffWard.wardId}") {
+                                        StaffAdminViewModel(container.staffAdminApi(), staffWard.wardId,
+                                            memberships = { container.api.wards().items },
+                                            sessionValid = { val now = container.session.state.value; now is SessionState.SignedIn && now.userId == current.userId && now.generation == current.generation },
+                                            onSessionInvalid = { container.logout() })
+                                    }
+                                    StaffAdminScreen(staffWard.wardName, staff,
+                                        onBack = { staffWardId = null; wardsModel.reload(silent = true) },
+                                        onForbidden = { staffWardId = null; selectedWardId = null; wardsModel.reload() })
                                 }
                                 adminWard != null -> {
                                     BackHandler { adminWardId = null }
@@ -159,6 +176,7 @@ fun NurseFlowRoot(container: AppContainer) {
                                     onPasteInvitation = { pasting = true },
                                     onCreateWard = enterCreate,
                                     onLogout = container::logout,
+                                    onManageStaff = { staffWardId = it.wardId },
                                 )
                                 else -> {
                                     BackHandler { selectedWardId = null }

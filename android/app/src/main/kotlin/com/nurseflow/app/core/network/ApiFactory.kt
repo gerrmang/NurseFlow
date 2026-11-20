@@ -1,6 +1,7 @@
 package com.nurseflow.app.core.network
 
 import com.nurseflow.app.core.session.SessionManager
+import com.nurseflow.app.core.session.SessionCredentials
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
 import okhttp3.Authenticator
@@ -24,6 +25,8 @@ object ApiJson {
 }
 
 object ApiFactory {
+    @OptIn(kotlinx.serialization.ExperimentalSerializationApi::class)
+    private val staffJson = Json(ApiJson.json) { explicitNulls = true; encodeDefaults = false }
     private fun baseClient() = OkHttpClient.Builder()
         .connectTimeout(10, TimeUnit.SECONDS)
         .readTimeout(20, TimeUnit.SECONDS)
@@ -71,16 +74,36 @@ object ApiFactory {
         retrofit(baseUrl, nonRetryingClient(session).readTimeout(30, TimeUnit.SECONDS).build())
             .create(WardCreationApi::class.java)
 
+    fun staffAdminApi(baseUrl: String, session: SessionManager): StaffAdminApi {
+        val identity = session.credentials?.identity
+        val bound = RequestSessionIdentity(identity?.userId, identity?.generation)
+        val client = nonRetryingClient(session).build()
+        return Retrofit.Builder().baseUrl(baseUrl)
+            .callFactory { request -> client.newCall(request.newBuilder().tag(RequestSessionIdentity::class.java, bound).build()) }
+            .addConverterFactory(staffJson.asConverterFactory("application/json".toMediaType()))
+            .build().create(StaffAdminApi::class.java)
+    }
+
     private fun nonRetryingClient(session: SessionManager) = baseClient()
         .connectionPool(ConnectionPool(0, 1, TimeUnit.NANOSECONDS))
         .addInterceptor(BearerInterceptor(session))
         .authenticator(RefreshAuthenticator(session))
 }
 
-private class BearerInterceptor(private val session: SessionManager) : Interceptor {
+internal class BearerInterceptor(private val credentials: () -> SessionCredentials?) : Interceptor {
+    constructor(session: SessionManager) : this({ session.credentials })
+
     override fun intercept(chain: Interceptor.Chain): Response {
-        val token = session.accessToken ?: return chain.proceed(chain.request())
-        return chain.proceed(chain.request().newBuilder().header("Authorization", "Bearer $token").build())
+        val snapshot = credentials()
+        val bound = chain.request().tag(RequestSessionIdentity::class.java)
+        if (bound != null && !bound.matches(snapshot)) throw java.io.IOException("Session changed")
+        val token = snapshot?.accessToken ?: return chain.proceed(chain.request())
+        // Every authenticated request carries the identity that supplied its bearer token.
+        // Common clients do not bind an identity when the API instance is created.
+        val owner = bound ?: RequestSessionIdentity(snapshot.identity.userId, snapshot.identity.generation)
+        return chain.proceed(chain.request().newBuilder()
+            .tag(RequestSessionIdentity::class.java, owner)
+            .header("Authorization", "Bearer $token").build())
     }
 }
 
@@ -88,16 +111,30 @@ private class BearerInterceptor(private val session: SessionManager) : Intercept
  * On 401, refreshes the session once (shared by concurrent requests) and retries.
  * A rejected refresh ends the session; transient failures preserve it for a later retry.
  */
-private class RefreshAuthenticator(private val session: SessionManager) : Authenticator {
+internal class RefreshAuthenticator(
+    private val session: SessionManager,
+    private val credentials: () -> SessionCredentials? = { session.credentials },
+) : Authenticator {
     override fun authenticate(route: Route?, response: Response): Request? {
         if (response.priorResponse != null) return null // already retried once
+        val bound = response.request.tag(RequestSessionIdentity::class.java) ?: return null
+        if (!bound.matches(credentials())) return null
         val used = response.request.header("Authorization")?.removePrefix("Bearer ")
         // Any failure here must not escape: OkHttp would rethrow it on its own thread.
-        val fresh = try {
+        try {
             runBlocking { session.refreshAfterUnauthorized(used) }
         } catch (_: Exception) {
             null
         } ?: return null
-        return response.request.newBuilder().header("Authorization", "Bearer $fresh").build()
+        val snapshot = credentials() ?: return null
+        if (!bound.matches(snapshot)) return null
+        return response.request.newBuilder().header("Authorization", "Bearer ${snapshot.accessToken}").build()
+    }
+}
+
+internal data class RequestSessionIdentity(val userId: String?, val generation: Long?) {
+    fun matches(snapshot: SessionCredentials?): Boolean {
+        val now = snapshot?.identity
+        return now?.userId == userId && now?.generation == generation
     }
 }

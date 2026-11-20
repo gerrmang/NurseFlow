@@ -1,5 +1,63 @@
 # 공유 작업 현황
 
+## B5a PR #50 공통 401 재시도 계정 혼용 회귀 수정 (2026-11-20, Codex)
+
+- 새 P2 `discussion_r4639296654` 대응. 이전 스냅샷 수정 aefb24f가 staff 태그 없는 공통 요청에서 만든 회귀임을 확인했다. 이전 P2 스레드는 리뷰어가 해결 표시했으나 새 P2는 미해결 상태였다. 초대 발급·철회·병동 생성도 공통 BearerInterceptor에서 실제 전송 토큰의 계정·세션 세대를 RequestSessionIdentity 태그로 기록하게 했다. 기존 staff 클라이언트 생성 시 바인딩은 유지한다.
+- RefreshAuthenticator는 태그가 없는 응답을 재시도하지 않고, 태그가 있으면 갱신 전후 모두 같은 계정·세션 세대인지 검사한다. 검증한 스냅샷의 토큰만 사용하므로 공통 요청도 다른 계정이나 로그아웃 후 새 로그인으로 재전송하지 않는다. 읽기 API와 모든 비재시도 API가 같은 interceptor/authenticator를 사용하는 경로를 함께 확인했다.
+- 회귀 6개 추가: 초대 발급·철회·병동 생성의 갱신 성공 직후 계정 전환, 변경 전 스냅샷의 원래 토큰 유지, 동일 계정 로그아웃/재로그인 세대 차단, 태그 없는 응답의 갱신·재시도 차단. 새 검사 중 최초 5개를 수정 전 코드에서 실행해 4개가 잘못된 재전송(예상 401/실제 200)으로 실패함을 재현했다. 기존 staff 경합 검사 5개와 정상 공통 401 갱신 검사도 유지했다.
+- 최종 JDK 21 android `:app:testDebugUnitTest :app:assembleDebug :app:assembleDebugAndroidTest :app:lintDebug --offline --no-daemon`: BUILD SUCCESSFUL(52초). XML 187개 중 186개 통과·실서버 opt-in 1개 건너뜀·실패/오류 0. Lint 오류 0·기존 경고 28·Information 4. git diff --check 통과. 기기 UI·실서버·실제 Kakao·backend·웹 전체 검사는 공통 Android 인증 경로 수정 범위라 재실행하지 않았다.
+- API/DB/환경·서버 근무 규칙 변경 없음. Android 공통 인증·401 재시도 경로에 영향, 배포 없음. 롤백은 이번 수정 커밋 revert와 이전 Android 빌드 복원이다. 자체 수정 diff·관련 경로 검토 완료, 독립 재리뷰·최종 head CI는 별도 확인한다.
+- 공유 인계: 같은 `C:\Users\jjang\IdeaProjects\NurseFlow`, `feat/android-staff-team`에서 코드·회귀 검사·이 현황 절만 커밋·푸시하고 원격 head 일치를 확인한다. PR 설명에 최신 검증 결과를 반영하고 사용자 요청의 구현 대응 완료로 새 리뷰 스레드를 해결 표시한다(독립 승인과 구분). 기존 dev 점검·A7 리뷰·DB 복구 미커밋 기록과 DB·trace는 제외해 보존한다. PR 병합·자동 병합 없음. 다음 단계는 수정 diff 재리뷰다.
+
+## B5a PR #50 계정 전환 토큰 경합 수정 (2026-11-20, Codex)
+
+- P2 `discussion_r4639136298` 수정: SessionManager가 계정 ID·세션 세대·액세스 토큰을 불변 SessionCredentials 하나로 구성해 volatile 참조로 발행한다. UI 상태에는 토큰을 넣지 않는다. 로그아웃·복원 실패 시 스냅샷을 제거하고 기존 accessToken 조회도 이 참조를 사용한다.
+- 같은 패턴을 최초 BearerInterceptor와 401 RefreshAuthenticator에서 함께 수정했다. 요청의 세션 바인딩을 검증한 스냅샷의 토큰으로 헤더를 만든다. staff API 생성도 같은 스냅샷에서 세션 식별자를 얻는다. 계정 변경을 읽은 요청은 차단하고, 변경 전 스냅샷을 읽은 요청은 원래 계정 토큰만 사용한다.
+- 신규 SessionCredentialRaceTest 5개: latch로 최초 요청·401 재시도의 스냅샷 읽기 직전/직후 계정 전환을 강제한 4개와 로그인·갱신·로그아웃 스냅샷 일관성 1개. 토큰을 별도로 재조회하는 변이를 임시 적용한 대상 검사에서 5개 중 2개가 새 계정 토큰 혼용으로 예상대로 실패했다. finally에서 원본을 복원한 뒤 최종 전체 검사를 다시 통과했다.
+- 최종 JDK 21 android `:app:testDebugUnitTest :app:assembleDebug :app:assembleDebugAndroidTest :app:lintDebug --offline --no-daemon`: BUILD SUCCESSFUL(49초). XML 181개 중 180개 통과·실서버 opt-in 1개 건너뜀·실패/오류 0. Lint 오류 0·기존 경고 28·Information 4. git diff --check 통과. 기기 UI·실서버·실제 Kakao·backend·웹 전체 검사는 Android 세션/네트워크 수정 범위라 재실행하지 않았다.
+- API/DB/환경·서버 근무 규칙 변경 없음. Android의 공통 인증 요청 경로에 영향, 배포 없음. 롤백은 이번 수정 커밋 revert와 이전 Android 빌드 복원이다. 자체 수정 diff·관련 경로 재검토 완료, 독립 재리뷰·최종 head CI는 별도 확인 대상이며 리뷰 스레드를 독립 검토 완료로 처리하지 않는다.
+- 공유 인계: 같은 `C:\Users\jjang\IdeaProjects\NurseFlow`, `feat/android-staff-team`에서 이번 코드·회귀 검사·PR #50 확인/수정 기록만 커밋·푸시한다. 기존 dev 점검·A7 리뷰·DB 복구 미커밋 기록과 DB·trace는 제외해 보존한다. 원격 head 일치를 확인하고 PR 본문에 최신 검증 결과를 반영한다. PR 병합·자동 병합 없음. 다음 단계는 수정 diff 재리뷰다.
+
+## B5a PR #50 추가 코멘트 확인 (2026-11-20, Codex)
+
+- GitHub 연결 도구로 PR 대화와 리뷰 스레드를 조회했다. head `f15631c0b05afb8c83975b8b90d5e1d21930dc15`에 미해결·현재 유효한 인라인 지적 1건(`discussion_r4639136298`, P2)이 있다. 별도 리뷰 본문은 같은 지적의 요약이며 나머지 대화는 Vercel Ready 알림이다.
+- 코드를 대조해 지적이 아직 남아 있음을 확인했다. ApiFactory의 BearerInterceptor는 bound.matches(session) 뒤 accessToken을 별도로 읽고, SessionManager.apply는 토큰과 SignedIn을 따로 발행한다. 계정 전환 중 이전 요청이 새 계정 토큰을 선택할 수 있는 실행 순서다. 기존 StaffAdminApiTest는 로그인 완료 뒤의 차단을 검사하며 두 읽기 사이 전환을 강제하지 않는다. 자격 보존 수정 f15631c는 이 경로를 수정하지 않았다.
+- 검증은 코멘트 조회·관련 코드/테스트 정적 대조만 수행했다. 경합 실행 재현·로컬 테스트·최종 head CI는 이번 확인에서 실행/조회하지 않았다. 앱·API·DB 변경, GitHub 답글·스레드 해결·커밋·푸시·병합 없음. 같은 공유 worktree·feat/android-staff-team에서 미해결 P2 수정과 순서 강제 회귀 검사로 인계하며 기존 미커밋 기록·DB·trace를 보존한다.
+
+## B5a PR #50 자격 문자열 보존 수정 (2026-11-20, Codex)
+
+- P2 데이터 보존 결함 수정: 기존 자격 표시값을 변경하지 않으면 원래 배열을 그대로 전송한다. 이름·활성 상태만 수정할 때 `자격 A,B`가 두 자격으로 분리되는 것을 방지했다. 화면 입력 검증과 저장이 같은 변환 함수를 사용해 쉼표를 포함한 50개 자격도 잘못 차단하지 않는다. 자격 입력 자체를 변경하거나 새 기록을 등록할 때는 기존 쉼표 구분 방식을 유지한다.
+- 회귀 테스트 5개 추가: 이름 변경·비활성화 시 원래 배열 보존, 쉼표 포함 50개 자격 검증, 자격 교체·비우기, 신규 등록. 같은 패턴 검색 결과 Android의 화면 검증·저장 두 경로를 함께 수정했으며 웹은 줄바꿈 구분을 사용한다.
+- JDK 21, android `:app:testDebugUnitTest :app:assembleDebug :app:assembleDebugAndroidTest :app:lintDebug --offline --no-daemon`: BUILD SUCCESSFUL. XML 총 176개 중 175개 통과·실서버 opt-in 1개 건너뜀·실패/오류 0. Lint 오류 0·경고 28·Information 4. 초기 샌드박스 실행은 Gradle 캐시 잠금 접근 거부로 시작하지 못했고, 권한 확장 후 위 검증을 완료했다. git diff --check 통과.
+- 기기 UI·실서버·실제 Kakao·backend·웹 전체 회귀는 Android의 미변경 자격 보존 수정 범위라 재실행하지 않았다. 수정 diff 자체 검토 완료, 독립 재리뷰·수정 후 GitHub CI는 미확인이다. API/DB/환경·서버 근무 규칙 변경 없음. Android 빌드 영향, 배포 없음. 되돌리기는 이번 수정 revert와 이전 Android 빌드 복원이다.
+- 공유 인계: 사용자 요청으로 같은 `C:\Users\jjang\IdeaProjects\NurseFlow`, `feat/android-staff-team`에서 이번 수정·회귀 테스트·이 현황 절만 커밋해 origin에 푸시한다. 기존 현황 문서의 별도 미커밋 변경과 DB·trace는 커밋에서 제외해 보존한다. 제품·테스트 코드는 직전 검증 이후 변경하지 않아 로컬 검사를 반복하지 않는다. 게시 전 staged diff와 공백을 검사하며 푸시 후 원격 SHA 일치를 확인한다. PR 병합·자동 병합·배포 없음. 다음 단계는 수정 diff 재리뷰와 최종 head CI 확인이다.
+
+## B5a PR #50 게시 (2026-11-18, Codex)
+
+- 사용자 요청으로 [PR #50](https://github.com/gerrmang/NurseFlow/pull/50)을 게시했다. GitHub 조회로 OPEN·일반 PR(`draft=false`)·대상 dev·구현 head `037552cbf9d9afca1bd28b56b679cc6f78433c92` 일치를 확인했다. 연결 도구의 생성 권한 403으로 기존 인증된 gh를 사용했다. 병합·자동 병합·배포 없음.
+- PR 템플릿에 실제 backend/가상 OIDC 구분, 171개·기기 4개 성공, 미실행 항목, API/DB 변경 없음·Android 배포 영향·되돌리기·Squash and merge를 기록했다. 구현 head의 [Verify 44303614249](https://github.com/gerrmang/NurseFlow/actions/runs/44303614249)는 조회 시 queued·결과 미정이었다. 이 게시 기록 커밋 이후 최종 CI는 별도 확인한다.
+- 제품·테스트 코드 변경 없이 게시 기록만 추가하므로 로컬 앱 검사를 반복하지 않는다. 같은 공유 worktree·feat/android-staff-team에서 이 PR 리뷰 대응으로 인계한다. 기존 dev 점검·A7 리뷰·DB 복구 기록과 DB·trace는 이 문서 커밋에서도 제외해 보존한다. 독립 리뷰와 기존 미검증 제한은 유지한다.
+
+
+## B5a 커밋·푸시 인계 (2026-11-18, Codex)
+
+- 사용자 요청으로 B5a Android 구현·테스트·검증 문서·PR 초안과 이 기능 현황만 커밋해 `origin/feat/android-staff-team`에 푸시한다. 기존 dev 점검·A7 리뷰·DB 복구 미커밋 기록과 로컬 DB·trace는 커밋에서 제외해 공유 작업 폴더에 보존한다.
+- 직전 최종 검증은 단위/API/실서버 171개·기기 4개 통과, 앱·테스트 APK·Lint 성공(오류 0·경고 28). 제품·테스트 코드는 그 뒤 변경하지 않아 이번 게시 단계에서는 재실행하지 않는다. 게시 전 staged diff 공백·포함 파일·기존 기록 제외를 확인하고, 푸시 후 원격 branch SHA와 로컬 HEAD 일치를 확인한다.
+- 같은 공유 worktree·`feat/android-staff-team`에서 후속 리뷰로 인계한다. 독립 리뷰·GitHub CI는 별도이며 PR 개설·병합·자동 병합·배포는 이번 요청에 포함하지 않는다. API/DB/환경 추가 변경 없음. 되돌리기는 B5a 커밋 revert와 이전 Android 빌드 사용이다.
+
+## B5a Android 팀·간호사·구성원 관리 구현·검증 (2026-11-18, Codex)
+
+- 사용자 승인 계획을 구현했다. `git fetch origin` 후 최신 dev `4ecedd1a2aa5a39a9cf93a22ee1381f4a83da52c` 기반 `feat/android-staff-team` 생성. 같은 공유 worktree 사용, 추가 worktree 없음. 기존 미커밋 dev 점검·A7 리뷰·DB 복구 기록과 DB·trace를 보존했다.
+- 관리자 병동 카드·병동 생성 후 안내에서 관리 진입. 팀 추가·이름·표시 순서·삭제, 간호사 기록 등록/이름·자격·활성/팀 배치, 활성 팀원 전체 드래그·버튼 경력순 저장. 병원 입사 연월 조회와 실제 경력·직급 입력/확인 분리, 선임·단계 조정·이력, 구성원 관리자 지정/해제·접근 비활성/재활성. 팀 수는 기존 추가/삭제 API로 조절한다. 근무 형태·근무 설정·경력 정책 편집·시연 모드는 제외했다.
+- A5·A6 기존 계약 소비. 세션·병동별 ViewModel, 진입·재조회·쓰기 전 관리자 소속 확인, 직렬 쓰기·서버 재조회, 유실 결과 확인 전 재전송 차단, 재조회 실패 중 편집 차단·이력 재시도, 권한 상실 데이터 폐기. API를 생성 당시 계정·세션 세대에 묶어 대기 요청과 401 갱신 뒤 계정 전환 재전송을 막았다. 명시적 null로 팀/단계 초기화, PATCH는 변경 속성만 전송. 서버의 기본 경력순을 유지하며 수동 저장 후 순서를 반영한다. 일반 편집의 마지막 저장 우선 한계는 안내한다.
+- 최종 JDK 21 Android `:app:testDebugUnitTest :app:assembleDebug :app:assembleDebugAndroidTest :app:lintDebug --offline --no-daemon`, NURSEFLOW_B5A_E2E=1: BUILD SUCCESSFUL. XML **171개 통과·실패/오류/건너뜀 0**(기존 144 + B5a 27). Lint 오류 0·경고 28·Information 4. 기본 실행에서는 실서버 opt-in 1개를 건너뛴다. 변경 없는 backend·웹 전체 회귀는 재실행하지 않았다.
+- 실제 backend 18091·별도 메모리 DB와 루프백 가상 OIDC 18090으로 API/DB·인증 서명 검증을 수행했다. 팀·정렬·경력·선임·이력, 마지막 관리자·활성 기록 충돌·비활성 구성원 보호, 접근만 재활성화, 본인 권한 상실 시 데이터 폐기 확인. 사용자 파일 DB는 사용하지 않았다. 공급자·계정만 가상이며 실제 Kakao·운영 검증은 아니다. 재현은 android/B5a-verification.md와 android/scripts/b5a-oidc-fixture.mjs 참조.
+- 최종 Pixel_10 Android 17 `:app:connectedDebugAndroidTest`에 B5a 두 클래스를 지정: **4/4 통과·실패/건너뜀 0, BUILD SUCCESSFUL(45초)**. 드래그·버튼 정렬 저장, 마지막 관리자 확인/거절 안내, 실제 MainActivity 진입·재생성 뒤 미저장 팀 입력과 정렬 보존. 직접 instrumentation도 앞서 4개 성공. 실제 물리 회전·실서버 기기 E2E와 구분한다.
+- 중간 검증의 가상 API 예외 전달, 기기의 기존 프록시, 테스트 앱 초기 세션 복원과 로그인 순서를 보완했다. 기기 시스템 응답 정지로 이번 검증용 에뮬레이터를 데이터 초기화 없이 콜드 부팅했다. 기기 프록시는 변경하지 않고 테스트 프로세스에서 루프백만 직접 연결·복원했다. 장시간 메모리 서버의 시계 변경 경고 이후 실서버 HTTP 500 1건이 있었고, 새 메모리 서버에서 동일 제품 코드와 최종 코드 모두 재실행 통과했다. 내부 원인·제품 결함으로 단정하지 않는다.
+- 자체 전체 diff·관련 경로 검토와 git diff --check 완료. 독립 리뷰·최종 GitHub CI·실제 Kakao·물리 기기·운영·모든 화면 크기·다중 관리자 실기기 동시 편집은 미완료. 앱/서버 계약·DB·환경변수·의존성 추가 변경 없음. Android 빌드에 영향, 배포 없음. 되돌리기는 B5a 변경 revert와 이전 Android 빌드 복원.
+- 공유 인계: 같은 C:\Users\jjang\IdeaProjects\NurseFlow, feat/android-staff-team, HEAD 4ecedd1에서 구현·검증 문서와 PR 초안(android/B5a-pr-draft.md)을 미커밋으로 남긴다. 기존 미커밋 기록·DB·trace는 기능 변경과 구분해 보존한다. 커밋·푸시·PR 개설·병합·자동 병합·배포 없음. 다음 단계는 이 변경 전체의 독립 리뷰와 지적 수정, 검증 기록을 포함한 Android 단독 dev 대상 PR 게시다. 검증용 서버·공급자·이번 에뮬레이터는 종료해 인계한다.
+
+
 ## B9b PR #49 최신 dev B4b·B5b 통합 (2026-11-18, Codex)
 
 - 사용자 요청으로 기존 `feat/web-published-roster`의 `2e83302`에 최신 `origin/dev` `5319ec6`(B4b PR #46, B5b PR #47 병합 포함)을 반영했다. 기존 공유 worktree에서 진행했으며 새 브랜치·worktree 없음. 충돌은 `web/src/App.tsx`와 이 문서에서 해결했다. 공개 근무표·병동 생성·팀 관리 경로를 모두 유지하고 전역 생성 경고와 세션별 화면 키도 보존했다. 자동 병합된 목록의 공개 조회·관리 링크와 두 기능 스타일을 검토했다. 루트/웹 README에 통합된 공개 조회 현황과 검증 링크를 반영했다.
