@@ -24,6 +24,9 @@ private class FakeStaffApi : StaffAdminApi {
     override suspend fun staff(ward: String) = Items(nurses)
     override suspend fun members(ward: String) = Items(listOf(AdminMember("u1", "가상 관리자", listOf("WARD_ADMIN"), true)))
     override suspend fun policy(ward: String) = AdminCareerPolicy(listOf(12, 36, 72, 120), listOf("간호사"), true)
+    var demoMode = false
+    var eligibilityRead: suspend () -> Unit = {}
+    override suspend fun eligibility(ward: String): AdminEligibility { eligibilityRead(); return AdminEligibility(demoMode, 0) }
     private suspend fun mutate() { writes++; write() }
     override suspend fun createTeam(ward: String, input: AdminTeamInput): AdminTeam { mutate(); return team }
     override suspend fun updateTeam(ward: String, id: String, input: AdminTeamInput): AdminTeam { mutate(); return team }
@@ -47,6 +50,20 @@ class StaffAdminViewModelTest {
     private var expired = 0
     private val vm = StaffAdminViewModel(api, "w1", { if (admin) listOf(MembershipDto("w1", "가상 병동", listOf("WARD_ADMIN"), true)) else emptyList() }, { valid }, { expired++ }, scope)
     private fun open() { vm.activate(); assertTrue(vm.state.value.editable) }
+
+    @Test fun demoModeComesFromServerAndRefreshRemovesIt() {
+        api.demoMode = true; open()
+        assertTrue(vm.state.value.data!!.eligibility.demoMode)
+        api.demoMode = false; vm.reload()
+        assertFalse(vm.state.value.data!!.eligibility.demoMode)
+    }
+    @Test fun failedModeRefreshCannotAppearAsFreshNormalMode() {
+        api.demoMode = true; open()
+        api.eligibilityRead = { throw ApiException(503, "UNAVAILABLE", "고정") }
+        vm.reload()
+        assertTrue(vm.state.value.stale); assertFalse(vm.state.value.editable)
+        assertTrue(vm.state.value.data!!.eligibility.demoMode)
+    }
 
     @Test fun onlyAdminCanReadAndRevokedPermissionClearsData() {
         open(); admin = false; vm.reload()

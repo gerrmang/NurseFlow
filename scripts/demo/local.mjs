@@ -5,6 +5,7 @@ import { DemoError } from './api.mjs';
 import { seed, verify } from './seed.mjs';
 import { startRuntime } from './runtime.mjs';
 import { shifts } from './data.mjs';
+import { verifyAccounts } from './accounts.mjs';
 
 let runtime;
 let shuttingDown = false;
@@ -51,9 +52,9 @@ try {
     assert.equal(off.data.demoMode, false);
     assert.equal(off.data.items.length, 10);
     assert.ok(off.data.items.every(n => !n.eligible && n.reason === 'DEMO_MODE_DISABLED'));
-    const outsider = await runtime.login('outsider');
+    const member = await runtime.login('member');
     // The server intentionally hides wards from non-members with 404.
-    await assert.rejects(outsider('GET', `${root}/staff`), /HTTP 404/);
+    await assert.rejects(member('GET', `${root}/staff`), /HTTP 404/);
     await seed(api);
     const types = await api('GET', `${root}/shift-types`);
     const day = types.data.items.find(s => s.code === 'D');
@@ -63,6 +64,8 @@ try {
     assert.equal(changed.data.items.find(s => s.code === 'D').recognizedMinutes, 449);
     await api('PUT', `${root}/shift-types/${day.shiftTypeId}`, shifts[0], { 'If-Match': changed.etag });
     await verify(api, result.wardId);
+    await verifyAccounts(api, member, result.wardId);
+    console.log('[계정 검증 성공] 관리자·간호사 가상 2계정의 초대 가입·본인 프로필·권한 분리·기본 모드 편성 확인.');
     console.log('[검증 성공] 4종 생성 응답 유실 복구·재실행 쓰기 0건·시연 모드 제외/복구·412·타 계정 404·기존 근무 설정 보존 확인.');
   } else {
     const show = async () => {

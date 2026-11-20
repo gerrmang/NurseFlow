@@ -1,5 +1,15 @@
 # 공유 작업 현황
 
+## B6 Android·웹 시연 모드 표시와 2계정 검증 보완 (2026-11-20, Codex)
+
+- 사용자 요청으로 남은 표시·계정 검증을 같은 `chore/demo-seed-script`에서 보완했다. Android·웹의 관리자 팀/구성원 화면이 기존 A7 `/roster-eligibility`를 조회해 가상 데이터 포함 시연 모드·일반 모드를 표시한다. 조회 중/실패/오래된 상태는 일반 모드로 추정하지 않으며 갱신 실패 중 편집을 차단한다. 권한 상실 시 기존 세션/병동 소유 상태 처리로 데이터를 폐기한다. 서버/계약/권한을 변경하지 않았다. 사용자가 남은 B6 작업 전체를 요청해 이번 PR에 Android·웹의 작은 표시 보완을 함께 포함한다.
+- 가상 관리자·간호사 **2개 신원**으로 가입 전 404→초대 수락·본인 입사 연월→관리자 API 403 및 기본 모드의 가입 간호사 편성·관리자 간호사 기록 제외를 실제 Spring+새 메모리 H2로 검증했다. 기존 A/B팀 시드 병동과 별도 가입 검증 병동을 사용한다. `scripts/demo/accounts.md`에 자동 계정 수·메모리 수명·폐기·비출력 정책과 실제 Kakao 2계정 준비안을 작성했다. 실제 Kakao 운용 방식 선택을 사용자에게 요청했으며 답변 전 결정 21을 임의로 해결 처리하지 않는다.
+- 검증: Node 테스트 11개 통과·실패/건너뜀 0(42초), 새 `local.mjs --verify` exit 0로 기존 시드 복구/모드/시간 보존과 새 2계정 가입 검증 성공. CI에 Demo seed checks를 추가해 같은 검사를 PR마다 실행하도록 구성했다. 실제 CI 성공 여부는 게시 후 별도 확인한다.
+- Android JDK 21 `:app:testDebugUnitTest :app:assembleDebug :app:assembleDebugAndroidTest :app:lintDebug --offline --no-daemon` BUILD SUCCESSFUL. 단위 XML 189개 중 188개 통과·실서버 opt-in 1개 건너뜀·실패/오류 0. 신규 상태 회귀 2개, API·Compose 배너 및 기기 fixture 보완. 읽기 전용 headless Pixel_10 Android 17에서 두 StaffAdmin 기기 클래스를 지정한 최종 `connectedDebugAndroidTest` **5/5 통과·실패/건너뜀 0, BUILD SUCCESSFUL(52초)**. 앞선 PowerShell 인수 분리 오류와 초기 프로세스 종료(0개 시작) 후 정확한 러너 직접 계측 4개 및 최종 Gradle 5개로 확인했다. 기존 AVD 데이터는 초기화하지 않았다.
+- 웹 api:check·lint·typecheck·전체 test·build 성공. 387개 통과·실서버 opt-in 3개 건너뜀·실패 0. 화면의 켜짐→꺼짐 재조회·조회 실패 시 일반 모드 오표시 차단, 비정상 demoMode 응답 거부 회귀 포함. git diff --check 통과. 실제 Kakao·물리 기기·운영·macOS/Linux·전체 화면 크기 및 독립 리뷰는 미검증이다. 서버 미변경이므로 로컬 backend 전체 회귀는 생략하고 PR CI에서 별도로 확인한다.
+- API·DB·배포 환경/의존성 계약 변경 없음. Android·웹 관리 화면과 CI 작업에 영향, 수동 배포 없음. 롤백은 이 보완 커밋 revert와 이전 클라이언트 빌드 복원이다. 현재 코드/가상 계정 검증 완료와 실제 Kakao 2계정 시연 완료를 구분한다. 실제 계정 운용·로그인 확인 전에는 B6 전체 인수 완료로 표시하지 않는다.
+- 공유 인계: 같은 `C:\Users\jjang\IdeaProjects\NurseFlow`, `chore/demo-seed-script`에 코드·검사·사용법·계정 기록·PR 초안·이 현황을 함께 커밋·푸시하고 dev 대상 Draft PR로 검토 가능하게 게시한다. 기존 DB·trace와 로컬 문서 보존 브랜치는 유지한다. 최종 CI·계정 운용 방식 확인 및 수정 diff 독립 리뷰를 남기며 병합·자동 병합·배포는 하지 않는다.
+
 ## B6 P3 종료 코드 수정·인수 상태 정정 (2026-11-20, Codex)
 
 - 사용자 수정 요청으로 같은 `chore/demo-seed-script`에서 일반 실행의 마지막 시드 검증 결과를 `process.exitCode`에 반영했다. 실패 후 q/EOF는 1, r로 복구·검증까지 성공하면 0, 최초 성공 뒤 재실패하면 1이다. 오류를 알린 뒤 메모리 DB를 유지하는 재시도 흐름은 보존했다. 같은 오류 처리 패턴을 검색했으며 최상위 catch는 이미 exitCode=1, API/runtime catch는 호출자에게 실패를 전달한다.
