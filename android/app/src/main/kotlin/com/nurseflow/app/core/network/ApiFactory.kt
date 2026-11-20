@@ -76,10 +76,10 @@ object ApiFactory {
 
     fun staffAdminApi(baseUrl: String, session: SessionManager): StaffAdminApi {
         val identity = session.credentials?.identity
-        val bound = StaffSessionIdentity(identity?.userId, identity?.generation)
+        val bound = RequestSessionIdentity(identity?.userId, identity?.generation)
         val client = nonRetryingClient(session).build()
         return Retrofit.Builder().baseUrl(baseUrl)
-            .callFactory { request -> client.newCall(request.newBuilder().tag(StaffSessionIdentity::class.java, bound).build()) }
+            .callFactory { request -> client.newCall(request.newBuilder().tag(RequestSessionIdentity::class.java, bound).build()) }
             .addConverterFactory(staffJson.asConverterFactory("application/json".toMediaType()))
             .build().create(StaffAdminApi::class.java)
     }
@@ -95,10 +95,15 @@ internal class BearerInterceptor(private val credentials: () -> SessionCredentia
 
     override fun intercept(chain: Interceptor.Chain): Response {
         val snapshot = credentials()
-        val bound = chain.request().tag(StaffSessionIdentity::class.java)
+        val bound = chain.request().tag(RequestSessionIdentity::class.java)
         if (bound != null && !bound.matches(snapshot)) throw java.io.IOException("Session changed")
         val token = snapshot?.accessToken ?: return chain.proceed(chain.request())
-        return chain.proceed(chain.request().newBuilder().header("Authorization", "Bearer $token").build())
+        // Every authenticated request carries the identity that supplied its bearer token.
+        // Common clients do not bind an identity when the API instance is created.
+        val owner = bound ?: RequestSessionIdentity(snapshot.identity.userId, snapshot.identity.generation)
+        return chain.proceed(chain.request().newBuilder()
+            .tag(RequestSessionIdentity::class.java, owner)
+            .header("Authorization", "Bearer $token").build())
     }
 }
 
@@ -112,8 +117,8 @@ internal class RefreshAuthenticator(
 ) : Authenticator {
     override fun authenticate(route: Route?, response: Response): Request? {
         if (response.priorResponse != null) return null // already retried once
-        val bound = response.request.tag(StaffSessionIdentity::class.java)
-        if (bound != null && !bound.matches(credentials())) return null
+        val bound = response.request.tag(RequestSessionIdentity::class.java) ?: return null
+        if (!bound.matches(credentials())) return null
         val used = response.request.header("Authorization")?.removePrefix("Bearer ")
         // Any failure here must not escape: OkHttp would rethrow it on its own thread.
         try {
@@ -122,12 +127,12 @@ internal class RefreshAuthenticator(
             null
         } ?: return null
         val snapshot = credentials() ?: return null
-        if (bound != null && !bound.matches(snapshot)) return null
+        if (!bound.matches(snapshot)) return null
         return response.request.newBuilder().header("Authorization", "Bearer ${snapshot.accessToken}").build()
     }
 }
 
-internal data class StaffSessionIdentity(val userId: String?, val generation: Long?) {
+internal data class RequestSessionIdentity(val userId: String?, val generation: Long?) {
     fun matches(snapshot: SessionCredentials?): Boolean {
         val now = snapshot?.identity
         return now?.userId == userId && now?.generation == generation

@@ -1,5 +1,14 @@
 # 공유 작업 현황
 
+## B5a PR #50 공통 401 재시도 계정 혼용 회귀 수정 (2026-11-20, Codex)
+
+- 새 P2 `discussion_r4639296654` 대응. 이전 스냅샷 수정 aefb24f가 staff 태그 없는 공통 요청에서 만든 회귀임을 확인했다. 이전 P2 스레드는 리뷰어가 해결 표시했으나 새 P2는 미해결 상태였다. 초대 발급·철회·병동 생성도 공통 BearerInterceptor에서 실제 전송 토큰의 계정·세션 세대를 RequestSessionIdentity 태그로 기록하게 했다. 기존 staff 클라이언트 생성 시 바인딩은 유지한다.
+- RefreshAuthenticator는 태그가 없는 응답을 재시도하지 않고, 태그가 있으면 갱신 전후 모두 같은 계정·세션 세대인지 검사한다. 검증한 스냅샷의 토큰만 사용하므로 공통 요청도 다른 계정이나 로그아웃 후 새 로그인으로 재전송하지 않는다. 읽기 API와 모든 비재시도 API가 같은 interceptor/authenticator를 사용하는 경로를 함께 확인했다.
+- 회귀 6개 추가: 초대 발급·철회·병동 생성의 갱신 성공 직후 계정 전환, 변경 전 스냅샷의 원래 토큰 유지, 동일 계정 로그아웃/재로그인 세대 차단, 태그 없는 응답의 갱신·재시도 차단. 새 검사 중 최초 5개를 수정 전 코드에서 실행해 4개가 잘못된 재전송(예상 401/실제 200)으로 실패함을 재현했다. 기존 staff 경합 검사 5개와 정상 공통 401 갱신 검사도 유지했다.
+- 최종 JDK 21 android `:app:testDebugUnitTest :app:assembleDebug :app:assembleDebugAndroidTest :app:lintDebug --offline --no-daemon`: BUILD SUCCESSFUL(52초). XML 187개 중 186개 통과·실서버 opt-in 1개 건너뜀·실패/오류 0. Lint 오류 0·기존 경고 28·Information 4. git diff --check 통과. 기기 UI·실서버·실제 Kakao·backend·웹 전체 검사는 공통 Android 인증 경로 수정 범위라 재실행하지 않았다.
+- API/DB/환경·서버 근무 규칙 변경 없음. Android 공통 인증·401 재시도 경로에 영향, 배포 없음. 롤백은 이번 수정 커밋 revert와 이전 Android 빌드 복원이다. 자체 수정 diff·관련 경로 검토 완료, 독립 재리뷰·최종 head CI는 별도 확인한다.
+- 공유 인계: 같은 `C:\Users\jjang\IdeaProjects\NurseFlow`, `feat/android-staff-team`에서 코드·회귀 검사·이 현황 절만 커밋·푸시하고 원격 head 일치를 확인한다. PR 설명에 최신 검증 결과를 반영하고 사용자 요청의 구현 대응 완료로 새 리뷰 스레드를 해결 표시한다(독립 승인과 구분). 기존 dev 점검·A7 리뷰·DB 복구 미커밋 기록과 DB·trace는 제외해 보존한다. PR 병합·자동 병합 없음. 다음 단계는 수정 diff 재리뷰다.
+
 ## B5a PR #50 계정 전환 토큰 경합 수정 (2026-11-20, Codex)
 
 - P2 `discussion_r4639136298` 수정: SessionManager가 계정 ID·세션 세대·액세스 토큰을 불변 SessionCredentials 하나로 구성해 volatile 참조로 발행한다. UI 상태에는 토큰을 넣지 않는다. 로그아웃·복원 실패 시 스냅샷을 제거하고 기존 accessToken 조회도 이 참조를 사용한다.
