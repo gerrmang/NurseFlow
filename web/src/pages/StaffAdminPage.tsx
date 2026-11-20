@@ -26,6 +26,11 @@ export function StaffAdminPage({ wardId }: { wardId: string }) {
   const session = manager.getState()
   return <main className="page staff-page">
     <header className="toolbar"><h1>팀·구성원 관리{data && ` · ${data.wardName}`}</h1><Link to="/wards">내 병동</Link></header>
+    {!state.forbidden && <p role="status" className={data?.eligibility.demoMode && !state.stale ? 'error' : 'notice'}>
+      {state.stale || !data ? '시연 모드 상태를 확인하고 있어요. 최신 목록을 불러와 주세요.' : data.eligibility.demoMode
+        ? '시연 모드 · 계정이 연결되지 않은 가상 간호사도 편성에 포함돼요. 실제 근무표로 사용하지 마세요.'
+        : '일반 모드 · 초대를 수락한 활성 간호사만 편성에 포함돼요.'}
+    </p>}
     <p className="notice">저장 후 서버의 최신 목록을 다시 불러와요. 새로고침하면 미저장 입력과 순서는 초기화돼요.</p>
     <div className="actions"><button className="secondary" disabled={state.busy || state.loading || !!confirmation} onClick={() => void store.reload()}>최신 목록 불러오기</button></div>
     {state.loading && <p role="status">최신 정보를 불러오고 있어요…</p>}

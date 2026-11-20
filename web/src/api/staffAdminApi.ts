@@ -1,6 +1,6 @@
-import { expectNoContent, readJson } from './http'
+import { ApiError, ClientErrorCode, expectNoContent, readJson } from './http'
 import type { AuthorizedFetch } from './nurseflowApi'
-import type { CareerPolicy, CareerProfileInput, RosterSettingsRequest, StaffAdjustment, StaffInput, StaffMember, Team, TeamInput, UpdateMembershipRequest, WardMember } from './types'
+import type { CareerPolicy, CareerProfileInput, RosterEligibility, RosterSettingsRequest, StaffAdjustment, StaffInput, StaffMember, Team, TeamInput, UpdateMembershipRequest, WardMember } from './types'
 
 const json = (method: string, body?: unknown): RequestInit => ({
   method, ...(body === undefined ? {} : { headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }),
@@ -16,6 +16,13 @@ export function createStaffAdminApi(fetch: AuthorizedFetch, wardId: string) {
     staff: () => items<StaffMember>(`${base}/staff?includeInactive=true`),
     members: () => items<WardMember>(`${base}/members`),
     policy: async () => readJson<CareerPolicy>(await fetch(`${base}/career-policy`)),
+    eligibility: async () => {
+      const value = await readJson<RosterEligibility>(await fetch(`${base}/roster-eligibility`))
+      if (!value || typeof value.demoMode !== 'boolean' || !Number.isInteger(value.policyRevision) || value.policyRevision < 0) {
+        throw new ApiError(0, ClientErrorCode.INVALID_RESPONSE)
+      }
+      return value
+    },
     createTeam: async (input: TeamInput) => readJson<Team>(await fetch(`${base}/teams`, json('POST', input))),
     updateTeam: async (id: string, input: TeamInput) => readJson<Team>(await fetch(team(id), json('PUT', input))),
     deleteTeam: async (id: string) => expectNoContent(await fetch(team(id), json('DELETE'))),

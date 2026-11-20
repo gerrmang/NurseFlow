@@ -10,6 +10,7 @@ function gate<T>() {
 function setup() {
   const api = {
     teams: vi.fn().mockResolvedValue([TEAM_A]), staff: vi.fn().mockResolvedValue([NURSE_A]), members: vi.fn().mockResolvedValue([ADMIN, MEMBER]), policy: vi.fn().mockResolvedValue(POLICY),
+    eligibility: vi.fn().mockResolvedValue({ demoMode: false, policyRevision: 0, items: [] }),
     createTeam: vi.fn(), updateTeam: vi.fn(), deleteTeam: vi.fn(), createStaff: vi.fn(), updateStaff: vi.fn(), assignTeam: vi.fn(), order: vi.fn(), setProfile: vi.fn(), confirmProfile: vi.fn(), settings: vi.fn(), adjustments: vi.fn(), membership: vi.fn(),
   }
   const wards = vi.fn().mockResolvedValue({ items: [ADMIN_WARD] })

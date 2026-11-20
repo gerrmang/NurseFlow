@@ -1,6 +1,6 @@
 import { asApiError, ClientErrorCode } from '../api/http'
 import type { StaffAdminApi } from '../api/staffAdminApi'
-import type { CareerPolicy, StaffMember, Team, WardList, WardMember } from '../api/types'
+import type { CareerPolicy, RosterEligibility, StaffMember, Team, WardList, WardMember } from '../api/types'
 
 export interface StaffData {
   wardName: string
@@ -8,6 +8,7 @@ export interface StaffData {
   staff: StaffMember[]
   members: WardMember[]
   policy: CareerPolicy
+  eligibility: RosterEligibility
 }
 interface State {
   data: StaffData | null
@@ -63,9 +64,9 @@ export class StaffAdminStore {
       if (this.disposed || mine !== this.ticket) return false
       const ward = wards.items.find((item) => item.wardId === this.wardId && item.roles.includes('WARD_ADMIN'))
       if (!ward) { this.patch({ forbidden: true, data: null, loading: false }); return false }
-      const [teams, staff, members, policy] = await Promise.all([this.api.teams(), this.api.staff(), this.api.members(), this.api.policy()])
+      const [teams, staff, members, policy, eligibility] = await Promise.all([this.api.teams(), this.api.staff(), this.api.members(), this.api.policy(), this.api.eligibility()])
       if (this.disposed || mine !== this.ticket) return false
-      this.patch({ data: { wardName: ward.wardName, teams, staff, members, policy }, loading: false, stale: false, forbidden: false, version: this.state.version + 1,
+      this.patch({ data: { wardName: ward.wardName, teams, staff, members, policy, eligibility }, loading: false, stale: false, forbidden: false, version: this.state.version + 1,
         ...(!fromWrite && !this.state.uncertain ? { notice: null, noticeTone: 'info' as const } : {}),
       })
       return true
