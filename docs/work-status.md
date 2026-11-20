@@ -1,5 +1,13 @@
 # 공유 작업 현황
 
+## B6 인수 범위 마무리·일반 PR 전환 (2026-11-20, Codex)
+
+- 사용자의 마무리 요청에 따라 B6 원문 완료 증명인 **새 H2 DB에서 공개 API로 시드 실행 후 조회**를 기준으로 인수 상태를 정리했다. 구현·복구·종료 상태, 가상 관리자/간호사 2계정의 운용·가입·권한, Android/웹 관리자 화면 시연 모드 표시는 구현·검증했다. 실제 Kakao 로그인을 B6의 필수 선행으로 확대해 Draft에 남겼던 판정을 정정한다. 실제 Kakao 로그인 자체는 실행하지 않았으며 B3/B12의 실제 인증·교차 클라이언트 시연 미검증 항목으로 명시한다. 실제 계정이 준비됐거나 로그인 검증을 통과했다고 주장하지 않는다.
+- `scripts/demo/accounts.md`에 B6 자동화의 가상 2계정과 메모리 수명·폐기, 실제 시연의 관리자/간호사 2역할·소유자 직접 관리·로그인·검증 전 계정 이용 가능 확인·비밀값 비출력 절차를 구분했다. README·PR 설명에서 Draft 대기 문구를 제거하고 이 인수 기준과 미검증 항목을 함께 명시한다. 공통 기획 문서는 변경하지 않는다.
+- 최신 구현/게시 기록 head `f2b4c16`의 [Verify 44738992638](https://github.com/gerrmang/NurseFlow/actions/runs/44738992638)는 completed/success이고 Demo seed checks·Backend tests·Android debug build·Web checks 모두 success 확인. PR #51은 OPEN·MERGEABLE이며 조회 시 리뷰·리뷰 스레드 0건이다. 이는 독립 승인이나 브랜치 보호 설정 확인을 뜻하지 않는다.
+- 이번 변경은 문서 마무리뿐이며 앱/서버/테스트 코드는 바꾸지 않았다. 기존 로컬 11개·Android 단위 188개/opt-in 1개·기기 5개·웹 387개/opt-in 3개 결과와 원격 CI를 근거로 하고 테스트를 불필요하게 반복하지 않는다. git diff 공백 검사를 확인하고 문서 커밋을 같은 `chore/demo-seed-script`에 푸시한다. 최종 문서 head의 CI도 별도로 확인한다.
+- 공유 인계: 같은 `C:\Users\jjang\IdeaProjects\NurseFlow`, `chore/demo-seed-script`, [PR #51](https://github.com/gerrmang/NurseFlow/pull/51)을 Ready for review로 전환하고 PR 설명을 최신 파일로 갱신한다. 사용자 DB·trace·로컬 문서 보존 브랜치는 유지한다. 별도 병합 승인·독립 리뷰는 수행하지 않았으며 dev/main 병합·자동 병합·수동 배포는 하지 않는다. 아래 Draft 절들은 당시 게시 이력이다.
+
 ## B6 Draft PR #51 게시 (2026-11-20, Codex)
 
 - B6 보완을 `856ce5f9b9a081e1ddc6bf6239286c770fbc72fd`에 커밋·푸시하고 [PR #51](https://github.com/gerrmang/NurseFlow/pull/51)을 dev 대상 Draft로 게시했다. 연결 도구의 PR 생성 권한 403 후 기존 인증된 gh의 `--body-file scripts/demo/pr-draft.md`로 게시했다. 사용자 요청의 구현·검증·PR 준비 작업을 수행했으며 실제 Kakao 계정 운용 선택·로그인 검증 대기 사유를 PR 첫 부분에 명시했다.
