@@ -135,7 +135,7 @@ class StaffAdminViewModel(
     }
     fun deleteTeam(team: AdminTeam) = write("팀 삭제") { api.deleteTeam(wardId, team.teamId) }
     fun saveStaff(staff: AdminStaff?, name: String, qualifications: String, active: Boolean) {
-        val q = qualifications.split(',').map { it.trim() }.filter { it.isNotEmpty() }.distinct()
+        val q = staffQualifications(staff, qualifications)
         if (name.trim().length !in 1..100 || q.size > 50 || q.any { it.length > 64 }) { message("이름 1~100자, 자격은 각 64자 이내·50개 이하로 입력해 주세요."); return }
         write("간호사 기록 저장") { val input = AdminStaffInput(name.trim(), q, active); if (staff == null) api.createStaff(wardId, input) else api.updateStaff(wardId, staff.nurseId, input) }
     }
@@ -171,6 +171,11 @@ class StaffAdminViewModel(
         }
     }
 }
+
+internal fun staffQualifications(staff: AdminStaff?, text: String): List<String> =
+    // A comma is valid within a server qualification. Do not parse an untouched display value.
+    if (staff != null && text == staff.qualifications.joinToString(", ")) staff.qualifications
+    else text.split(',').map { it.trim() }.filter { it.isNotEmpty() }.distinct()
 
 internal fun staffError(code: String?): String = when (code) {
     "TEAM_NAME_DUPLICATE" -> "같은 이름의 팀이 있어요. 다른 이름을 입력해 주세요."

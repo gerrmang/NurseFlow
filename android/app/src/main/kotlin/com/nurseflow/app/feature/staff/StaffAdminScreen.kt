@@ -254,7 +254,7 @@ private fun adjustmentName(kind: String) = when (kind) {
     var name by rememberSaveable(nurse?.nurseId) { mutableStateOf(nurse?.displayName ?: "") }
     var qualifications by rememberSaveable(nurse?.nurseId) { mutableStateOf(nurse?.qualifications?.joinToString(", ") ?: "") }
     var active by rememberSaveable(nurse?.nurseId) { mutableStateOf(nurse?.active ?: true) }
-    val qs = qualifications.split(',').map { it.trim() }.filter { it.isNotEmpty() }.distinct()
+    val qs = staffQualifications(nurse, qualifications)
     AlertDialog(onDismissRequest = onDismiss, title = { Text(if (nurse == null) "간호사 기록 등록" else "간호사 기록 수정") }, text = {
         Column {
             OutlinedTextField(name, { name = it }, label = { Text("이름 (1~100자)") })

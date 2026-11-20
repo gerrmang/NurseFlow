@@ -1,5 +1,13 @@
 # 공유 작업 현황
 
+## B5a PR #50 자격 문자열 보존 수정 (2026-11-20, Codex)
+
+- P2 데이터 보존 결함 수정: 기존 자격 표시값을 변경하지 않으면 원래 배열을 그대로 전송한다. 이름·활성 상태만 수정할 때 `자격 A,B`가 두 자격으로 분리되는 것을 방지했다. 화면 입력 검증과 저장이 같은 변환 함수를 사용해 쉼표를 포함한 50개 자격도 잘못 차단하지 않는다. 자격 입력 자체를 변경하거나 새 기록을 등록할 때는 기존 쉼표 구분 방식을 유지한다.
+- 회귀 테스트 5개 추가: 이름 변경·비활성화 시 원래 배열 보존, 쉼표 포함 50개 자격 검증, 자격 교체·비우기, 신규 등록. 같은 패턴 검색 결과 Android의 화면 검증·저장 두 경로를 함께 수정했으며 웹은 줄바꿈 구분을 사용한다.
+- JDK 21, android `:app:testDebugUnitTest :app:assembleDebug :app:assembleDebugAndroidTest :app:lintDebug --offline --no-daemon`: BUILD SUCCESSFUL. XML 총 176개 중 175개 통과·실서버 opt-in 1개 건너뜀·실패/오류 0. Lint 오류 0·경고 28·Information 4. 초기 샌드박스 실행은 Gradle 캐시 잠금 접근 거부로 시작하지 못했고, 권한 확장 후 위 검증을 완료했다. git diff --check 통과.
+- 기기 UI·실서버·실제 Kakao·backend·웹 전체 회귀는 Android의 미변경 자격 보존 수정 범위라 재실행하지 않았다. 수정 diff 자체 검토 완료, 독립 재리뷰·수정 후 GitHub CI는 미확인이다. API/DB/환경·서버 근무 규칙 변경 없음. Android 빌드 영향, 배포 없음. 되돌리기는 이번 수정 revert와 이전 Android 빌드 복원이다.
+- 공유 인계: 사용자 요청으로 같은 `C:\Users\jjang\IdeaProjects\NurseFlow`, `feat/android-staff-team`에서 이번 수정·회귀 테스트·이 현황 절만 커밋해 origin에 푸시한다. 기존 현황 문서의 별도 미커밋 변경과 DB·trace는 커밋에서 제외해 보존한다. 제품·테스트 코드는 직전 검증 이후 변경하지 않아 로컬 검사를 반복하지 않는다. 게시 전 staged diff와 공백을 검사하며 푸시 후 원격 SHA 일치를 확인한다. PR 병합·자동 병합·배포 없음. 다음 단계는 수정 diff 재리뷰와 최종 head CI 확인이다.
+
 ## B5a PR #50 게시 (2026-11-18, Codex)
 
 - 사용자 요청으로 [PR #50](https://github.com/gerrmang/NurseFlow/pull/50)을 게시했다. GitHub 조회로 OPEN·일반 PR(`draft=false`)·대상 dev·구현 head `037552cbf9d9afca1bd28b56b679cc6f78433c92` 일치를 확인했다. 연결 도구의 생성 권한 403으로 기존 인증된 gh를 사용했다. 병합·자동 병합·배포 없음.

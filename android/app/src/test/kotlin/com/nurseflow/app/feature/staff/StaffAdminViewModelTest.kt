@@ -19,6 +19,7 @@ private class FakeStaffApi : StaffAdminApi {
     var lastOrder: List<String>? = null
     var lastSettings: AdminRosterSettings? = null
     var lastMembership: AdminMembershipInput? = null
+    var lastStaff: AdminStaffInput? = null
     override suspend fun teams(ward: String): Items<AdminTeam> { read(); return Items(teamRows) }
     override suspend fun staff(ward: String) = Items(nurses)
     override suspend fun members(ward: String) = Items(listOf(AdminMember("u1", "가상 관리자", listOf("WARD_ADMIN"), true)))
@@ -27,8 +28,8 @@ private class FakeStaffApi : StaffAdminApi {
     override suspend fun createTeam(ward: String, input: AdminTeamInput): AdminTeam { mutate(); return team }
     override suspend fun updateTeam(ward: String, id: String, input: AdminTeamInput): AdminTeam { mutate(); return team }
     override suspend fun deleteTeam(ward: String, id: String) { mutate() }
-    override suspend fun createStaff(ward: String, input: AdminStaffInput): AdminStaff { mutate(); return nurse() }
-    override suspend fun updateStaff(ward: String, id: String, input: AdminStaffInput): AdminStaff { mutate(); return nurse(id) }
+    override suspend fun createStaff(ward: String, input: AdminStaffInput): AdminStaff { lastStaff = input; mutate(); return nurse() }
+    override suspend fun updateStaff(ward: String, id: String, input: AdminStaffInput): AdminStaff { lastStaff = input; mutate(); return nurse(id) }
     override suspend fun assignTeam(ward: String, id: String, input: AdminTeamAssignment): AdminStaff { mutate(); return nurse(id) }
     override suspend fun order(ward: String, id: String, input: AdminTeamOrder): Items<AdminStaff> { lastOrder = input.nurseIds; mutate(); return Items(nurses) }
     override suspend fun profile(ward: String, id: String, input: AdminProfileInput): AdminStaff { mutate(); return nurse(id) }
@@ -119,6 +120,41 @@ class StaffAdminViewModelTest {
         vm.saveStaff(null, " ", "", true); vm.saveStaff(null, "가상", "x".repeat(65), true)
         vm.saveProfile("n1", "2026-13", "간호사"); vm.saveProfile("n1", "2026-01", "없는 직급")
         assertEquals(0, api.writes)
+    }
+    @Test fun renamingStaffPreservesCommaInsideQualification() {
+        val staff = nurse().copy(qualifications = listOf("자격 A,B", "자격 C"))
+        api.nurses = listOf(staff); open()
+        vm.saveStaff(staff, "변경 이름", staff.qualifications.joinToString(", "), true)
+        assertEquals(1, api.writes)
+        assertEquals(AdminStaffInput("변경 이름", listOf("자격 A,B", "자격 C"), true), api.lastStaff)
+    }
+    @Test fun deactivatingStaffPreservesCommaInsideQualification() {
+        val staff = nurse().copy(qualifications = listOf("자격 A,B"))
+        api.nurses = listOf(staff); open()
+        vm.saveStaff(staff, staff.displayName, "자격 A,B", false)
+        assertEquals(1, api.writes)
+        assertEquals(AdminStaffInput(staff.displayName, listOf("자격 A,B"), false), api.lastStaff)
+    }
+    @Test fun unchangedQualificationsUseOriginalItemCountForValidation() {
+        val staff = nurse().copy(qualifications = (1..50).map { "자격 $it,A" })
+        api.nurses = listOf(staff); open()
+        vm.saveStaff(staff, "변경 이름", staff.qualifications.joinToString(", "), true)
+        assertEquals(1, api.writes)
+        assertEquals(staff.qualifications, api.lastStaff!!.qualifications)
+    }
+    @Test fun editedQualificationsCanBeReplacedAndCleared() {
+        val staff = nurse().copy(qualifications = listOf("자격 A,B"))
+        api.nurses = listOf(staff); open()
+        vm.saveStaff(staff, staff.displayName, " 자격 C, 자격 D, 자격 C ", true)
+        assertEquals(listOf("자격 C", "자격 D"), api.lastStaff!!.qualifications)
+        vm.saveStaff(staff, staff.displayName, "", true)
+        assertEquals(emptyList<String>(), api.lastStaff!!.qualifications)
+        assertEquals(2, api.writes)
+    }
+    @Test fun newStaffQualificationsStillUseCommaSeparatedInput() {
+        open(); vm.saveStaff(null, "가상 간호사", " 자격 A, 자격 B, 자격 A ", true)
+        assertEquals(1, api.writes)
+        assertEquals(listOf("자격 A", "자격 B"), api.lastStaff!!.qualifications)
     }
     @Test fun departingScreenCancelsPendingReadAndDoesNotResurrectHistory() {
         open(); val wait = CompletableDeferred<Unit>(); api.historyRead = { wait.await() }
