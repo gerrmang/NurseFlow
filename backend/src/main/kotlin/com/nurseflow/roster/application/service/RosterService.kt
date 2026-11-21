@@ -120,10 +120,12 @@ class RosterService(
                 throw BusinessException(ErrorCode.INVALID_SHIFT_INTERVAL)
             }
             val qualifications = item.requiredQualifications.distinct()
-            val hasSeniorSlot = teamId != null && shift.kind != ShiftKind.OTHER
+            if (teamId != null && item.requiredCount > 0 && shift.kind == ShiftKind.OTHER) {
+                throw BusinessException(ErrorCode.INVALID_REQUIREMENTS, safeDetail = "팀별 인력 수요는 D/E/N 근무 유형만 사용할 수 있습니다.")
+            }
             List(item.requiredCount) { index ->
                 NewSlot(item.date, item.shiftTypeId, shift.code, shift.kind, start, end,
-                    qualifications, teamId, hasSeniorSlot && index == 0)
+                    qualifications, teamId, teamId != null && index == 0)
             }
         }
         repo.deleteSlots(roster.id)

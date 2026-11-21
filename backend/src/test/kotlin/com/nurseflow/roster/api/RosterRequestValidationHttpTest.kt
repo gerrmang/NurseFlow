@@ -82,6 +82,12 @@ class RosterRequestValidationHttpTest : ApiTestBase() {
             mapOf("date" to "2026-12-01", "shiftTypeId" to shift, "requiredCount" to 2,
                 "requiredQualifications" to emptyList<String>(), "teamId" to it)
         }
+        jdbc.update("UPDATE shift_types SET kind='OTHER' WHERE shift_type_id=?", shift)
+        val unsupported = http.put("/api/v1/rosters/$rosterId/requirements", mapOf("items" to requirements), admin,
+            mapOf("If-Match" to etag))
+        assertEquals(400, unsupported.status, unsupported.body)
+        assertEquals("INVALID_REQUIREMENTS", unsupported.code)
+        jdbc.update("UPDATE shift_types SET kind='EVENING' WHERE shift_type_id=?", shift)
         val saved = http.put("/api/v1/rosters/$rosterId/requirements", mapOf("items" to requirements), admin,
             mapOf("If-Match" to etag))
         assertEquals(200, saved.status, saved.body)
