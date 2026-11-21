@@ -663,6 +663,34 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/wards/{wardId}/staff/{nurseId}/work-pattern": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                wardId: components["parameters"]["WardId"];
+                nurseId: string;
+            };
+            cookie?: never;
+        };
+        /** 간호사 근무 형태 조회 (관리자) */
+        get: operations["getStaffWorkPattern"];
+        /**
+         * 간호사 근무 형태 설정 (관리자)
+         * @description GENERAL은 D/E/N, DAY_EVENING_ONLY는 D/E, NIGHT_ONLY는 N을 허용한다.
+         *     기존 OTHER 유형은 GENERAL만 허용한다. 제한 형태는 명시된 D/E 또는 N만 허용한다. 기존 간호사 기본값은 GENERAL이다.
+         *     변경 시 모든 DRAFT revision이 증가하고 재검증 표시되므로 초안 ETag를 재조회해야 한다.
+         *     공개본은 재확정 전까지 유지한다. 같은 값 저장은 revision을 변경하지 않는다.
+         *     동시 편집은 마지막 저장이 반영된다. 전담 기간·순환·월 최소 횟수는 별도 정책이다.
+         */
+        put: operations["updateStaffWorkPattern"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/wards/{wardId}/roster-eligibility": {
         parameters: {
             query?: never;
@@ -1245,6 +1273,10 @@ export interface components {
             userId: string;
             displayName: string;
             memberships: components["schemas"]["WardMembership"][];
+        };
+        StaffWorkPattern: {
+            /** @enum {string} */
+            workPattern: "GENERAL" | "DAY_EVENING_ONLY" | "NIGHT_ONLY";
         };
         WardMembership: {
             /** Format: uuid */
@@ -3546,6 +3578,63 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ApiProblem"];
                 };
             };
+        };
+    };
+    getStaffWorkPattern: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                wardId: components["parameters"]["WardId"];
+                nurseId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 근무 형태 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StaffWorkPattern"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    updateStaffWorkPattern: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                wardId: components["parameters"]["WardId"];
+                nurseId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StaffWorkPattern"];
+            };
+        };
+        responses: {
+            /** @description 근무 형태 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StaffWorkPattern"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
         };
     };
     getRosterEligibility: {

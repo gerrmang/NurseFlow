@@ -69,3 +69,9 @@ data class RosterSettingsRequest(
     @param:JsonProperty(required = true) @field:Min(1) @field:Max(5)
     val stageOverride: Int?,
 )
+
+/** Full replacement of the administrator-managed duty pattern. */
+data class WorkPatternRequest(
+    @field:Pattern(regexp = "GENERAL|DAY_EVENING_ONLY|NIGHT_ONLY")
+    val workPattern: String,
+)
