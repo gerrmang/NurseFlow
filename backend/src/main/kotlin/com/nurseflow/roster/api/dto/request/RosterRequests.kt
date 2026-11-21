@@ -32,6 +32,7 @@ data class StaffingRequirement(
     val requiredCount: Int,
     @field:Size(max = 50)
     val requiredQualifications: List<@Size(min = 1, max = 64) String>,
+    val teamId: UUID? = null,
 )
 
 @InvalidRequestCode(ErrorCode.INVALID_REQUIREMENTS)

@@ -72,6 +72,7 @@ class StaffService(
         wards.lockAsAdmin(wardId, actor)
         val team = repo.findTeam(wardId, teamId) ?: throw BusinessException(ErrorCode.TEAM_NOT_FOUND)
         if (repo.activeNursesInTeam(teamId) > 0) throw BusinessException(ErrorCode.TEAM_NOT_EMPTY)
+        if (repo.teamUsedInDraft(wardId, teamId)) throw BusinessException(ErrorCode.TEAM_USED_IN_DRAFT)
         // Inactive members leave the team too; otherwise reactivating one later would yield an active nurse
         // in a deleted team (hidden in responses, impossible to order).
         repo.staff(wardId).filter { it.teamId == teamId }.forEach {
@@ -188,6 +189,7 @@ class StaffService(
             // A moved nurse has no position in the new team: listed after the admin-ordered members
             // (by career date among the unordered) until the admin drags them into place.
             repo.assignTeam(nurseId, teamId)
+            repo.invalidateTeamDrafts(wardId)
             val before = nurse.teamId?.let(context.teams::get)?.name
             adjust(wardId, nurseId, "TEAM_ASSIGNED", before, newTeam?.name, actor)
             if (nurse.teamOrder != null && nurse.teamId != null) {
@@ -239,6 +241,7 @@ class StaffService(
             adjust(wardId, nurseId, "STAGE_OVERRIDE", nurse.stageOverride?.toString(), input.stageOverride?.toString(), actor)
         }
         repo.updateRosterSettings(nurseId, input.seniorEligible, input.stageOverride)
+        if (nurse.seniorEligible != input.seniorEligible) repo.invalidateTeamDrafts(wardId)
         return requireStaff(wardId, nurseId).toResult(context)
     }
 

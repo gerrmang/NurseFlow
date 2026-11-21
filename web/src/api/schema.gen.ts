@@ -865,7 +865,10 @@ export interface paths {
         get?: never;
         /**
          * 월간 인력 수요 전체 교체
-         * @description 요청의 전체 항목을 원자적으로 교체한다. 직원/자격 조건과 월 경계 정책은 P0에서 고정한다.
+         * @description 요청 항목으로 수요를 원자적으로 교체한다. 팀·날짜·근무 유형 조합은 중복될 수 없다.
+         *     활성 팀이 있는 병동의 양수 수요는 해당 병동의 활성 팀을 지정해야 한다.
+         *     팀을 지정한 양수 수요는 D/E/N 유형으로 한정하며 선임 필수 칸이 하나 포함된다.
+         *     팀이 없는 병동과 기존 팀 미지정 근무표는 기존 배치를 유지한다.
          */
         put: operations["replaceRosterRequirements"];
         post?: never;
@@ -1549,6 +1552,8 @@ export interface components {
             required: number;
             assigned: number;
             unfilled: number;
+            /** @description 전체 미충원에 포함된 선임 필수 칸 수. */
+            seniorUnfilled?: number;
             /** @constant */
             hardRuleViolations: 0;
         };
@@ -1557,6 +1562,11 @@ export interface components {
             date: string;
             /** Format: uuid */
             shiftTypeId: string;
+            /**
+             * Format: uuid
+             * @description 활성 팀이 있는 병동의 양수 수요에 필수.
+             */
+            teamId?: string | null;
             requiredCount: number;
             requiredQualifications: string[];
         };
@@ -1581,6 +1591,10 @@ export interface components {
             startAt: string;
             /** Format: date-time */
             endAt: string;
+            /** Format: uuid */
+            teamId?: string | null;
+            /** @description 선임 자격이 필요한 칸. 기존 칸의 기본값은 false. */
+            seniorRequired?: boolean;
             /** @enum {string} */
             status: "FILLED" | "UNFILLED";
             assignment?: components["schemas"]["Assignment"] | null;
@@ -2823,7 +2837,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ApiProblem"];
                 };
             };
-            /** @description TEAM_NOT_EMPTY */
+            /** @description TEAM_NOT_EMPTY 또는 TEAM_USED_IN_DRAFT */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -4029,8 +4043,26 @@ export interface operations {
                     "application/json": components["schemas"]["RosterSummary"];
                 };
             };
+            /** @description INVALID_REQUIREMENTS, DUPLICATE_REQUIREMENT, TEAM_REQUIRED_FOR_DEMAND 또는 SHIFT_TYPE_NOT_FOUND */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
+            /** @description 근무표 또는 해당 병동의 활성 팀이 없음 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
             412: components["responses"]["PreconditionFailed"];
             422: components["responses"]["RuleViolation"];
         };
