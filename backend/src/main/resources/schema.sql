@@ -278,3 +278,6 @@ UPDATE roster_slots s SET
     shift_code = COALESCE(s.shift_code, (SELECT t.code FROM shift_types t WHERE t.shift_type_id = s.shift_type_id)),
     shift_kind = COALESCE(s.shift_kind, (SELECT t.kind FROM shift_types t WHERE t.shift_type_id = s.shift_type_id))
 WHERE s.shift_code IS NULL OR s.shift_kind IS NULL;
+
+ALTER TABLE roster_slots ADD COLUMN IF NOT EXISTS team_id UUID;
+ALTER TABLE roster_slots ADD COLUMN IF NOT EXISTS senior_required BOOLEAN DEFAULT FALSE NOT NULL;

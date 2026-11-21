@@ -68,6 +68,32 @@ class RosterRequestValidationHttpTest : ApiTestBase() {
     }
 
     @Test
+    fun `same duty on two teams produces one senior slot per team`() {
+        val (rosterId, etag) = createRoster()
+        val teams = listOf("가상 A팀", "가상 B팀").map { name ->
+            val res = http.post("/api/v1/wards/$wardId/teams", mapOf("name" to name), admin)
+            assertEquals(201, res.status, res.body)
+            res.json!!.get("teamId").asString()
+        }
+        val shift = UUID.randomUUID()
+        jdbc.update("""INSERT INTO shift_types(shift_type_id,ward_id,code,display_name,kind,start_time,end_time,spans_midnight)
+            VALUES(?,?,'E','가상 이브닝','EVENING','15:00:00','23:00:00',FALSE)""", shift, wardId)
+        val requirements = teams.map {
+            mapOf("date" to "2026-12-01", "shiftTypeId" to shift, "requiredCount" to 2,
+                "requiredQualifications" to emptyList<String>(), "teamId" to it)
+        }
+        val saved = http.put("/api/v1/rosters/$rosterId/requirements", mapOf("items" to requirements), admin,
+            mapOf("If-Match" to etag))
+        assertEquals(200, saved.status, saved.body)
+        assertEquals(2, saved.json!!.get("staffing").get("seniorUnfilled").asInt())
+        val view = http.get("/api/v1/rosters/$rosterId", admin)
+        assertEquals(200, view.status, view.body)
+        val byTeam = view.json!!.get("slots").toList().groupBy { it.get("teamId").asString() }
+        assertEquals(teams.toSet(), byTeam.keys)
+        assertTrue(byTeam.values.all { slots -> slots.size == 2 && slots.count { it.get("seniorRequired").asBoolean() } == 1 })
+    }
+
+    @Test
     fun `absence kind and generation limit keep their dedicated codes`() {
         val (rosterId, etag) = createRoster()
         val absence = http.post("/api/v1/rosters/$rosterId/absences", mapOf(
