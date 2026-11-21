@@ -1,7 +1,5 @@
 package com.nurseflow.staff.api.dto.request
 
-import com.nurseflow.roster.domain.model.WorkPattern
-
 import com.fasterxml.jackson.annotation.JsonProperty
 import com.nurseflow.common.error.ErrorCode
 import com.nurseflow.common.error.InvalidRequestCode
@@ -73,4 +71,7 @@ data class RosterSettingsRequest(
 )
 
 /** Full replacement of the administrator-managed duty pattern. */
-data class WorkPatternRequest(val workPattern: WorkPattern)
+data class WorkPatternRequest(
+    @field:Pattern(regexp = "GENERAL|DAY_EVENING_ONLY|NIGHT_ONLY")
+    val workPattern: String,
+)

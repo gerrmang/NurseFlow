@@ -2,6 +2,8 @@
 
 ## A10 근무 형태 규칙 구현 (2026-11-19, Codex)
 
+- 2026-11-21 게시 전 자체 리뷰에서 API가 숫자를 근무 형태로 해석하지 않도록 문자열 허용 목록을 적용했다. 숫자 입력은 400이며 기존 설정을 보존한다. #50 이후 dev 기준 최종 백엔드 check에서 265개 통과·5개 건너뜀·실패 0을 확인했다.
+
 - `origin/dev` `4ecedd1`에서 `codex/work-pattern-rule`로 분기해 일반(`GENERAL`), D/E 전담(`DAY_EVENING_ONLY`), N 전담(`NIGHT_ONLY`)을 저장한다. 기존 간호사와 신규 기록은 GENERAL 기본값이다. 관리자 전용 `GET/PUT /wards/{wardId}/staff/{nurseId}/work-pattern`을 추가했다. 기존 staff 요청·응답은 바꾸지 않아 기존 클라이언트가 설정값을 덮어쓰지 않는다. 제한 형태는 기존 OTHER 유형도 거부하며 GENERAL만 OTHER를 허용한다. Night 기간·순환·최소 횟수(A15)는 제외했다.
 - `WorkPattern`은 `roster.domain.model`의 값 모델이며 같은 패키지 ShiftKind만 의존한다. 서비스는 병동 관리자 잠금 뒤 변경하고 기존 직원 조정 이력을 남긴다. 변경 시 모든 DRAFT revision·재검증 표시를 갱신한다. 같은 값은 변경하지 않고 공개본은 재확정 전까지 유지한다. 동시 편집은 기존 staff API와 같은 마지막 저장 우선이다.
 - 후보·수동·고정 자동배치·자동 후보 선택·확정에 공통 validator의 `SHIFT_KIND_NOT_ALLOWED` HARD 규칙을 적용했다. 형태×근무 종류 전체 조합, 후보/수동/자동(고정 포함)/확정 통합 경로, 관리자/간호사 권한·잘못된 enum·필수값 누락·타 병동·변경/no-op·초안 무효화, 기존 H2 파일 DB의 GENERAL 기본값과 schema 2회 적용을 검사했다.
