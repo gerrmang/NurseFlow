@@ -1,5 +1,9 @@
 package com.nurseflow.staff.api.controller
 
+import com.nurseflow.staff.api.dto.request.WorkPatternRequest
+
+import com.nurseflow.staff.api.dto.response.WorkPatternResponse
+
 import com.nurseflow.common.security.CurrentSubject
 import com.nurseflow.staff.api.dto.request.CareerProfileRequest
 import com.nurseflow.staff.api.dto.request.HospitalJoinMonthRequest
@@ -29,6 +33,17 @@ import java.util.UUID
 @RestController
 @RequestMapping("/api/v1/wards/{wardId}")
 class StaffController(private val staff: StaffService) {
+    @GetMapping("/staff/{nurseId}/work-pattern")
+    fun workPattern(@PathVariable wardId: UUID, @PathVariable nurseId: UUID, @CurrentSubject subject: String) =
+        ResponseEntity.ok().header("Cache-Control", "private, no-store").body(
+            WorkPatternResponse(staff.workPattern(wardId, nurseId, subject)))
+
+    @PutMapping("/staff/{nurseId}/work-pattern")
+    fun setWorkPattern(@PathVariable wardId: UUID, @PathVariable nurseId: UUID,
+        @Valid @RequestBody request: WorkPatternRequest,
+        @CurrentSubject subject: String) =
+        WorkPatternResponse(staff.setWorkPattern(wardId, nurseId, request.workPattern, subject))
+
     /** Admin roster pool: team order, then most experienced first. */
     @GetMapping("/staff")
     fun list(

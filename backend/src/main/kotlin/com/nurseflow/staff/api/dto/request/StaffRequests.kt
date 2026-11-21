@@ -1,5 +1,7 @@
 package com.nurseflow.staff.api.dto.request
 
+import com.nurseflow.roster.domain.model.WorkPattern
+
 import com.fasterxml.jackson.annotation.JsonProperty
 import com.nurseflow.common.error.ErrorCode
 import com.nurseflow.common.error.InvalidRequestCode
@@ -69,3 +71,6 @@ data class RosterSettingsRequest(
     @param:JsonProperty(required = true) @field:Min(1) @field:Max(5)
     val stageOverride: Int?,
 )
+
+/** Full replacement of the administrator-managed duty pattern. */
+data class WorkPatternRequest(val workPattern: WorkPattern)

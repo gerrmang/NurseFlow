@@ -1,5 +1,16 @@
 # 공유 작업 현황
 
+## A10 근무 형태 규칙 구현 (2026-11-19, Codex)
+
+- `origin/dev` `4ecedd1`에서 `codex/work-pattern-rule`로 분기해 일반(`GENERAL`), D/E 전담(`DAY_EVENING_ONLY`), N 전담(`NIGHT_ONLY`)을 저장한다. 기존 간호사와 신규 기록은 GENERAL 기본값이다. 관리자 전용 `GET/PUT /wards/{wardId}/staff/{nurseId}/work-pattern`을 추가했다. 기존 staff 요청·응답은 바꾸지 않아 기존 클라이언트가 설정값을 덮어쓰지 않는다. 제한 형태는 기존 OTHER 유형도 거부하며 GENERAL만 OTHER를 허용한다. Night 기간·순환·최소 횟수(A15)는 제외했다.
+- `WorkPattern`은 `roster.domain.model`의 값 모델이며 같은 패키지 ShiftKind만 의존한다. 서비스는 병동 관리자 잠금 뒤 변경하고 기존 직원 조정 이력을 남긴다. 변경 시 모든 DRAFT revision·재검증 표시를 갱신한다. 같은 값은 변경하지 않고 공개본은 재확정 전까지 유지한다. 동시 편집은 기존 staff API와 같은 마지막 저장 우선이다.
+- 후보·수동·고정 자동배치·자동 후보 선택·확정에 공통 validator의 `SHIFT_KIND_NOT_ALLOWED` HARD 규칙을 적용했다. 형태×근무 종류 전체 조합, 후보/수동/자동(고정 포함)/확정 통합 경로, 관리자/간호사 권한·잘못된 enum·필수값 누락·타 병동·변경/no-op·초안 무효화, 기존 H2 파일 DB의 GENERAL 기본값과 schema 2회 적용을 검사했다.
+- 백엔드 `./gradlew check --offline --no-daemon`, 웹 `api:gen`·`api:check`·`typecheck`·`lint`, `git diff --check` 성공. Android·실기기·실제 Kakao·운영·GitHub CI는 미실행. 신규 의존성 없음. DB는 nurses.work_pattern 추가, OpenAPI/웹 생성타입 동기화. 롤백은 이전 코드 복원이며 추가 컬럼은 이전 코드에서 사용하지 않는다. 커밋·푸시·PR·병합 없이 같은 브랜치의 미커밋 변경으로 부모 검토에 인계한다.
+
+## PR #50 B5a 코드 리뷰 (2026-11-19, Codex)
+
+- head `7b9676f`의 변경 18파일과 세션·권한·쓰기 유실·정렬·null/false 직렬화 및 서버 A5/A6 경로를 읽기 전용 검토했다. 새로 확정된 P1~P5 결함은 없었다. GitHub Verify `44303733822`의 Backend tests·Android debug build·Web checks 성공을 직접 확인했다. 로컬 Android·실기기는 이 리뷰에서 재실행하지 않았다. 병합·댓글 없음. 마지막 저장 우선·긴 목록 자동스크롤 미지원은 PR에 기존 제한으로 기록돼 있다.
+
 ## B5a PR #50 공통 401 재시도 계정 혼용 회귀 수정 (2026-11-20, Codex)
 
 - 새 P2 `discussion_r4639296654` 대응. 이전 스냅샷 수정 aefb24f가 staff 태그 없는 공통 요청에서 만든 회귀임을 확인했다. 이전 P2 스레드는 리뷰어가 해결 표시했으나 새 P2는 미해결 상태였다. 초대 발급·철회·병동 생성도 공통 BearerInterceptor에서 실제 전송 토큰의 계정·세션 세대를 RequestSessionIdentity 태그로 기록하게 했다. 기존 staff 클라이언트 생성 시 바인딩은 유지한다.
