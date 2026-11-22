@@ -1,5 +1,15 @@
 # 공유 작업 현황
 
+## B6 PR #51 리뷰 수정 (2026-11-22, Codex)
+
+- 같은 공유 worktree·`chore/demo-seed-script`, HEAD `51008be`와 PR 원격 head 일치를 확인하고 리뷰 `6003072000`의 P3·P5를 반영했다. Android·웹에서 `/roster-eligibility`만 일시 실패하면 모드 값을 미확인(null)으로 두고 ‘시연 모드 확인 불가’를 표시한다. 성공한 팀·간호사·구성원·경력 정책 목록과 편집은 유지하며 이전 모드를 최신 값이나 일반 모드로 표시하지 않는다. 인증·권한·취소 오류의 기존 처리는 유지하고 목록 자체 조회 실패는 계속 편집을 차단한다.
+- 첫 진입 503·새로고침 실패·저장 후 재조회·모드 복구·권한 상실·인증 오류 회귀를 Android ViewModel과 웹 Store/화면에서 검증했다. 같은 패턴 검색으로 두 클라이언트의 목록/모드 병합 경로와 배너 소비를 함께 수정했다. P5는 실행 안내를 현재 Android·웹 관리자 화면 지원과 로컬 가상 계정의 실제 Kakao 로그인 불가 범위로 나눴다.
+- JDK 21 Android `:app:testDebugUnitTest :app:assembleDebug :app:assembleDebugAndroidTest :app:lintDebug --offline --no-daemon`: BUILD SUCCESSFUL(1분 45초), XML 191개 중 190개 통과·실서버 opt-in 1개 건너뜀·실패/오류 0. Lint 오류 0·경고 27. 최초 샌드박스 실행은 Gradle 캐시 잠금 접근 거부로 시작하지 못해 권한 확장 후 완료했다.
+- Windows web `npm run api:check`, `npm run lint`, `npm run typecheck`, `npm test -- --run`, `npm run build` 성공. 394개 통과·실서버 opt-in 3개 건너뜀·실패 0. 최초 화면 회귀 2개는 빈 팀 이름의 기존 필수 검증을 누락해 실패했고, 이름 입력 후 활성화를 검사하도록 테스트만 정정해 전체 재실행 통과했다. Node `--test scripts/demo/api.test.mjs scripts/demo/runtime.test.mjs` 7개 통과·실패/건너뜀 0, `node --check scripts/demo/local.mjs`·`git diff --check` 통과.
+- 기기 UI·새 실서버/시드 통합·실제 Kakao·backend 전체 회귀는 클라이언트 장애 처리와 실행 문구 변경 범위라 재실행하지 않았다. API/DB/환경·서버 근무 규칙 변경 없음. Android·웹 빌드 영향, 수동 배포 없음. 롤백은 이번 수정 커밋 revert와 이전 클라이언트 빌드 복원이다. 수정 diff 자체 검토 완료, 독립 재리뷰·최종 head CI는 별도다.
+- 공유 인계: 같은 `C:\Users\jjang\IdeaProjects\NurseFlow`, `chore/demo-seed-script`에 이번 수정·회귀 검사·PR 초안·이 현황을 커밋·푸시하고 PR #51 설명을 최신 검증으로 갱신한다. 사용자 `nurseflow.mv.db`·`nurseflow.trace.db`는 보존하며 커밋에서 제외한다. 리뷰 스레드 해결·독립 승인·PR 병합·자동 병합·수동 배포 없음. 다음 단계는 수정 diff 재리뷰와 최종 head CI 확인이다.
+- 게시 상태: 로컬 수정 커밋 생성 후 `git push origin chore/demo-seed-script`는 자동 승인 검토가 외부 GitHub 게시에 대한 명시적 사용자 승인 부족으로 거부했다. 우회하지 않았으며 원격 푸시·PR 설명 갱신은 미실행이다. 검증된 변경은 같은 브랜치의 로컬 커밋으로 인계하고 사용자 푸시 승인 후 게시한다. 위 문장의 푸시·PR 갱신은 계획이며 완료 기록이 아니다.
+
 ## B6 실제 Kakao 웹 로그인 1계정 검증 (2026-11-20, Codex)
 
 - 사용자의 실제 로그인 검증 요청에 따라 현재 코드 HEAD `4d8590e`의 웹과 backend bootJar를 실행했다. backend는 dev `139b609` 이후 변경 없음. WSL JDK 21·새 `jdbc:h2:mem:b6_real_kakao`·8080, Windows Vite·localhost:5173, 실제 Kakao HTTPS issuer/JWKS/authorize/token 주소로 구성했다. 사용자가 기존에 준비한 Kakao 환경 파일은 source로만 읽고 키·Secret·토큰·인가 코드·쿠키·계정 식별자를 출력·기록하지 않았다. 사용자 파일 DB를 사용하지 않았다.

@@ -82,7 +82,8 @@ try {
     };
     await show();
     console.log('r + Enter: 재실행 / Ctrl+C 또는 q + Enter: 종료·메모리 DB 폐기');
-    console.log('실제 Kakao 로그인·Android/웹 시연 모드 표시는 별도 후속 범위입니다.');
+    console.log('Android·웹 관리자 팀/구성원 화면은 서버의 시연 모드를 표시합니다.');
+    console.log('이 로컬 런타임의 가상 계정으로 앱·웹의 실제 Kakao 로그인은 할 수 없습니다.');
     const input = createInterface({ input: process.stdin });
     // Sequential line handling prevents overlapping writes when r is pressed repeatedly.
     for await (const line of input) {

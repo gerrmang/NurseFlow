@@ -8,7 +8,7 @@ export interface StaffData {
   staff: StaffMember[]
   members: WardMember[]
   policy: CareerPolicy
-  eligibility: RosterEligibility
+  eligibility: RosterEligibility | null
 }
 interface State {
   data: StaffData | null
@@ -64,7 +64,15 @@ export class StaffAdminStore {
       if (this.disposed || mine !== this.ticket) return false
       const ward = wards.items.find((item) => item.wardId === this.wardId && item.roles.includes('WARD_ADMIN'))
       if (!ward) { this.patch({ forbidden: true, data: null, loading: false }); return false }
-      const [teams, staff, members, policy, eligibility] = await Promise.all([this.api.teams(), this.api.staff(), this.api.members(), this.api.policy(), this.api.eligibility()])
+      const [teams, staff, members, policy, eligibility] = await Promise.all([
+        this.api.teams(), this.api.staff(), this.api.members(), this.api.policy(),
+        this.api.eligibility().catch((error: unknown) => {
+          const failure = asApiError(error)
+          if (failure.status === 401 || failure.status === 403 || failure.code === 'WARD_NOT_FOUND' ||
+            failure.code === ClientErrorCode.ABORTED || failure.code === ClientErrorCode.SESSION_EXPIRED) throw error
+          return null
+        }),
+      ])
       if (this.disposed || mine !== this.ticket) return false
       this.patch({ data: { wardName: ward.wardName, teams, staff, members, policy, eligibility }, loading: false, stale: false, forbidden: false, version: this.state.version + 1,
         ...(!fromWrite && !this.state.uncertain ? { notice: null, noticeTone: 'info' as const } : {}),

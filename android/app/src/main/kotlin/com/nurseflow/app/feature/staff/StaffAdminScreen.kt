@@ -50,6 +50,7 @@ fun StaffAdminScreen(wardName: String, model: StaffAdminViewModel, onBack: () ->
         if (!state.forbidden) Text(
             when {
                 state.stale || data == null -> "시연 모드 상태를 확인하고 있어요. 최신 목록을 불러와 주세요."
+                data.eligibility == null -> "시연 모드 확인 불가 · 새로고침해 다시 확인해 주세요."
                 data.eligibility.demoMode -> "시연 모드 · 계정이 연결되지 않은 가상 간호사도 편성에 포함돼요. 실제 근무표로 사용하지 마세요."
                 else -> "일반 모드 · 초대를 수락한 활성 간호사만 편성에 포함돼요."
             }, modifier = Modifier.testTag("staff-demo-mode"),

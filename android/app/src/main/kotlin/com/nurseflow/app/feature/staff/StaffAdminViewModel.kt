@@ -5,7 +5,7 @@ import com.nurseflow.app.core.network.*
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 
-data class StaffAdminData(val teams: List<AdminTeam>, val staff: List<AdminStaff>, val members: List<AdminMember>, val policy: AdminCareerPolicy, val eligibility: AdminEligibility)
+data class StaffAdminData(val teams: List<AdminTeam>, val staff: List<AdminStaff>, val members: List<AdminMember>, val policy: AdminCareerPolicy, val eligibility: AdminEligibility?)
 data class StaffAdminState(
     val data: StaffAdminData? = null, val loading: Boolean = false, val busy: Boolean = false,
     val stale: Boolean = true, val uncertain: Boolean = false, val forbidden: Boolean = false,
@@ -81,7 +81,14 @@ class StaffAdminViewModel(
                 val staff = async { apiCall { api.staff(wardId) }.items }
                 val members = async { apiCall { api.members(wardId) }.items }
                 val policy = async { apiCall { api.policy(wardId) } }
-                val eligibility = async { apiCall { api.eligibility(wardId) } }
+                val eligibility = async {
+                    try { apiCall { api.eligibility(wardId) } }
+                    catch (e: CancellationException) { throw e }
+                    catch (e: ApiException) {
+                        if (e.status == 401 || e.status == 403 || e.code == "WARD_NOT_FOUND" || e.code == "USER_NOT_FOUND") throw e
+                        null
+                    }
+                }
                 StaffAdminData(teams.await(), staff.await(), members.await(), policy.await(), eligibility.await())
             }
             if (!valid() || mine != ticket) return false

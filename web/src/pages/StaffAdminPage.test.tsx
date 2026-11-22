@@ -41,10 +41,23 @@ it('does not label a failed mode refresh as normal mode', async () => {
   await screen.findByText(/시연 모드 · 계정이 연결되지 않은/)
   app.data.eligibilityFails = true
   await app.user.click(screen.getByRole('button', { name: '최신 목록 불러오기' }))
-  await screen.findByRole('alert')
-  expect(screen.getByText(/시연 모드 상태를 확인/)).toBeInTheDocument()
+  await screen.findByText(/시연 모드 확인 불가/)
   expect(screen.queryByText(/일반 모드 · 초대를 수락한/)).not.toBeInTheDocument()
-  expect(screen.getByRole('button', { name: '팀 추가' })).toBeDisabled()
+  await app.user.type(screen.getByLabelText('새 팀 이름'), '가상 C팀')
+  expect(screen.getByRole('button', { name: '팀 추가' })).toBeEnabled()
+  expect(screen.getByRole('button', { name: NURSE_A.displayName })).toBeInTheDocument()
+  app.data.eligibilityFails = false
+  await app.user.click(screen.getByRole('button', { name: '최신 목록 불러오기' }))
+  expect(await screen.findByText(/시연 모드 · 계정이 연결되지 않은/)).toBeInTheDocument()
+})
+it('keeps management available when only mode lookup fails on entry', async () => {
+  const app = open()
+  app.data.eligibilityFails = true
+  await screen.findByText(/시연 모드 확인 불가/)
+  expect(screen.getByRole('button', { name: NURSE_A.displayName })).toBeInTheDocument()
+  expect(screen.queryByText(/일반 모드 · 초대를 수락한/)).not.toBeInTheDocument()
+  await app.user.type(screen.getByLabelText('새 팀 이름'), '가상 C팀')
+  expect(screen.getByRole('button', { name: '팀 추가' })).toBeEnabled()
 })
 async function detail(app: ReturnType<typeof open>) { await app.user.click(await screen.findByRole('button', { name: NURSE_A.displayName })) }
 

@@ -53,16 +53,35 @@ class StaffAdminViewModelTest {
 
     @Test fun demoModeComesFromServerAndRefreshRemovesIt() {
         api.demoMode = true; open()
-        assertTrue(vm.state.value.data!!.eligibility.demoMode)
+        assertTrue(vm.state.value.data!!.eligibility!!.demoMode)
         api.demoMode = false; vm.reload()
-        assertFalse(vm.state.value.data!!.eligibility.demoMode)
+        assertFalse(vm.state.value.data!!.eligibility!!.demoMode)
     }
     @Test fun failedModeRefreshCannotAppearAsFreshNormalMode() {
         api.demoMode = true; open()
         api.eligibilityRead = { throw ApiException(503, "UNAVAILABLE", "고정") }
         vm.reload()
-        assertTrue(vm.state.value.stale); assertFalse(vm.state.value.editable)
-        assertTrue(vm.state.value.data!!.eligibility.demoMode)
+        assertFalse(vm.state.value.stale); assertTrue(vm.state.value.editable)
+        assertNull(vm.state.value.data!!.eligibility)
+        assertEquals(api.nurses, vm.state.value.data!!.staff)
+        vm.saveTeam(null, "가상팀", "1"); assertEquals(1, api.writes)
+        assertTrue(vm.state.value.editable)
+        api.eligibilityRead = {}; api.demoMode = false; vm.reload()
+        assertFalse(vm.state.value.data!!.eligibility!!.demoMode)
+    }
+    @Test fun modeUnavailableOnEntryStillLoadsEditableLists() {
+        api.eligibilityRead = { throw ApiException(503, "UNAVAILABLE", "고정") }
+        open()
+        assertNull(vm.state.value.data!!.eligibility)
+        assertEquals(api.nurses, vm.state.value.data!!.staff)
+    }
+    @Test fun modeAccessFailureStillClearsManagementData() {
+        for ((status, code) in listOf(403 to "WARD_ADMIN_REQUIRED", 404 to "WARD_NOT_FOUND", 401 to "USER_NOT_FOUND")) {
+            api.eligibilityRead = {}; vm.activate(); vm.reload()
+            api.eligibilityRead = { throw ApiException(status, code, "고정") }; vm.reload()
+            assertTrue(vm.state.value.forbidden); assertNull(vm.state.value.data)
+        }
+        assertEquals(1, expired)
     }
 
     @Test fun onlyAdminCanReadAndRevokedPermissionClearsData() {
