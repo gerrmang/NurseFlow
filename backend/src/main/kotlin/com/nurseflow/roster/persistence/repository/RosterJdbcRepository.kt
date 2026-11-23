@@ -1,8 +1,7 @@
 package com.nurseflow.roster.persistence.repository
 
-import com.nurseflow.roster.domain.model.WorkPattern
-
 import com.nurseflow.roster.domain.model.ShiftKind
+import com.nurseflow.roster.domain.model.WorkPattern
 import com.nurseflow.roster.persistence.entity.DbAbsence
 import com.nurseflow.roster.persistence.entity.DbGenerationJob
 import com.nurseflow.roster.persistence.entity.DbNurse
@@ -116,10 +115,16 @@ class RosterJdbcRepository(
                 Instant.parse(rs.getString("starts_at")), Instant.parse(rs.getString("ends_at")),
                 mapper.readValue(rs.getString("required_qualifications"), strings).toSet(),
                 rs.getString("nurse_id")?.let(UUID::fromString), rs.getString("display_name"), rs.getBoolean("locked"),
+                rs.getObject("team_id", UUID::class.java), rs.getBoolean("senior_required"),
             )
         },
         rosterId,
     )
+
+    fun activeTeamIds(wardId: UUID): Set<UUID> = jdbc.query(
+        "SELECT team_id FROM ward_teams WHERE ward_id=? AND active=TRUE",
+        { rs, _ -> uuid(rs, "team_id") }, wardId,
+    ).toSet()
 
     fun deleteSlots(rosterId: UUID) {
         jdbc.update("DELETE FROM roster_slots WHERE roster_id=?", rosterId)
@@ -127,11 +132,11 @@ class RosterJdbcRepository(
 
     fun insertSlot(rosterId: UUID, slot: NewSlot) {
         jdbc.update(
-            """INSERT INTO roster_slots(slot_id,roster_id,shift_date,shift_type_id,shift_code,shift_kind,starts_at,ends_at,required_qualifications)
-                VALUES(?,?,?,?,?,?,?,?,?)""",
+            """INSERT INTO roster_slots(slot_id,roster_id,shift_date,shift_type_id,shift_code,shift_kind,starts_at,ends_at,required_qualifications,team_id,senior_required)
+                VALUES(?,?,?,?,?,?,?,?,?,?,?)""",
             UUID.randomUUID(), rosterId, slot.date, slot.shiftTypeId, slot.shiftCode, slot.shiftKind.name,
             slot.startsAt.toString(), slot.endsAt.toString(),
-            mapper.writeValueAsString(slot.requiredQualifications),
+            mapper.writeValueAsString(slot.requiredQualifications), slot.teamId, slot.seniorRequired,
         )
     }
 
@@ -212,24 +217,26 @@ class RosterJdbcRepository(
     )
 
     fun findNurse(id: UUID, wardId: UUID): DbNurse? = jdbc.query(
-        "SELECT nurse_id,qualifications,work_pattern,($rosterable) AS active FROM nurses WHERE nurse_id=? AND ward_id=?",
+        "SELECT nurse_id,qualifications,team_id,senior_eligible,work_pattern,($rosterable) AS active FROM nurses WHERE nurse_id=? AND ward_id=?",
         { rs, _ ->
             DbNurse(
                 uuid(rs, "nurse_id"),
                 mapper.readValue(rs.getString("qualifications"), strings).toSet(),
                 rs.getBoolean("active"),
+                rs.getObject("team_id", UUID::class.java), rs.getBoolean("senior_eligible"),
                 WorkPattern.valueOf(rs.getString("work_pattern")),
             )
         }, id, wardId,
     ).firstOrNull()
 
     fun activeNurses(wardId: UUID): List<DbNurse> = jdbc.query(
-        "SELECT nurse_id,qualifications,work_pattern,active FROM nurses WHERE ward_id=? AND $rosterable",
+        "SELECT nurse_id,qualifications,team_id,senior_eligible,work_pattern,active FROM nurses WHERE ward_id=? AND $rosterable",
         { rs, _ ->
             DbNurse(
                 uuid(rs, "nurse_id"),
                 mapper.readValue(rs.getString("qualifications"), strings).toSet(),
                 rs.getBoolean("active"),
+                rs.getObject("team_id", UUID::class.java), rs.getBoolean("senior_eligible"),
                 WorkPattern.valueOf(rs.getString("work_pattern")),
             )
         }, wardId,

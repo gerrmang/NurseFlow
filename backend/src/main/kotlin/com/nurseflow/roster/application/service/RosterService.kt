@@ -91,7 +91,7 @@ class RosterService(
             }) {
             throw BusinessException(ErrorCode.INVALID_REQUIREMENTS)
         }
-        if (request.items.map { it.date to it.shiftTypeId }.toSet().size != request.items.size) {
+        if (request.items.map { Triple(it.date, it.shiftTypeId, it.teamId) }.toSet().size != request.items.size) {
             throw BusinessException(ErrorCode.DUPLICATE_REQUIREMENT)
         }
         if (request.items.sumOf { it.requiredCount } > 10000) {
@@ -101,7 +101,13 @@ class RosterService(
             throw BusinessException(ErrorCode.ASSIGNMENTS_EXIST)
         }
         val month = parseMonth(roster.month)
+        val teamIds = repo.activeTeamIds(roster.wardId)
         val newSlots = request.items.flatMap { item ->
+            val teamId = item.teamId
+            if (teamId != null && teamId !in teamIds) throw BusinessException(ErrorCode.TEAM_NOT_FOUND)
+            if (teamId == null && item.requiredCount > 0 && teamIds.isNotEmpty()) {
+                throw BusinessException(ErrorCode.TEAM_REQUIRED_FOR_DEMAND)
+            }
             if (YearMonth.from(item.date) != month) {
                 throw BusinessException(ErrorCode.DATE_OUTSIDE_ROSTER)
             }
@@ -113,8 +119,13 @@ class RosterService(
             if (!start.isBefore(end)) {
                 throw BusinessException(ErrorCode.INVALID_SHIFT_INTERVAL)
             }
-            List(item.requiredCount) {
-                NewSlot(item.date, item.shiftTypeId, shift.code, shift.kind, start, end, item.requiredQualifications.distinct())
+            val qualifications = item.requiredQualifications.distinct()
+            if (teamId != null && item.requiredCount > 0 && shift.kind == ShiftKind.OTHER) {
+                throw BusinessException(ErrorCode.INVALID_REQUIREMENTS, safeDetail = "팀별 인력 수요는 D/E/N 근무 유형만 사용할 수 있습니다.")
+            }
+            List(item.requiredCount) { index ->
+                NewSlot(item.date, item.shiftTypeId, shift.code, shift.kind, start, end,
+                    qualifications, teamId, teamId != null && index == 0)
             }
         }
         repo.deleteSlots(roster.id)
@@ -352,7 +363,7 @@ class RosterService(
             if (nurse == null || !nurse.qualifications.containsAll(slot.requiredQualifications)) {
                 listOf(RuleDiagnostic("LOCKED_ASSIGNMENT_INVALID", "HARD", "고정 배치가 현재 자격 또는 활성 상태와 맞지 않습니다.", slot.date))
             } else {
-                validator.validate(candidate, assignments, context.absences, nurse.workPattern).map(RuleDiagnostic::from)
+                teamViolations(slot, nurse) + validator.validate(candidate, assignments, context.absences, nurse.workPattern).map(RuleDiagnostic::from)
             }
         }
         if (preexistingViolations.isNotEmpty()) {
@@ -366,7 +377,7 @@ class RosterService(
         var timedOut = false
         var cancelled = false
         generationLoop@ for (slot in allSlots.filter { it !in preserved }.sortedWith(
-            compareBy<DbSlot>({ it.date }, { it.startsAt }, { it.id.toString() }),
+            compareBy<DbSlot>({ it.date }, { it.startsAt }, { !it.seniorRequired }, { it.id.toString() }),
         )) {
             if (repo.generationCancelled(jobId)) { cancelled = true; break }
             if (System.nanoTime() >= deadline) { timedOut = true; break }
@@ -379,7 +390,7 @@ class RosterService(
             )
             for (nurse in ordered) {
                 if (System.nanoTime() >= deadline) { timedOut = true; break@generationLoop }
-                if (!nurse.qualifications.containsAll(slot.requiredQualifications)) continue
+                if (!nurse.qualifications.containsAll(slot.requiredQualifications) || teamViolations(slot, nurse).isNotEmpty()) continue
                 val candidate = ShiftAssignment(slot.id, nurse.id, slot.date, slot.kind, slot.startsAt, slot.endsAt)
                 if (validator.validate(candidate, assignments, context.absences, nurse.workPattern).isNotEmpty()) continue
                 selected[slot.id] = nurse.id
@@ -405,11 +416,10 @@ class RosterService(
             throw IllegalStateException("Automatic roster assignment failed final hard-rule validation")
         }
         repo.increment(roster.id)
-        val staffing = StaffingSummary(
-            finalSlots.size, finalSlots.count { it.nurseId != null }, finalSlots.count { it.nurseId == null },
-        )
+        val staffing = staffing(finalSlots)
         val diagnostics = finalSlots.filter { it.nurseId == null }.map {
-            RuleDiagnostic("UNFILLED_SLOT", "SOFT", "현재 배치 순서와 필수 규칙으로 채우지 못한 칸입니다.", it.date)
+            if (it.seniorRequired) RuleDiagnostic("SENIOR_UNFILLED", "SOFT", "선임 필수 칸이 비어 있습니다.", it.date)
+            else RuleDiagnostic("UNFILLED_SLOT", "SOFT", "현재 배치 순서와 필수 규칙으로 채우지 못한 칸입니다.", it.date)
         }.distinctBy { it.code to it.affectedDate } + if (timedOut) {
             listOf(RuleDiagnostic("TIME_LIMIT_REACHED", "SOFT", "제한 시간에 도달해 남은 칸은 검토가 필요합니다."))
         } else {
@@ -457,13 +467,22 @@ class RosterService(
     ): List<RuleDiagnostic> {
         val nurse = nursesById.getOrPut(nurseId) { repo.findNurse(nurseId, roster.wardId) }
             ?: throw BusinessException(ErrorCode.NURSE_NOT_FOUND)
-        val extra = mutableListOf<RuleDiagnostic>()
+        val extra = teamViolations(slot, nurse).toMutableList()
         if (!nurse.active) extra += RuleDiagnostic("NURSE_INACTIVE", "HARD", "활성화되지 않은 간호사입니다.", slot.date)
         if (!nurse.qualifications.containsAll(slot.requiredQualifications)) {
             extra += RuleDiagnostic("QUALIFICATION_MISSING", "HARD", "필수 자격이 부족합니다.", slot.date)
         }
         val candidate = ShiftAssignment(slot.id, nurseId, slot.date, slot.kind, slot.startsAt, slot.endsAt)
         return extra + validator.validate(candidate, context.assignments, context.absences, nurse.workPattern).map(RuleDiagnostic::from)
+    }
+
+    private fun teamViolations(slot: DbSlot, nurse: DbNurse): List<RuleDiagnostic> = buildList {
+        if (slot.teamId != null && slot.teamId != nurse.teamId) {
+            add(RuleDiagnostic("TEAM_MISMATCH", "HARD", "이 근무 칸과 간호사의 소속 팀이 다릅니다.", slot.date))
+        }
+        if (slot.seniorRequired && !nurse.seniorEligible) {
+            add(RuleDiagnostic("SENIOR_REQUIRED", "HARD", "선임 자격이 필요한 근무 칸입니다.", slot.date))
+        }
     }
 
     private fun loadValidationContext(roster: DbRoster, ownSlots: List<DbSlot> = repo.slots(roster.id)): ValidationContext {
@@ -516,12 +535,13 @@ class RosterService(
         val all = repo.slots(roster.id)
         return RosterView(
             roster.id, roster.wardId, roster.month, roster.status, roster.revision, roster.zone.id,
-            StaffingSummary(all.size, all.count { it.nurseId != null }, all.count { it.nurseId == null }),
+            staffing(all),
             all.map {
                 SlotView(
                     it.id, it.date, it.shiftTypeId, it.shiftCode, it.kind.name, it.startsAt, it.endsAt,
                     if (it.nurseId == null) "UNFILLED" else "FILLED",
                     it.nurseId?.let { nurseId -> AssignmentView(nurseId, it.nurseName ?: "", it.locked) },
+                    it.teamId, it.seniorRequired,
                 )
             },
             roster.publishedAt,
@@ -529,11 +549,18 @@ class RosterService(
         )
     }
 
+    private fun staffing(slots: List<DbSlot>): StaffingSummary = StaffingSummary(
+        required = slots.size,
+        assigned = slots.count { it.nurseId != null },
+        unfilled = slots.count { it.nurseId == null },
+        seniorUnfilled = slots.count { it.seniorRequired && it.nurseId == null },
+    )
+
     private fun summary(roster: DbRoster): RosterSummary {
         val all = repo.slots(roster.id)
         return RosterSummary(
             roster.id, roster.wardId, roster.month, roster.status, roster.revision, roster.zone.id,
-            StaffingSummary(all.size, all.count { it.nurseId != null }, all.count { it.nurseId == null }),
+            staffing(all),
             roster.publishedAt,
             roster.needsRevalidation && roster.status == "DRAFT",
         )

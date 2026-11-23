@@ -12,7 +12,7 @@ import com.nurseflow.roster.application.model.StartGenerationRequest as Generati
 
 internal fun CreateRosterRequest.toCommand() = CreateCommand(month)
 internal fun ReplaceRequirementsRequest.toCommand() = RequirementsCommand(items.map {
-    com.nurseflow.roster.application.model.StaffingRequirement(it.date, it.shiftTypeId, it.requiredCount, it.requiredQualifications)
+    com.nurseflow.roster.application.model.StaffingRequirement(it.date, it.shiftTypeId, it.requiredCount, it.requiredQualifications, it.teamId)
 })
 internal fun ApprovedAbsenceInput.toCommand() = AbsenceCommand(nurseId, kind, startsAt, endsAt)
 internal fun ValidateAssignmentRequest.toCommand() = ValidateCommand(slotId, nurseId)
@@ -21,11 +21,11 @@ internal fun ConfirmRosterRequest.toCommand() = ConfirmCommand(acknowledgeUnfill
 internal fun StartGenerationRequest.toCommand() = GenerationCommand(preserveLockedAssignments, timeLimitSeconds)
 
 internal fun com.nurseflow.roster.application.model.StaffingSummary.toResponse() =
-    StaffingSummary(required, assigned, unfilled, hardRuleViolations)
+    StaffingSummary(required, assigned, unfilled, hardRuleViolations, seniorUnfilled)
 internal fun com.nurseflow.roster.application.model.AssignmentView.toResponse() =
     AssignmentView(nurseId, displayName, locked)
 internal fun com.nurseflow.roster.application.model.SlotView.toResponse() =
-    SlotView(slotId, date, shiftTypeId, shiftCode, shiftKind, startAt, endAt, status, assignment?.toResponse())
+    SlotView(slotId, date, shiftTypeId, shiftCode, shiftKind, startAt, endAt, status, assignment?.toResponse(), teamId, seniorRequired)
 internal fun com.nurseflow.roster.application.model.RosterSummary.toResponse() =
     RosterSummary(rosterId, wardId, month, status, revision, timeZone, staffing.toResponse(), publishedAt, needsRevalidation)
 internal fun com.nurseflow.roster.application.model.RosterView.toResponse() =
