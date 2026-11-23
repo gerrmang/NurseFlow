@@ -10,6 +10,7 @@
 - 가상 데이터만 사용, 토큰 비출력, 기존 포트·파일 DB 보존
 - Android·웹 관리 화면: 서버 모드 표시·최신 목록 갱신, 조회 실패·오래된 상태를 일반 모드로 추정하지 않음
 - PR 리뷰 P3 반영: 모드 조회만 실패하면 ‘시연 모드 확인 불가’를 표시하고 최신 팀·구성원 목록과 편집을 유지한다. 인증·권한 오류와 기존 목록 조회 실패의 차단은 유지한다. P5 실행 안내도 현재 관리자 화면 지원과 가상 계정의 실제 로그인 불가 범위를 구분한다.
+- 2026-11-23 추가 P3 반영: Android 모드 응답의 JSON 디코딩 실패도 미확인 상태로 처리한다. 실제 Retrofit 변환기로 필수 필드 누락·깨진 JSON·잘못된 타입을 검사하며 첫 진입·새로고침·저장 후 재조회·정상 응답 복구를 검증했다. 취소·인증·권한 오류 처리는 유지한다.
 - 가상 관리자·간호사 2계정: 초대 전 404→가입·본인 프로필→관리자 API 403, 기본 모드 편성·관리자 기록 제외
 - CI Demo seed checks 추가: 기존 서버·Android·웹 검사와 별도로 시드/CLI 11개 및 새 H2 통합 검사
 
@@ -19,6 +20,7 @@
 
 ## 검증
 
+- 2026-11-23 추가 리뷰 수정: Android ViewModel 30개 통과. 새 JSON 회귀 2개는 처리 코드를 제거한 변이에서 모두 실패했으며 수정 코드를 복원했다. 최종 JDK 21 `:app:testDebugUnitTest :app:assembleDebug :app:assembleDebugAndroidTest :app:lintDebug --offline --no-daemon` BUILD SUCCESSFUL(1분 19초), 단위 194개 중 193개 통과·실서버 opt-in 1개 건너뜀·실패/오류 0, Lint 오류 0·경고 27. 이번 변경은 Android 모드 응답 처리뿐이므로 웹·backend·시드 실서버 통합·기기·실제 Kakao 검사는 재실행하지 않았다.
 - 2026-11-22 리뷰 수정: Android 단위 190개 통과·실서버 opt-in 1개 건너뜀·실패/오류 0, 앱/테스트 APK·Lint 성공(오류 0·경고 27). 웹 api:check·lint·typecheck·전체 test·build 성공, 394개 통과·실서버 opt-in 3개 건너뜀. 시드 API/런타임 7개·local.mjs 구문·git diff 공백 검사 통과. 첫 진입·모드 재조회 실패·저장 후 재조회·복구와 인증/권한 차단 회귀를 포함한다. 기기·실서버·실제 Kakao·backend 전체 검사는 클라이언트 장애 처리와 안내 수정 범위라 이번에 재실행하지 않았다. 수정 diff 독립 재리뷰와 최종 head CI는 별도 확인한다.
 - JDK 21·Node v24.15.0, `scripts/demo/run.ps1 -Verify -Offline`: bootJar BUILD SUCCESSFUL, 기본 통합 검증 성공.
 - 최종 `node scripts/demo/local.mjs --jar backend/build/libs/nurseflow-backend-0.1.0-SNAPSHOT.jar --verify`: exit 0. 생성 응답 유실 4종 복구·재실행 쓰기 0건·전체 데이터 조회·시연 모드 제외/복구·412·비소속 404·기존 근무 설정 보존 확인.

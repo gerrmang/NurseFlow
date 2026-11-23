@@ -1,5 +1,14 @@
 # 공유 작업 현황
 
+## B6 PR #51 JSON 파싱 실패 리뷰 수정 (2026-11-23, Codex)
+
+- 같은 공유 worktree·`chore/demo-seed-script`, 시작 HEAD와 원격 PR head `e27e919` 일치를 확인했다. 새 미해결 P3 `discussion_r4660963516` 대응으로 Android `/roster-eligibility` 조회에서만 `SerializationException`을 미확인(null)으로 처리한다. 성공한 관리 목록과 편집을 유지하며 기존 ‘시연 모드 확인 불가’ 표시를 사용한다. 취소·401·403·WARD_NOT_FOUND·USER_NOT_FOUND는 기존 처리를 유지한다.
+- 실제 `ApiFactory.staffAdminApi`의 Retrofit/kotlinx.serialization 변환기와 MockWebServer로 HTTP 200의 `{}`·깨진 JSON·잘못된 타입을 검증했다. 다른 관리 API는 가상 응답이며 실서버 통합으로 표현하지 않는다. 첫 진입·시연 모드에서 실패한 새로고침·저장 후 재조회·정상 일반 모드 복구를 검사했고 취소 회귀를 추가했다. 기존 인증·권한·병동 없음 회귀도 유지했다. 같은 패턴을 검색해 웹 모드 조회는 디코딩 실패를 이미 분리함을 확인했다.
+- 대상 ViewModel 30개 통과. 파싱 예외 처리만 제거한 변이에서 새 JSON 회귀 2개 모두 목록/편집 유지 단언에 실패(exit 1)했으며 finally로 수정 코드를 복원했다. 변이 실행 중 Kotlin daemon 초기 종료 안내가 있었지만 컴파일이 이어져 검사가 실제 실행됐다.
+- 최종 JDK 21 `:app:testDebugUnitTest :app:assembleDebug :app:assembleDebugAndroidTest :app:lintDebug --offline --no-daemon`: BUILD SUCCESSFUL(1분 19초). 단위 XML 194개 중 193개 통과·실서버 opt-in 1개 건너뜀·실패/오류 0. Lint 오류 0·경고 27·Information 4. 최초 샌드박스 실행은 사용자 Gradle 캐시 미설정·배포본 다운로드 연결 권한 오류로 시작하지 못했고, 기존 사용자 캐시와 JDK 21을 지정해 권한 확장 후 검증했다.
+- 웹·backend 전체 회귀·시드 실서버 통합·기기 UI·실제 Kakao 검사는 Android 디코딩 예외 처리 수정 범위라 재실행하지 않았다. API/DB/환경·서버 규칙 변경 없음. Android 빌드에 영향, 수동 배포 없음. 롤백은 이번 커밋 revert와 이전 Android 빌드 복원이다. 수정 diff 자체 검토 완료, 독립 재리뷰·최종 head CI는 별도다.
+- 공유 인계: 같은 `C:\Users\jjang\IdeaProjects\NurseFlow`·`chore/demo-seed-script`에 수정·회귀 검사·PR 초안·이 현황만 커밋하고 PR #51에 반영한다. 사용자 `nurseflow.mv.db`·`nurseflow.trace.db`는 보존·커밋 제외한다. PR 병합·자동 병합·수동 배포 없음. 게시 결과는 후속 기록으로 구분한다.
+
 ## B6 PR #51 리뷰 수정 (2026-11-22, Codex)
 
 - 같은 공유 worktree·`chore/demo-seed-script`, HEAD `51008be`와 PR 원격 head 일치를 확인하고 리뷰 `6003072000`의 P3·P5를 반영했다. Android·웹에서 `/roster-eligibility`만 일시 실패하면 모드 값을 미확인(null)으로 두고 ‘시연 모드 확인 불가’를 표시한다. 성공한 팀·간호사·구성원·경력 정책 목록과 편집은 유지하며 이전 모드를 최신 값이나 일반 모드로 표시하지 않는다. 인증·권한·취소 오류의 기존 처리는 유지하고 목록 자체 조회 실패는 계속 편집을 차단한다.

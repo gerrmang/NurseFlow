@@ -1,7 +1,12 @@
 package com.nurseflow.app.feature.staff
 
 import com.nurseflow.app.core.network.*
+import com.nurseflow.app.core.session.MemoryTokenStore
+import com.nurseflow.app.core.session.SessionManager
 import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.first
+import okhttp3.mockwebserver.MockResponse
+import okhttp3.mockwebserver.MockWebServer
 import org.junit.Assert.*
 import org.junit.Test
 
@@ -50,6 +55,63 @@ class StaffAdminViewModelTest {
     private var expired = 0
     private val vm = StaffAdminViewModel(api, "w1", { if (admin) listOf(MembershipDto("w1", "가상 병동", listOf("WARD_ADMIN"), true)) else emptyList() }, { valid }, { expired++ }, scope)
     private fun open() { vm.activate(); assertTrue(vm.state.value.editable) }
+
+    private fun withModeApi(test: suspend (StaffAdminViewModel, MockWebServer) -> Unit) = runBlocking {
+        MockWebServer().use { server ->
+            server.start(java.net.InetAddress.getByName("127.0.0.1"), 0)
+            val base = "http://127.0.0.1:${server.port}/"
+            val real = ApiFactory.staffAdminApi(base, SessionManager(ApiFactory.authApi(base), MemoryTokenStore()))
+            val mixed = object : StaffAdminApi by api {
+                override suspend fun eligibility(ward: String) = real.eligibility(ward)
+            }
+            val testScope = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined)
+            val model = StaffAdminViewModel(mixed, "w1", {
+                listOf(MembershipDto("w1", "가상 병동", listOf("WARD_ADMIN"), true))
+            }, scope = testScope)
+            try { withTimeout(5_000) { test(model, server) } }
+            finally { model.deactivate(); testScope.cancel() }
+        }
+    }
+    private fun modeResponse(body: String) = MockResponse().setHeader("Content-Type", "application/json").setBody(body)
+    private suspend fun awaitLoad(model: StaffAdminViewModel) {
+        model.state.first { !it.loading && !it.busy }
+    }
+
+    @Test fun malformedModeJsonOnEntryStillLoadsEditableLists() = withModeApi { model, server ->
+        for (body in listOf("{}", "{", """{"demoMode":{},"policyRevision":0}""")) {
+            server.enqueue(modeResponse(body))
+            model.activate(); awaitLoad(model)
+            assertTrue(model.state.value.editable); assertFalse(model.state.value.stale)
+            assertNull(model.state.value.data!!.eligibility)
+            assertEquals(api.nurses, model.state.value.data!!.staff)
+            assertEquals(api.teamRows, model.state.value.data!!.teams)
+            assertEquals("/api/v1/wards/w1/roster-eligibility", server.takeRequest().path)
+            model.deactivate()
+        }
+    }
+
+    @Test fun malformedModeRefreshAndPostWriteReloadKeepListsAndRecover() = withModeApi { model, server ->
+        server.enqueue(modeResponse("""{"demoMode":true,"policyRevision":0}"""))
+        model.activate(); awaitLoad(model)
+        assertTrue(model.state.value.data!!.eligibility!!.demoMode)
+        server.enqueue(modeResponse("{}")); model.reload(); awaitLoad(model)
+        assertTrue(model.state.value.editable); assertNull(model.state.value.data!!.eligibility)
+        server.enqueue(modeResponse("{")); model.saveTeam(null, "가상팀", "1"); awaitLoad(model)
+        assertEquals(1, api.writes); assertTrue(model.state.value.editable)
+        assertNull(model.state.value.data!!.eligibility)
+        assertEquals(api.nurses, model.state.value.data!!.staff)
+        server.enqueue(modeResponse("""{"demoMode":false,"policyRevision":0}"""))
+        model.reload(); awaitLoad(model)
+        assertFalse(model.state.value.data!!.eligibility!!.demoMode)
+    }
+
+    @Test fun modeCancellationDoesNotBecomeAnEditableUnknownMode() {
+        api.eligibilityRead = { throw CancellationException("가상 조회 취소") }
+        vm.activate()
+        assertNull(vm.state.value.data); assertFalse(vm.state.value.editable)
+        api.eligibilityRead = {}; vm.reload()
+        assertTrue(vm.state.value.editable)
+    }
 
     @Test fun demoModeComesFromServerAndRefreshRemovesIt() {
         api.demoMode = true; open()

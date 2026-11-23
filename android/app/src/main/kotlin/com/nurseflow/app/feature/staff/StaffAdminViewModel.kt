@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import com.nurseflow.app.core.network.*
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
+import kotlinx.serialization.SerializationException
 
 data class StaffAdminData(val teams: List<AdminTeam>, val staff: List<AdminStaff>, val members: List<AdminMember>, val policy: AdminCareerPolicy, val eligibility: AdminEligibility?)
 data class StaffAdminState(
@@ -88,6 +89,7 @@ class StaffAdminViewModel(
                         if (e.status == 401 || e.status == 403 || e.code == "WARD_NOT_FOUND" || e.code == "USER_NOT_FOUND") throw e
                         null
                     }
+                    catch (e: SerializationException) { null }
                 }
                 StaffAdminData(teams.await(), staff.await(), members.await(), policy.await(), eligibility.await())
             }
