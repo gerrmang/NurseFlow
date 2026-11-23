@@ -102,6 +102,33 @@ class RosterServiceIntegrationTest @Autowired constructor(
         assertThrows(BusinessException::class.java) { service.publishedWard(wardId, "2026-11", admin) }
     }
 
+    @Test
+    fun `work pattern is enforced for candidate manual locked generation automatic and confirmation`() {
+        jdbc.update("UPDATE nurses SET work_pattern='DAY_EVENING_ONLY' WHERE nurse_id=?", nurseId)
+        val draft = newRoster("2026-11", LocalDate.parse("2026-11-30"), nightTypeId)
+        val slot = draft.slots.single().slotId
+        val validated = service.validate(draft.rosterId, tag(draft), ValidateAssignmentRequest(slot, nurseId), admin)
+        assertFalse(validated.allowed)
+        assertTrue(validated.hardViolations.any { it.code == "SHIFT_KIND_NOT_ALLOWED" })
+        val denied = assertThrows(BusinessException::class.java) { assign(draft, nurseId) }
+        assertEquals("RULE_VIOLATION", denied.errorCode.name)
+        jdbc.update("UPDATE roster_slots SET nurse_id=?,locked=TRUE WHERE slot_id=?", nurseId, slot)
+        val confirmed = assertThrows(BusinessException::class.java) {
+            service.confirm(draft.rosterId, tag(draft), UUID.randomUUID(), ConfirmRosterRequest(), admin)
+        }
+        assertTrue(confirmed.ruleViolations.filterIsInstance<RuleDiagnostic>().any { it.code == "SHIFT_KIND_NOT_ALLOWED" })
+        val locked = service.startGeneration(draft.rosterId, tag(draft), UUID.randomUUID(), StartGenerationRequest(true), admin)
+        service.markGenerationRunning(locked.jobId)
+        service.processGeneration(locked.jobId)
+        assertEquals("FAILED", service.getGenerationJob(locked.jobId, admin).status)
+        jdbc.update("UPDATE roster_slots SET nurse_id=NULL,locked=FALSE WHERE slot_id=?", slot)
+        val automatic = service.startGeneration(draft.rosterId, tag(draft), UUID.randomUUID(), StartGenerationRequest(true), admin)
+        service.markGenerationRunning(automatic.jobId)
+        service.processGeneration(automatic.jobId)
+        assertEquals("PARTIAL", service.getGenerationJob(automatic.jobId, admin).status)
+        assertEquals(null, service.getRoster(draft.rosterId, admin).slots.single().assignment)
+    }
+
     @BeforeEach
     fun setup() {
         listOf("mutation_replays", "generation_jobs", "approved_absences", "roster_slots", "rosters",

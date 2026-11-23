@@ -1,5 +1,7 @@
 package com.nurseflow.roster.persistence.repository
 
+import com.nurseflow.roster.domain.model.WorkPattern
+
 import com.nurseflow.roster.domain.model.ShiftKind
 import com.nurseflow.roster.persistence.entity.DbAbsence
 import com.nurseflow.roster.persistence.entity.DbGenerationJob
@@ -210,23 +212,25 @@ class RosterJdbcRepository(
     )
 
     fun findNurse(id: UUID, wardId: UUID): DbNurse? = jdbc.query(
-        "SELECT nurse_id,qualifications,($rosterable) AS active FROM nurses WHERE nurse_id=? AND ward_id=?",
+        "SELECT nurse_id,qualifications,work_pattern,($rosterable) AS active FROM nurses WHERE nurse_id=? AND ward_id=?",
         { rs, _ ->
             DbNurse(
                 uuid(rs, "nurse_id"),
                 mapper.readValue(rs.getString("qualifications"), strings).toSet(),
                 rs.getBoolean("active"),
+                WorkPattern.valueOf(rs.getString("work_pattern")),
             )
         }, id, wardId,
     ).firstOrNull()
 
     fun activeNurses(wardId: UUID): List<DbNurse> = jdbc.query(
-        "SELECT nurse_id,qualifications,active FROM nurses WHERE ward_id=? AND $rosterable",
+        "SELECT nurse_id,qualifications,work_pattern,active FROM nurses WHERE ward_id=? AND $rosterable",
         { rs, _ ->
             DbNurse(
                 uuid(rs, "nurse_id"),
                 mapper.readValue(rs.getString("qualifications"), strings).toSet(),
                 rs.getBoolean("active"),
+                WorkPattern.valueOf(rs.getString("work_pattern")),
             )
         }, wardId,
     )
