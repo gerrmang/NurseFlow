@@ -1,5 +1,7 @@
 package com.nurseflow.staff.api.dto.response
 
+import com.nurseflow.roster.domain.model.WorkPattern
+
 import java.time.Instant
 import java.util.UUID
 
@@ -63,3 +65,5 @@ data class StaffAdjustmentResponse(
 data class StaffAdjustmentItems(val items: List<StaffAdjustmentResponse>)
 
 data class StaffPage(val items: List<StaffMemberResponse>, val page: Int, val pageSize: Int, val totalItems: Int)
+
+data class WorkPatternResponse(val workPattern: WorkPattern)

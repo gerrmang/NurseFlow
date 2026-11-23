@@ -1,5 +1,7 @@
 package com.nurseflow.staff.application.service
 
+import com.nurseflow.roster.domain.model.WorkPattern
+
 import com.nurseflow.common.audit.AuditLog
 import com.nurseflow.common.error.BusinessException
 import com.nurseflow.common.error.ErrorCode
@@ -35,6 +37,23 @@ class StaffService(
     private val wards: WardService,
     private val audit: AuditLog,
 ) {
+    @Transactional(readOnly = true)
+    fun workPattern(wardId: UUID, nurseId: UUID, actor: String): WorkPattern {
+        wards.requireAdmin(wardId, actor)
+        return repo.workPattern(wardId, nurseId) ?: throw BusinessException(ErrorCode.NURSE_NOT_FOUND)
+    }
+
+    @Transactional
+    fun setWorkPattern(wardId: UUID, nurseId: UUID, pattern: WorkPattern, actor: String): WorkPattern {
+        wards.lockAsAdmin(wardId, actor)
+        val previous = repo.workPattern(wardId, nurseId) ?: throw BusinessException(ErrorCode.NURSE_NOT_FOUND)
+        if (previous != pattern) {
+            repo.setWorkPattern(wardId, nurseId, pattern)
+            adjust(wardId, nurseId, "WORK_PATTERN", previous.name, pattern.name, actor)
+        }
+        return pattern
+    }
+
     // ── Teams ──
 
     @Transactional(readOnly = true)

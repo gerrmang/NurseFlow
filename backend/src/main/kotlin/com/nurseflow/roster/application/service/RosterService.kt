@@ -363,7 +363,7 @@ class RosterService(
             if (nurse == null || !nurse.qualifications.containsAll(slot.requiredQualifications)) {
                 listOf(RuleDiagnostic("LOCKED_ASSIGNMENT_INVALID", "HARD", "고정 배치가 현재 자격 또는 활성 상태와 맞지 않습니다.", slot.date))
             } else {
-                teamViolations(slot, nurse) + validator.validate(candidate, assignments, context.absences).map(RuleDiagnostic::from)
+                teamViolations(slot, nurse) + validator.validate(candidate, assignments, context.absences, nurse.workPattern).map(RuleDiagnostic::from)
             }
         }
         if (preexistingViolations.isNotEmpty()) {
@@ -392,7 +392,7 @@ class RosterService(
                 if (System.nanoTime() >= deadline) { timedOut = true; break@generationLoop }
                 if (!nurse.qualifications.containsAll(slot.requiredQualifications) || teamViolations(slot, nurse).isNotEmpty()) continue
                 val candidate = ShiftAssignment(slot.id, nurse.id, slot.date, slot.kind, slot.startsAt, slot.endsAt)
-                if (validator.validate(candidate, assignments, context.absences).isNotEmpty()) continue
+                if (validator.validate(candidate, assignments, context.absences, nurse.workPattern).isNotEmpty()) continue
                 selected[slot.id] = nurse.id
                 assignments += candidate
                 counts[nurse.id] = (counts[nurse.id] ?: 0) + 1
@@ -473,7 +473,7 @@ class RosterService(
             extra += RuleDiagnostic("QUALIFICATION_MISSING", "HARD", "필수 자격이 부족합니다.", slot.date)
         }
         val candidate = ShiftAssignment(slot.id, nurseId, slot.date, slot.kind, slot.startsAt, slot.endsAt)
-        return extra + validator.validate(candidate, context.assignments, context.absences).map(RuleDiagnostic::from)
+        return extra + validator.validate(candidate, context.assignments, context.absences, nurse.workPattern).map(RuleDiagnostic::from)
     }
 
     private fun teamViolations(slot: DbSlot, nurse: DbNurse): List<RuleDiagnostic> = buildList {

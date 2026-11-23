@@ -1421,6 +1421,64 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiProblem'
 
+  /wards/{wardId}/staff/{nurseId}/work-pattern:
+    parameters:
+      - $ref: '#/components/parameters/WardId'
+      - name: nurseId
+        in: path
+        required: true
+        schema: {type: string, format: uuid}
+    get:
+      tags: [Staff]
+      operationId: getStaffWorkPattern
+      summary: 간호사 근무 형태 조회 (관리자)
+      x-required-role: WARD_ADMIN
+      responses:
+        '200':
+          description: 근무 형태
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StaffWorkPattern'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    put:
+      tags: [Staff]
+      operationId: updateStaffWorkPattern
+      summary: 간호사 근무 형태 설정 (관리자)
+      x-required-role: WARD_ADMIN
+      description: |
+        GENERAL은 D/E/N, DAY_EVENING_ONLY는 D/E, NIGHT_ONLY는 N을 허용한다.
+        기존 OTHER 유형은 GENERAL만 허용한다. 제한 형태는 명시된 D/E 또는 N만 허용한다. 기존 간호사 기본값은 GENERAL이다.
+        변경 시 모든 DRAFT revision이 증가하고 재검증 표시되므로 초안 ETag를 재조회해야 한다.
+        공개본은 재확정 전까지 유지한다. 같은 값 저장은 revision을 변경하지 않는다.
+        동시 편집은 마지막 저장이 반영된다. 전담 기간·순환·월 최소 횟수는 별도 정책이다.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StaffWorkPattern'
+      responses:
+        '200':
+          description: 근무 형태
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StaffWorkPattern'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
   /wards/{wardId}/roster-eligibility:
     parameters:
       - $ref: '#/components/parameters/WardId'
@@ -2764,6 +2822,15 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/WardMembership'
+    StaffWorkPattern:
+      type: object
+      additionalProperties: false
+      required: [workPattern]
+      properties:
+        workPattern:
+          type: string
+          enum: [GENERAL, DAY_EVENING_ONLY, NIGHT_ONLY]
+
     WardMembership:
       type: object
       required: [wardId, wardName, roles, canViewWardCalendar]

@@ -37,12 +37,13 @@ class StaffSchemaUpgradeTest {
         ResourceDatabasePopulator(ClassPathResource("schema.sql")).execute(dataSource)
 
         val jdbc = JdbcTemplate(dataSource)
-        val row = jdbc.queryForMap("SELECT display_name, team_order, senior_eligible, stage_override FROM nurses WHERE nurse_id=?", nurse)
+        val row = jdbc.queryForMap("SELECT display_name, team_order, senior_eligible, stage_override, work_pattern FROM nurses WHERE nurse_id=?", nurse)
             .mapKeys { it.key.lowercase() }
         assertEquals("가상 간호사", row["display_name"])
         assertNull(row["team_order"])
         assertEquals(false, row["senior_eligible"])
         assertNull(row["stage_override"])
+        assertEquals("GENERAL", row["work_pattern"])
         assertEquals(0, jdbc.queryForObject("SELECT COUNT(*) FROM staff_adjustments", Int::class.java))
         jdbc.execute("SHUTDOWN")
     }

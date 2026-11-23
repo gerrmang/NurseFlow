@@ -1,5 +1,7 @@
 package com.nurseflow.roster.domain.rule
 
+import com.nurseflow.roster.domain.model.WorkPattern
+
 import com.nurseflow.roster.domain.model.ApprovedAbsence
 import com.nurseflow.roster.domain.model.ApprovedAbsenceKind
 import com.nurseflow.roster.domain.model.RuleSeverity
@@ -18,6 +20,7 @@ class RosterRuleValidator {
         candidate: ShiftAssignment,
         existingAssignments: Collection<ShiftAssignment>,
         approvedAbsences: Collection<ApprovedAbsence>,
+        workPattern: WorkPattern = WorkPattern.GENERAL,
     ): List<RuleViolation> {
         if (!candidate.startsAt.isBefore(candidate.endsAt)) {
             return listOf(
@@ -31,6 +34,10 @@ class RosterRuleValidator {
         }
 
         val violations = mutableListOf<RuleViolation>()
+        if (!workPattern.allows(candidate.kind)) {
+            violations += RuleViolation("SHIFT_KIND_NOT_ALLOWED", RuleSeverity.HARD,
+                "간호사의 근무 형태에서 허용하지 않는 근무입니다.", candidate.shiftDate)
+        }
 
         approvedAbsences
             .asSequence()
