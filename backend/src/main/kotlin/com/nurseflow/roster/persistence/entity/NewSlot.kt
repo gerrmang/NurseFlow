@@ -13,4 +13,6 @@ data class NewSlot(
     val startsAt: Instant,
     val endsAt: Instant,
     val requiredQualifications: List<String>,
+    val teamId: UUID?,
+    val seniorRequired: Boolean,
 )

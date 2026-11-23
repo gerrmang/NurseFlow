@@ -1,5 +1,12 @@
 # 공유 작업 현황
 
+## B6 PR #51 게시·최신 dev 충돌 정리 (2026-11-23, Codex)
+
+- JSON 파싱 수정 `c40d090`을 기존 PR 브랜치에 푸시했고 원격 SHA 일치를 확인했다. 연결 GitHub 도구는 PR 설명 수정·스레드 해결에 403을 반환해 기존 gh 인증으로 PR 초안 파일을 본문에 반영하고 P3 스레드를 해결 표시했다. 재조회에서 미해결 스레드 0건을 확인했으며 독립 승인과 구분한다.
+- 푸시 후 PR이 최신 dev와 CONFLICTING/DIRTY여서 Verify가 시작되지 않음을 확인했다. `origin/dev` `00f086c`(A9 #53·A10 #52)를 같은 B6 브랜치로 통합하고 `docs/work-status.md` 한 곳의 충돌만 양쪽 기록을 모두 보존해 해결했다. backend·OpenAPI·웹 생성 타입은 `origin/dev`와 동일하며 B6 추가 서버 수정 없음.
+- 통합 검증: JDK 21 backend `test bootJar --offline --no-daemon` BUILD SUCCESSFUL(1분 22초), XML 272개 중 267개 통과·opt-in 5개 건너뜀·실패/오류 0. web `npm run api:check`·`npm run typecheck` exit 0. 새 JAR의 `node scripts/demo/local.mjs --jar backend/build/libs/nurseflow-backend-0.1.0-SNAPSHOT.jar --verify` exit 0(새 메모리 H2·가상 2계정·초대 가입·권한 분리·기본 모드 편성·응답 유실 복구·시드 재조회). Node API/runtime 검사 7개 통과·실패/건너뜀 0. 검증용 자식 Java·가상 공급자 종료, 사용자 DB 보존. Android 코드는 통합 중 변경되지 않아 직전 전체 193개 통과 결과를 유지하며 중복 실행하지 않았다.
+- 공유 인계: 같은 worktree·`chore/demo-seed-script`에서 이 통합·검증 기록을 커밋·푸시하고 PR 설명을 최신 파일로 갱신한다. `nurseflow.mv.db`·`nurseflow.trace.db`는 미추적 상태 그대로다. 최종 head Verify와 독립 재리뷰는 별도 확인 대상이며 dev/main 직접 푸시·PR 병합·자동 병합·수동 배포 없음.
+
 ## B6 PR #51 JSON 파싱 실패 리뷰 수정 (2026-11-23, Codex)
 
 - 같은 공유 worktree·`chore/demo-seed-script`, 시작 HEAD와 원격 PR head `e27e919` 일치를 확인했다. 새 미해결 P3 `discussion_r4660963516` 대응으로 Android `/roster-eligibility` 조회에서만 `SerializationException`을 미확인(null)으로 처리한다. 성공한 관리 목록과 편집을 유지하며 기존 ‘시연 모드 확인 불가’ 표시를 사용한다. 취소·401·403·WARD_NOT_FOUND·USER_NOT_FOUND는 기존 처리를 유지한다.
@@ -79,6 +86,33 @@
 - 미검증/후속: 실제 Kakao·Android/웹 UI·물리 기기·운영·macOS/Linux·전체 backend/클라이언트 회귀·독립 리뷰·GitHub CI는 실행하지 않았다. 이번 범위는 가상 공급자+실제 서버의 API 데이터 준비다. Android/웹 시연 모드 배너·설정 UI, 실제 계정 수/관리(결정 21), 초안/수요/자동배치/공개·통합 E2E는 후속이다.
 - API·DB 스키마·환경변수 계약·의존성 추가 변경 및 배포 없음. 설정은 전용 자식 프로세스에만 적용한다. 되돌리기는 시연 종료 후 B6 변경 제거/revert다. 검증용 Java/JWKS 서버는 종료했으며 기존 DB·trace와 로컬 문서 보존 브랜치 `codex/docs-preserve-handoff-records`의 `9a01332`는 그대로 뒀다.
 - 공유 인계: `C:\Users\jjang\IdeaProjects\NurseFlow`, `chore/demo-seed-script`에서 사용자 요청으로 B6 코드·사용법·PR 초안과 이 현황 기록을 함께 커밋·푸시한다. 게시 전 staged diff·공백·대상 파일을 확인하고 푸시 후 원격 SHA를 확인한다. 기존 로컬 문서 보존 브랜치와 DB·trace는 포함하지 않는다. PR 게시·병합·배포는 하지 않으며 다음 단계는 B6 diff 리뷰 및 후속 UI 범위 분리 확인이다. 별도 worktree를 만들지 않는다.
+## A9 PR #53 최신 dev 반영 (2026-11-23, Codex)
+
+- A10 스쿼시 병합 커밋 `d072565`를 `codex/team-demand-senior`에 반영했다. 서비스·저장소·DB 스키마·통합 테스트·작업 현황의 충돌을 해결했고 후보·수동·자동·확정에서 팀·선임과 근무 형태 제한이 함께 적용된다. OpenAPI 계약을 병합하고 웹 타입을 재생성했다.
+- 백엔드 전체 check 267개 통과·5개 건너뜀, 웹 384개 통과·3개 건너뜀, 실패 0. 웹 API 계약·타입·린트·빌드 및 Git 공백 검사 통과. 앱 기기와 운영 환경은 실행하지 않았다.
+
+## A9 팀별 필요 인원과 선임 배치 구현 (2026-11-21, Codex)
+
+- 게시 전 자체 리뷰에서 기존 OTHER 유형을 팀 수요에 등록한 뒤 D/E/N으로 전환할 때 선임 조건이 빠지는 경로를 막았다. 기존 OTHER의 팀 지정 양수 수요를 400으로 거부하는 회귀 검사와 전체 백엔드 check가 통과했다.
+
+- `origin/dev` `139b609` 기반 `codex/team-demand-senior`에서 팀·날짜·근무 유형별 수요와 선임 필수 칸을 추가했다. 활성 팀이 있는 병동의 양수 수요에 팀 ID가 필요하다. 팀 지정 D/E/N 유형당 선임 칸 하나를 만들고, 수요 0건에는 칸을 만들지 않는다. 팀 없는 병동과 기존 팀 미지정 칸을 호환한다.
+- 후보·수동·자동(고정 포함)·확정에 같은 팀과 선임 조건을 적용한다. 배치 불가 시 `TEAM_MISMATCH`·`SENIOR_REQUIRED` 진단을 반환하며, 선임 부족은 `seniorUnfilled` 및 `SENIOR_UNFILLED`로 구분한다. 팀 이동과 선임 자격 변경은 팀 배치 초안의 revision을 갱신한다. 초안이 참조하는 팀은 수요 제거 후 삭제한다. 공개본은 기존 값을 유지한다.
+- H2의 `roster_slots.team_id`, `senior_required` 컬럼과 OpenAPI·웹 생성 타입을 갱신했다. B7 화면, 팀 간 지원(A14), 경력 균형 최적화(A19)는 각 기능 범위에서 다룬다. 롤백 시 코드와 OpenAPI를 함께 되돌리며 신규 컬럼은 기존 코드에서 사용하지 않는다.
+- 백엔드 `check --offline --no-daemon` 264개 통과·5개 건너뜀·실패/오류 0. 웹 API 계약·타입·린트·384개 테스트·빌드 통과(선택 실서버 검사 3개 건너뜀). 기기·운영 검사는 이번 범위에서 실행하지 않았다.
+- A10 `codex/work-pattern-rule`의 `d42fa43`도 #50이 반영된 같은 dev에서 재검증했다. 백엔드 265개 통과·5개 건너뜀, 웹 계약·타입·린트 통과. 임시 결합본에서 서비스·DB·테스트·문서 충돌을 해결한 결과 백엔드 267개 통과·5개 건너뜀, 웹 384개 통과·3개 건너뜀, 실패 0과 빌드 성공을 확인했다.
+- 인계: 두 기능은 별도 로컬 브랜치에 있다. 한 기능을 dev에 병합한 뒤 다른 브랜치에 최신 dev를 반영할 때 팀·선임과 근무 형태 판정을 모두 유지하고 OpenAPI 웹 타입을 다시 생성한다. GitHub CI는 새 PR 커밋에서 확인한다.
+## A10 근무 형태 규칙 구현 (2026-11-19, Codex)
+
+- 2026-11-21 게시 전 자체 리뷰에서 API가 숫자를 근무 형태로 해석하지 않도록 문자열 허용 목록을 적용했다. 숫자 입력은 400이며 기존 설정을 보존한다. #50 이후 dev 기준 최종 백엔드 check에서 265개 통과·5개 건너뜀·실패 0을 확인했다.
+
+- `origin/dev` `4ecedd1`에서 `codex/work-pattern-rule`로 분기해 일반(`GENERAL`), D/E 전담(`DAY_EVENING_ONLY`), N 전담(`NIGHT_ONLY`)을 저장한다. 기존 간호사와 신규 기록은 GENERAL 기본값이다. 관리자 전용 `GET/PUT /wards/{wardId}/staff/{nurseId}/work-pattern`을 추가했다. 기존 staff 요청·응답은 바꾸지 않아 기존 클라이언트가 설정값을 덮어쓰지 않는다. 제한 형태는 기존 OTHER 유형도 거부하며 GENERAL만 OTHER를 허용한다. Night 기간·순환·최소 횟수(A15)는 제외했다.
+- `WorkPattern`은 `roster.domain.model`의 값 모델이며 같은 패키지 ShiftKind만 의존한다. 서비스는 병동 관리자 잠금 뒤 변경하고 기존 직원 조정 이력을 남긴다. 변경 시 모든 DRAFT revision·재검증 표시를 갱신한다. 같은 값은 변경하지 않고 공개본은 재확정 전까지 유지한다. 동시 편집은 기존 staff API와 같은 마지막 저장 우선이다.
+- 후보·수동·고정 자동배치·자동 후보 선택·확정에 공통 validator의 `SHIFT_KIND_NOT_ALLOWED` HARD 규칙을 적용했다. 형태×근무 종류 전체 조합, 후보/수동/자동(고정 포함)/확정 통합 경로, 관리자/간호사 권한·잘못된 enum·필수값 누락·타 병동·변경/no-op·초안 무효화, 기존 H2 파일 DB의 GENERAL 기본값과 schema 2회 적용을 검사했다.
+- 백엔드 `./gradlew check --offline --no-daemon`, 웹 `api:gen`·`api:check`·`typecheck`·`lint`, `git diff --check` 성공. Android·실기기·실제 Kakao·운영·GitHub CI는 미실행. 신규 의존성 없음. DB는 nurses.work_pattern 추가, OpenAPI/웹 생성타입 동기화. 롤백은 이전 코드 복원이며 추가 컬럼은 이전 코드에서 사용하지 않는다. 커밋·푸시·PR·병합 없이 같은 브랜치의 미커밋 변경으로 부모 검토에 인계한다.
+
+## PR #50 B5a 코드 리뷰 (2026-11-19, Codex)
+
+- head `7b9676f`의 변경 18파일과 세션·권한·쓰기 유실·정렬·null/false 직렬화 및 서버 A5/A6 경로를 읽기 전용 검토했다. 새로 확정된 P1~P5 결함은 없었다. GitHub Verify `44303733822`의 Backend tests·Android debug build·Web checks 성공을 직접 확인했다. 로컬 Android·실기기는 이 리뷰에서 재실행하지 않았다. 병합·댓글 없음. 마지막 저장 우선·긴 목록 자동스크롤 미지원은 PR에 기존 제한으로 기록돼 있다.
 
 ## B5a PR #50 공통 401 재시도 계정 혼용 회귀 수정 (2026-11-20, Codex)
 

@@ -8,6 +8,7 @@ import com.nurseflow.roster.application.service.RosterEligibilityService
 import com.nurseflow.policy.application.model.ShiftTypeCommand
 import com.nurseflow.policy.application.service.ShiftTypeService
 import com.nurseflow.roster.domain.model.ShiftKind
+import com.nurseflow.staff.application.service.StaffService
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertThrows
@@ -33,6 +34,7 @@ class RosterServiceIntegrationTest @Autowired constructor(
     private val generation: GenerationCoordinator,
     private val shiftTypes: ShiftTypeService,
     private val eligibility: RosterEligibilityService,
+    private val staff: StaffService,
 ) {
     private lateinit var wardId: UUID
     private lateinit var nurseId: UUID
@@ -102,10 +104,106 @@ class RosterServiceIntegrationTest @Autowired constructor(
         assertThrows(BusinessException::class.java) { service.publishedWard(wardId, "2026-11", admin) }
     }
 
+    @Test
+    fun `team demand keeps its senior slot empty when only a junior is available`() {
+        val team = staff.createTeam(wardId, "가상 A팀", null, admin).teamId
+        val otherTeam = staff.createTeam(wardId, "가상 B팀", null, admin).teamId
+        val date = LocalDate.parse("2026-11-30")
+        val draft = service.createRoster(wardId, CreateRosterRequest("2026-11"), admin, UUID.randomUUID())
+        fun requirements(vararg items: StaffingRequirement) =
+            service.replaceRequirements(draft.rosterId, tag(draft), ReplaceRequirementsRequest(items.toList()), admin)
+        val required = StaffingRequirement(date, nightTypeId, 2, emptyList(), team)
+
+        assertEquals("TEAM_REQUIRED_FOR_DEMAND", assertThrows(BusinessException::class.java) {
+            requirements(required.copy(teamId = null))
+        }.errorCode.name)
+        assertEquals("TEAM_NOT_FOUND", assertThrows(BusinessException::class.java) {
+            requirements(required.copy(teamId = UUID.randomUUID()))
+        }.errorCode.name)
+        assertEquals("DUPLICATE_REQUIREMENT", assertThrows(BusinessException::class.java) {
+            requirements(required, required)
+        }.errorCode.name)
+        val summary = requirements(required, required.copy(teamId = otherTeam, requiredCount = 0))
+        assertEquals(1, summary.staffing.seniorUnfilled)
+        assertEquals("TEAM_USED_IN_DRAFT", assertThrows(BusinessException::class.java) {
+            staff.deleteTeam(wardId, team, admin)
+        }.errorCode.name)
+        staff.deleteTeam(wardId, otherTeam, admin)
+        var current = service.getRoster(draft.rosterId, admin)
+        val senior = current.slots.single { it.seniorRequired }
+        assertTrue(current.slots.all { it.teamId == team })
+        assertTrue(service.validate(current.rosterId, tag(current), ValidateAssignmentRequest(senior.slotId, nurseId), admin)
+            .hardViolations.any { it.code == "TEAM_MISMATCH" })
+        staff.assignTeam(wardId, nurseId, team, admin)
+        val updated = service.getRoster(draft.rosterId, admin)
+        assertTrue(updated.needsRevalidation)
+        assertEquals(current.revision + 1, updated.revision)
+        current = updated
+        val candidate = service.validate(current.rosterId, tag(current), ValidateAssignmentRequest(senior.slotId, nurseId), admin)
+        assertFalse(candidate.allowed)
+        assertTrue(candidate.hardViolations.any { it.code == "SENIOR_REQUIRED" })
+        val denied = assertThrows(BusinessException::class.java) {
+            service.assign(current.rosterId, senior.slotId, tag(current), UUID.randomUUID(), AssignNurseRequest(nurseId), admin)
+        }
+        assertTrue(denied.ruleViolations.filterIsInstance<RuleDiagnostic>().any { it.code == "SENIOR_REQUIRED" })
+        jdbc.update("UPDATE roster_slots SET nurse_id=?,locked=TRUE WHERE slot_id=?", nurseId, senior.slotId)
+        val confirmation = assertThrows(BusinessException::class.java) {
+            service.confirm(current.rosterId, tag(current), UUID.randomUUID(), ConfirmRosterRequest(1), admin)
+        }
+        assertTrue(confirmation.ruleViolations.filterIsInstance<RuleDiagnostic>().any { it.code == "SENIOR_REQUIRED" })
+        fun generate(): GenerationJob {
+            val job = service.startGeneration(current.rosterId, tag(current), UUID.randomUUID(), StartGenerationRequest(true), admin)
+            service.markGenerationRunning(job.jobId)
+            service.processGeneration(job.jobId)
+            return service.getGenerationJob(job.jobId, admin)
+        }
+        val locked = generate()
+        assertEquals("FAILED", locked.status)
+        assertTrue(locked.diagnostics.any { it.code == "SENIOR_REQUIRED" })
+        jdbc.update("UPDATE roster_slots SET nurse_id=NULL,locked=FALSE WHERE slot_id=?", senior.slotId)
+        val generated = generate()
+        assertEquals("PARTIAL", generated.status)
+        assertTrue(generated.diagnostics.any { it.code == "SENIOR_UNFILLED" })
+        current = service.getRoster(draft.rosterId, admin)
+        assertEquals(1, current.staffing.seniorUnfilled)
+        assertEquals(nurseId, current.slots.single { !it.seniorRequired }.assignment?.nurseId)
+        service.confirm(current.rosterId, tag(current), UUID.randomUUID(), ConfirmRosterRequest(1), admin)
+        val published = service.publishedWard(wardId, "2026-11", admin)
+        assertEquals(1, published.staffing.seniorUnfilled)
+        assertEquals(team, published.slots.single { it.seniorRequired }.teamId)
+    }
+
+    @Test
+    fun `work pattern is enforced for candidate manual locked generation automatic and confirmation`() {
+        jdbc.update("UPDATE nurses SET work_pattern='DAY_EVENING_ONLY' WHERE nurse_id=?", nurseId)
+        val draft = newRoster("2026-11", LocalDate.parse("2026-11-30"), nightTypeId)
+        val slot = draft.slots.single().slotId
+        val validated = service.validate(draft.rosterId, tag(draft), ValidateAssignmentRequest(slot, nurseId), admin)
+        assertFalse(validated.allowed)
+        assertTrue(validated.hardViolations.any { it.code == "SHIFT_KIND_NOT_ALLOWED" })
+        val denied = assertThrows(BusinessException::class.java) { assign(draft, nurseId) }
+        assertEquals("RULE_VIOLATION", denied.errorCode.name)
+        jdbc.update("UPDATE roster_slots SET nurse_id=?,locked=TRUE WHERE slot_id=?", nurseId, slot)
+        val confirmed = assertThrows(BusinessException::class.java) {
+            service.confirm(draft.rosterId, tag(draft), UUID.randomUUID(), ConfirmRosterRequest(), admin)
+        }
+        assertTrue(confirmed.ruleViolations.filterIsInstance<RuleDiagnostic>().any { it.code == "SHIFT_KIND_NOT_ALLOWED" })
+        val locked = service.startGeneration(draft.rosterId, tag(draft), UUID.randomUUID(), StartGenerationRequest(true), admin)
+        service.markGenerationRunning(locked.jobId)
+        service.processGeneration(locked.jobId)
+        assertEquals("FAILED", service.getGenerationJob(locked.jobId, admin).status)
+        jdbc.update("UPDATE roster_slots SET nurse_id=NULL,locked=FALSE WHERE slot_id=?", slot)
+        val automatic = service.startGeneration(draft.rosterId, tag(draft), UUID.randomUUID(), StartGenerationRequest(true), admin)
+        service.markGenerationRunning(automatic.jobId)
+        service.processGeneration(automatic.jobId)
+        assertEquals("PARTIAL", service.getGenerationJob(automatic.jobId, admin).status)
+        assertEquals(null, service.getRoster(draft.rosterId, admin).slots.single().assignment)
+    }
+
     @BeforeEach
     fun setup() {
         listOf("mutation_replays", "generation_jobs", "approved_absences", "roster_slots", "rosters",
-            "shift_types", "nurses", "ward_memberships", "audit_events", "ward_policy_revisions", "wards")
+            "shift_types", "staff_adjustments", "nurses", "ward_memberships", "audit_events", "ward_policy_revisions", "ward_teams", "wards")
             .forEach { jdbc.update("DELETE FROM $it") }
         wardId = UUID.randomUUID()
         nurseId = UUID.randomUUID()

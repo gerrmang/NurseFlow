@@ -663,6 +663,34 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/wards/{wardId}/staff/{nurseId}/work-pattern": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                wardId: components["parameters"]["WardId"];
+                nurseId: string;
+            };
+            cookie?: never;
+        };
+        /** 간호사 근무 형태 조회 (관리자) */
+        get: operations["getStaffWorkPattern"];
+        /**
+         * 간호사 근무 형태 설정 (관리자)
+         * @description GENERAL은 D/E/N, DAY_EVENING_ONLY는 D/E, NIGHT_ONLY는 N을 허용한다.
+         *     기존 OTHER 유형은 GENERAL만 허용한다. 제한 형태는 명시된 D/E 또는 N만 허용한다. 기존 간호사 기본값은 GENERAL이다.
+         *     변경 시 모든 DRAFT revision이 증가하고 재검증 표시되므로 초안 ETag를 재조회해야 한다.
+         *     공개본은 재확정 전까지 유지한다. 같은 값 저장은 revision을 변경하지 않는다.
+         *     동시 편집은 마지막 저장이 반영된다. 전담 기간·순환·월 최소 횟수는 별도 정책이다.
+         */
+        put: operations["updateStaffWorkPattern"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/wards/{wardId}/roster-eligibility": {
         parameters: {
             query?: never;
@@ -865,7 +893,10 @@ export interface paths {
         get?: never;
         /**
          * 월간 인력 수요 전체 교체
-         * @description 요청의 전체 항목을 원자적으로 교체한다. 직원/자격 조건과 월 경계 정책은 P0에서 고정한다.
+         * @description 요청 항목으로 수요를 원자적으로 교체한다. 팀·날짜·근무 유형 조합은 중복될 수 없다.
+         *     활성 팀이 있는 병동의 양수 수요는 해당 병동의 활성 팀을 지정해야 한다.
+         *     팀을 지정한 양수 수요는 D/E/N 유형으로 한정하며 선임 필수 칸이 하나 포함된다.
+         *     팀이 없는 병동과 기존 팀 미지정 근무표는 기존 배치를 유지한다.
          */
         put: operations["replaceRosterRequirements"];
         post?: never;
@@ -1246,6 +1277,10 @@ export interface components {
             displayName: string;
             memberships: components["schemas"]["WardMembership"][];
         };
+        StaffWorkPattern: {
+            /** @enum {string} */
+            workPattern: "GENERAL" | "DAY_EVENING_ONLY" | "NIGHT_ONLY";
+        };
         WardMembership: {
             /** Format: uuid */
             wardId: string;
@@ -1549,6 +1584,8 @@ export interface components {
             required: number;
             assigned: number;
             unfilled: number;
+            /** @description 전체 미충원에 포함된 선임 필수 칸 수. */
+            seniorUnfilled?: number;
             /** @constant */
             hardRuleViolations: 0;
         };
@@ -1557,6 +1594,11 @@ export interface components {
             date: string;
             /** Format: uuid */
             shiftTypeId: string;
+            /**
+             * Format: uuid
+             * @description 활성 팀이 있는 병동의 양수 수요에 필수.
+             */
+            teamId?: string | null;
             requiredCount: number;
             requiredQualifications: string[];
         };
@@ -1581,6 +1623,10 @@ export interface components {
             startAt: string;
             /** Format: date-time */
             endAt: string;
+            /** Format: uuid */
+            teamId?: string | null;
+            /** @description 선임 자격이 필요한 칸. 기존 칸의 기본값은 false. */
+            seniorRequired?: boolean;
             /** @enum {string} */
             status: "FILLED" | "UNFILLED";
             assignment?: components["schemas"]["Assignment"] | null;
@@ -2823,7 +2869,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ApiProblem"];
                 };
             };
-            /** @description TEAM_NOT_EMPTY */
+            /** @description TEAM_NOT_EMPTY 또는 TEAM_USED_IN_DRAFT */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -3548,6 +3594,63 @@ export interface operations {
             };
         };
     };
+    getStaffWorkPattern: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                wardId: components["parameters"]["WardId"];
+                nurseId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 근무 형태 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StaffWorkPattern"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    updateStaffWorkPattern: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                wardId: components["parameters"]["WardId"];
+                nurseId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StaffWorkPattern"];
+            };
+        };
+        responses: {
+            /** @description 근무 형태 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StaffWorkPattern"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
     getRosterEligibility: {
         parameters: {
             query?: never;
@@ -4029,8 +4132,26 @@ export interface operations {
                     "application/json": components["schemas"]["RosterSummary"];
                 };
             };
+            /** @description INVALID_REQUIREMENTS, DUPLICATE_REQUIREMENT, TEAM_REQUIRED_FOR_DEMAND 또는 SHIFT_TYPE_NOT_FOUND */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
+            /** @description 근무표 또는 해당 병동의 활성 팀이 없음 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
             412: components["responses"]["PreconditionFailed"];
             422: components["responses"]["RuleViolation"];
         };

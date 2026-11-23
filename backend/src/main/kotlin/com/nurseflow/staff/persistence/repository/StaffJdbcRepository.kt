@@ -1,5 +1,7 @@
 package com.nurseflow.staff.persistence.repository
 
+import com.nurseflow.roster.domain.model.WorkPattern
+
 import com.nurseflow.staff.persistence.entity.DbStaff
 import com.nurseflow.staff.persistence.entity.DbStaffAdjustment
 import com.nurseflow.staff.persistence.entity.DbTeam
@@ -17,6 +19,16 @@ data class DbCareerPolicy(val thresholdMonths: List<Int>, val ranks: List<String
 class StaffJdbcRepository(private val jdbc: JdbcTemplate, private val mapper: JsonMapper) {
     private val strings = object : TypeReference<List<String>>() {}
     private val ints = object : TypeReference<List<Int>>() {}
+
+    fun workPattern(wardId: UUID, nurseId: UUID): WorkPattern? = jdbc.query(
+        "SELECT work_pattern FROM nurses WHERE ward_id=? AND nurse_id=?",
+        { rs, _ -> WorkPattern.valueOf(rs.getString(1)) }, wardId, nurseId,
+    ).firstOrNull()
+
+    fun setWorkPattern(wardId: UUID, nurseId: UUID, pattern: WorkPattern) {
+        jdbc.update("UPDATE nurses SET work_pattern=? WHERE ward_id=? AND nurse_id=?", pattern.name, wardId, nurseId)
+        jdbc.update("UPDATE rosters SET revision=revision+1,needs_revalidation=TRUE WHERE ward_id=? AND status='DRAFT'", wardId)
+    }
 
     // ── Teams ──
 
@@ -41,6 +53,19 @@ class StaffJdbcRepository(private val jdbc: JdbcTemplate, private val mapper: Js
 
     fun updateTeam(teamId: UUID, name: String, sortOrder: Int) {
         jdbc.update("UPDATE ward_teams SET name=?, sort_order=? WHERE team_id=?", name, sortOrder, teamId)
+    }
+
+    fun teamUsedInDraft(wardId: UUID, teamId: UUID): Boolean = jdbc.queryForObject(
+        """SELECT EXISTS(SELECT 1 FROM roster_slots s JOIN rosters r ON s.roster_id=r.roster_id
+            WHERE r.ward_id=? AND r.status='DRAFT' AND s.team_id=?)""",
+        Boolean::class.java, wardId, teamId,
+    ) == true
+
+    fun invalidateTeamDrafts(wardId: UUID) {
+        jdbc.update("""UPDATE rosters SET revision=revision+1,needs_revalidation=TRUE
+            WHERE ward_id=? AND status='DRAFT' AND EXISTS(
+                SELECT 1 FROM roster_slots s WHERE s.roster_id=rosters.roster_id AND s.team_id IS NOT NULL
+            )""", wardId)
     }
 
     fun deactivateTeam(teamId: UUID) {

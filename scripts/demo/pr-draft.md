@@ -1,6 +1,6 @@
 ## 변경 목적과 내용
 
-한 명령으로 가상 병동과 편성 기초 데이터를 공개 API로 준비한다. dev `139b609`의 실제 backend에 별도 메모리 H2·가상 OIDC/병원 목록을 연결하며 서버 코드를 변경하지 않는다. Android·웹 관리자 팀/구성원 화면에도 서버 시연 모드·가상 데이터 포함 경고를 표시한다.
+한 명령으로 가상 병동과 편성 기초 데이터를 공개 API로 준비한다. dev `00f086c`(A9·A10 포함)의 실제 backend에 별도 메모리 H2·가상 OIDC/병원 목록을 연결하며 B6에서 서버 코드를 변경하지 않는다. Android·웹 관리자 팀/구성원 화면에도 서버 시연 모드·가상 데이터 포함 경고를 표시한다.
 
 **B6 인수 기준:** 새 H2 DB에서 공개 API로 데이터를 생성하고 조회해 검증한다. 가상 관리자·간호사 2계정의 운용·초대 가입 검증과 Android·웹 관리 화면의 시연 모드 표시를 포함한다. 실제 Kakao 웹 로그인은 **1계정으로 별도 검증 완료**했으며 가상 2계정 결과와 구분한다. 계정 수·관리·폐기 절차는 `scripts/demo/accounts.md`, 실제 결과는 `scripts/demo/real-kakao-verification.md` 참조.
 
@@ -20,6 +20,7 @@
 
 ## 검증
 
+- 2026-11-23 최신 dev 통합: A9/A10 `00f086c` 병합, 작업 현황 문서 충돌에서 양쪽 기록 보존. backend `test bootJar --offline --no-daemon` 성공, 267개 통과·opt-in 5개 건너뜀·실패/오류 0. web api:check·typecheck 성공. 새 backend JAR의 새 H2 시드·가상 2계정·복구 통합 검증 exit 0, Node API/runtime 7개 통과. 서버·OpenAPI·생성 타입은 dev와 동일하다.
 - 2026-11-23 추가 리뷰 수정: Android ViewModel 30개 통과. 새 JSON 회귀 2개는 처리 코드를 제거한 변이에서 모두 실패했으며 수정 코드를 복원했다. 최종 JDK 21 `:app:testDebugUnitTest :app:assembleDebug :app:assembleDebugAndroidTest :app:lintDebug --offline --no-daemon` BUILD SUCCESSFUL(1분 19초), 단위 194개 중 193개 통과·실서버 opt-in 1개 건너뜀·실패/오류 0, Lint 오류 0·경고 27. 이번 변경은 Android 모드 응답 처리뿐이므로 웹·backend·시드 실서버 통합·기기·실제 Kakao 검사는 재실행하지 않았다.
 - 2026-11-22 리뷰 수정: Android 단위 190개 통과·실서버 opt-in 1개 건너뜀·실패/오류 0, 앱/테스트 APK·Lint 성공(오류 0·경고 27). 웹 api:check·lint·typecheck·전체 test·build 성공, 394개 통과·실서버 opt-in 3개 건너뜀. 시드 API/런타임 7개·local.mjs 구문·git diff 공백 검사 통과. 첫 진입·모드 재조회 실패·저장 후 재조회·복구와 인증/권한 차단 회귀를 포함한다. 기기·실서버·실제 Kakao·backend 전체 검사는 클라이언트 장애 처리와 안내 수정 범위라 이번에 재실행하지 않았다. 수정 diff 독립 재리뷰와 최종 head CI는 별도 확인한다.
 - JDK 21·Node v24.15.0, `scripts/demo/run.ps1 -Verify -Offline`: bootJar BUILD SUCCESSFUL, 기본 통합 검증 성공.
