@@ -6,7 +6,6 @@ import com.nurseflow.roster.api.dto.request.ConsecutiveWorkPolicyRequest
 import com.nurseflow.roster.api.dto.response.ConsecutiveWorkPolicyResponse
 import com.nurseflow.roster.application.service.ConsecutiveWorkPolicy
 import com.nurseflow.roster.application.service.ConsecutiveWorkPolicyService
-import jakarta.validation.Valid
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PathVariable
@@ -28,9 +27,9 @@ class ConsecutiveWorkPolicyController(private val service: ConsecutiveWorkPolicy
     fun replace(
         @PathVariable wardId: UUID,
         @RequestHeader("If-Match") ifMatch: String,
-        @Valid @RequestBody request: ConsecutiveWorkPolicyRequest,
+        @RequestBody request: ConsecutiveWorkPolicyRequest,
         @CurrentSubject actor: String,
-    ) = service.replace(wardId, request.maxConsecutiveWorkDays, ifMatch, actor).toEntity()
+    ) = service.replace(wardId, request.integerLimit(), ifMatch, actor).toEntity()
 }
 
 private fun ConsecutiveWorkPolicy.toEntity() = ResponseEntity.ok()
