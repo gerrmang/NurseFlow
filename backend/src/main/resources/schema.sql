@@ -15,6 +15,8 @@ ALTER TABLE wards ADD COLUMN IF NOT EXISTS created_by VARCHAR(255);
 ALTER TABLE wards ADD COLUMN IF NOT EXISTS created_at VARCHAR(40);
 -- A7: fictional, unlinked staff are rosterable only when the ward explicitly enables demo mode.
 ALTER TABLE wards ADD COLUMN IF NOT EXISTS demo_mode BOOLEAN DEFAULT FALSE NOT NULL;
+ALTER TABLE wards ADD COLUMN IF NOT EXISTS max_consecutive_work_days INT DEFAULT 5 NOT NULL
+    CHECK (max_consecutive_work_days BETWEEN 1 AND 31);
 CREATE INDEX IF NOT EXISTS ix_wards_created_by ON wards(created_by);
 
 CREATE TABLE IF NOT EXISTS ward_memberships (
@@ -61,6 +63,14 @@ CREATE TABLE IF NOT EXISTS rosters (
     confirmed_by VARCHAR(255)
 );
 CREATE INDEX IF NOT EXISTS ix_rosters_ward_month ON rosters(ward_id, roster_month);
+
+CREATE TABLE IF NOT EXISTS roster_rest_days (
+    roster_id UUID NOT NULL REFERENCES rosters(roster_id) ON DELETE CASCADE,
+    nurse_id UUID NOT NULL REFERENCES nurses(nurse_id),
+    rest_date DATE NOT NULL,
+    kind VARCHAR(3) NOT NULL CHECK (kind IN ('OF','SOF')),
+    PRIMARY KEY (roster_id, nurse_id, rest_date)
+);
 
 CREATE TABLE IF NOT EXISTS roster_slots (
     slot_id UUID PRIMARY KEY,

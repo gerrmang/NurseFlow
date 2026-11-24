@@ -736,8 +736,8 @@ export interface paths {
          * 병동 근무 유형 조회
          * @description 병동 구성원(관리자·간호사)이 조회한다. 기본은 활성 근무 유형만 반환하며
          *     `includeInactive=true`이면 비활성 유형도 포함한다. 정렬은 `startTime`, `code` 순이다.
-         *     `policyRevision`은 이 병동의 근무 유형이 바뀔 때마다 1씩 늘어나는 병동 정책 revision이다
-         *     (근무 유형이 한 번도 바뀌지 않았으면 0). 응답 `ETag`는 이 revision이며 수정·비활성화의 `If-Match`로 보낸다.
+         *     `policyRevision`은 이 병동의 근무 유형, 편성 대상 정책 또는 연속근무 상한이 바뀔 때 늘어나는 공통 revision이다
+         *     (정책이 한 번도 바뀌지 않았으면 0). 응답 `ETag`는 이 revision이며 수정·비활성화의 `If-Match`로 보낸다.
          *     revision은 목록보다 먼저 읽으므로, 조회 중 다른 변경이 커밋되면 ETag가 데이터보다 오래될 수는 있어도(저장 시 412) 더 새로울 수는 없다.
          *     미리보기의 `policyRevision`도 같다.
          */
@@ -836,6 +836,34 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/wards/{wardId}/consecutive-work-policy": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                wardId: components["parameters"]["WardId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * 병동 연속근무 상한 조회
+         * @description 병동 설정이 없으면 최대 5일이다. 응답 ETag는 병동 공통 정책 revision이다.
+         */
+        get: operations["getConsecutiveWorkPolicy"];
+        /**
+         * 병동 연속근무 상한 변경
+         * @description 후보 검증·수동 배치·자동 생성·확정에 같은 필수 상한을 적용한다.
+         *     변경하면 병동 정책 revision과 비공개 초안 revision을 올리고 초안을 재검증 대상으로 표시한다.
+         *     기존 공개본은 유지한다. 현재 값과 같은 요청도 정책 ETag를 확인하며 revision은 올리지 않는다.
+         */
+        put: operations["replaceConsecutiveWorkPolicy"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/wards/{wardId}/rosters": {
         parameters: {
             query?: never;
@@ -851,6 +879,7 @@ export interface paths {
         /**
          * 월간 draft 생성
          * @description 같은 ward/month에 유효한 draft가 있으면 기존 draft를 덮지 않고 conflict를 반환한다.
+         *     같은 달에 활성 공개본이 있으면 새 수정 초안에 공개본의 휴식일을 복사한다.
          */
         post: operations["createRoster"];
         delete?: never;
@@ -906,6 +935,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/rosters/{rosterId}/rest-days": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                rosterId: components["parameters"]["RosterId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * 관리자용 근무표 휴식일 조회
+         * @description 병동 현지 근무일 기준으로 명시한 OF·SOF를 조회한다.
+         *     응답 ETag는 근무표 revision이다. 간호사용 공개 근무표 API는 이 목록을 반환하지 않는다.
+         */
+        get: operations["listRosterRestDays"];
+        /**
+         * 초안의 휴식일 전체 교체
+         * @description OF·SOF 목록을 전부 교체한다. 빈 배열은 모든 휴식일을 제거한다. 간호사와 근무일 조합은 한 번만 넣는다.
+         *     명시된 휴식일에는 해당 날짜에 시작하는 근무를 배치할 수 없다. 전날 시작한 Night가 휴식일 오전에 끝나는 것은 허용한다.
+         *     연속근무는 간호사별 서로 다른 근무일을 센다. 알려진 월에서 명시된 OF·SOF만 누적을 끊으며
+         *     미배정 날짜와 승인 연차·반차는 휴식일로 추정하지 않는다. 연속된 앞뒤 공개월도 포함하며 공개표가 없는 월에서 확인 범위가 끊긴다.
+         *     휴식일을 바꾸면 초안 revision을 올리고 재검증 대상으로 표시한다. 내용이 같으면 ETag 확인 후 revision을 유지한다.
+         *     휴식일이 없어지면 저장된 근무가 상한을 넘을 수 있으므로 서버에서 확정할 때 다시 검증한다.
+         */
+        put: operations["replaceRosterRestDays"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/rosters/{rosterId}/absences": {
         parameters: {
             query?: never;
@@ -923,7 +984,7 @@ export interface paths {
         put?: never;
         /**
          * 이미 승인된 휴가/반차를 일정으로 등록
-         * @description absenceReason, diagnosis, medicalDetails 필드는 받지 않는다.
+         * @description 승인 연차에 해당하는 시간이 이미 지정된 OF·SOF의 병동 현지 날짜와 겹치면 거부한다. absenceReason, diagnosis, medicalDetails 필드는 받지 않는다.
          */
         post: operations["createApprovedAbsence"];
         delete?: never;
@@ -943,7 +1004,10 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        /** 승인 부재 구간 수정 */
+        /**
+         * 승인 부재 구간 수정
+         * @description 승인 연차에 해당하는 시간이 이미 지정된 OF·SOF의 병동 현지 날짜와 겹치면 거부한다.
+         */
         put: operations["updateApprovedAbsence"];
         post?: never;
         /** 승인 부재 일정 삭제 */
@@ -1677,7 +1741,34 @@ export interface components {
             /** @default false */
             locked: boolean;
         };
+        ConsecutiveWorkPolicyInput: {
+            /** @example 5 */
+            maxConsecutiveWorkDays: number;
+        };
+        ConsecutiveWorkPolicy: {
+            /** @example 5 */
+            maxConsecutiveWorkDays: number;
+            policyRevision: number;
+        };
+        RosterRestDay: {
+            /** Format: uuid */
+            nurseId: string;
+            /**
+             * Format: date
+             * @description 근무표에 속한 병동 현지 근무일.
+             */
+            date: string;
+            /** @enum {string} */
+            kind: "OF" | "SOF";
+        };
+        RosterRestDays: {
+            items: components["schemas"]["RosterRestDay"][];
+        };
         RuleDiagnostic: {
+            /**
+             * @description 연속근무 상한 위반은 CONSECUTIVE_WORK_LIMIT, 명시 휴식일 배치는 REST_DAY_ASSIGNMENT_CONFLICT,
+             *     명시 휴식일과 승인 연차의 겹침은 REST_DAY_CONFLICT이며 모두 HARD이다.
+             */
             code: string;
             /** @enum {string} */
             severity: "HARD" | "SOFT";
@@ -1895,7 +1986,7 @@ export interface components {
         SlotId: string;
         JobId: string;
         /**
-         * @description 마지막으로 받은 병동 근무 유형 정책 ETag.
+         * @description 마지막으로 받은 병동 공통 정책 ETag.
          * @example "policy-3"
          */
         PolicyIfMatch: string;
@@ -1914,7 +2005,7 @@ export interface components {
         /** @description Strong revision ETag for subsequent If-Match writes. */
         RosterETag: string;
         /**
-         * @description 병동 근무 유형 정책 revision의 ETag. 근무 유형 수정·비활성화의 If-Match로 보낸다.
+         * @description 병동 공통 정책 revision의 ETag. 정책 변경 요청의 If-Match로 보낸다.
          * @example "policy-3"
          */
         PolicyETag: string;
@@ -3682,7 +3773,7 @@ export interface operations {
             query?: never;
             header: {
                 /**
-                 * @description 마지막으로 받은 병동 근무 유형 정책 ETag.
+                 * @description 마지막으로 받은 병동 공통 정책 ETag.
                  * @example "policy-3"
                  */
                 "If-Match": components["parameters"]["PolicyIfMatch"];
@@ -3737,7 +3828,7 @@ export interface operations {
                 content: {
                     "application/json": {
                         items: components["schemas"]["ShiftType"][];
-                        /** @description 병동 정책 revision. 근무 유형 생성·수정·비활성화·재활성화마다 1 증가한다. */
+                        /** @description 병동 공통 정책 revision. 근무 유형 생성·수정·비활성화·재활성화와 다른 공통 정책 변경에 따라 증가한다. */
                         policyRevision: number;
                     };
                 };
@@ -3759,7 +3850,7 @@ export interface operations {
             query?: never;
             header: {
                 /**
-                 * @description 마지막으로 받은 병동 근무 유형 정책 ETag.
+                 * @description 마지막으로 받은 병동 공통 정책 ETag.
                  * @example "policy-3"
                  */
                 "If-Match": components["parameters"]["PolicyIfMatch"];
@@ -3836,7 +3927,7 @@ export interface operations {
             query?: never;
             header: {
                 /**
-                 * @description 마지막으로 받은 병동 근무 유형 정책 ETag.
+                 * @description 마지막으로 받은 병동 공통 정책 ETag.
                  * @example "policy-3"
                  */
                 "If-Match": components["parameters"]["PolicyIfMatch"];
@@ -3909,7 +4000,7 @@ export interface operations {
             query?: never;
             header: {
                 /**
-                 * @description 마지막으로 받은 병동 근무 유형 정책 ETag.
+                 * @description 마지막으로 받은 병동 공통 정책 ETag.
                  * @example "policy-3"
                  */
                 "If-Match": components["parameters"]["PolicyIfMatch"];
@@ -4003,6 +4094,78 @@ export interface operations {
             };
             /** @description INVALID_SHIFT_INTERVAL, SHIFT_SPANS_MIDNIGHT_MISMATCH, INVALID_SHIFT_MINUTES */
             422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+        };
+    };
+    getConsecutiveWorkPolicy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                wardId: components["parameters"]["WardId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 연속근무 상한과 병동 정책 revision */
+            200: {
+                headers: {
+                    ETag: components["headers"]["PolicyETag"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConsecutiveWorkPolicy"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    replaceConsecutiveWorkPolicy: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description 마지막으로 받은 병동 공통 정책 ETag.
+                 * @example "policy-3"
+                 */
+                "If-Match": components["parameters"]["PolicyIfMatch"];
+            };
+            path: {
+                wardId: components["parameters"]["WardId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConsecutiveWorkPolicyInput"];
+            };
+        };
+        responses: {
+            /** @description 적용된 연속근무 상한과 병동 정책 revision */
+            200: {
+                headers: {
+                    ETag: components["headers"]["PolicyETag"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConsecutiveWorkPolicy"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            /** @description STALE_POLICY_REVISION. 최신 정책을 조회한 뒤 다시 저장한다. */
+            412: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -4156,6 +4319,103 @@ export interface operations {
             422: components["responses"]["RuleViolation"];
         };
     };
+    listRosterRestDays: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                rosterId: components["parameters"]["RosterId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 휴식일 목록과 근무표 revision ETag */
+            200: {
+                headers: {
+                    ETag: components["headers"]["RosterETag"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RosterRestDays"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    replaceRosterRestDays: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Strong ETag of the roster revision loaded by the client.
+                 * @example "roster-70c0e496-r12"
+                 */
+                "If-Match": components["parameters"]["IfMatch"];
+            };
+            path: {
+                rosterId: components["parameters"]["RosterId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RosterRestDays"];
+            };
+        };
+        responses: {
+            /** @description 적용된 휴식일 목록과 근무표 revision ETag */
+            200: {
+                headers: {
+                    ETag: components["headers"]["RosterETag"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RosterRestDays"];
+                };
+            };
+            /** @description INVALID_REST_DAYS 또는 DATE_OUTSIDE_ROSTER */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            /** @description ROSTER_NOT_FOUND, WARD_NOT_FOUND 또는 NURSE_NOT_FOUND */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description NOT_DRAFT 또는 REST_DAY_CONFLICT. 같은 근무일의 배정이나 승인 연차와 겹치는 휴식일은 저장할 수 없다. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description STALE_ROSTER_REVISION. 최신 초안을 조회한 뒤 다시 저장한다. */
+            412: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+        };
+    };
     listApprovedAbsences: {
         parameters: {
             query?: never;
@@ -4218,6 +4478,15 @@ export interface operations {
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
+            /** @description REST_DAY_CONFLICT. 이미 지정된 OF·SOF와 승인 연차가 겹친다. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
             412: components["responses"]["PreconditionFailed"];
             422: components["responses"]["RuleViolation"];
         };
@@ -4257,6 +4526,15 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            /** @description REST_DAY_CONFLICT. 이미 지정된 OF·SOF와 승인 연차가 겹친다. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
             412: components["responses"]["PreconditionFailed"];
         };
     };

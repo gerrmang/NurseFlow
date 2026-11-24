@@ -37,7 +37,7 @@ class RosterEligibilityService(
         if (current != enabled) {
             roster.setDemoMode(wardId, enabled)
             policy.bumpPolicyRevision(wardId, actor, Instant.now())
-            roster.invalidateDraftsForEligibility(wardId)
+            roster.invalidateWardDrafts(wardId)
         }
         return snapshot(wardId)
     }
