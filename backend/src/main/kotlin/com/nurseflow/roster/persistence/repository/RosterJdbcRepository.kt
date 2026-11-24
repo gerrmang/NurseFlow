@@ -1,6 +1,9 @@
 package com.nurseflow.roster.persistence.repository
 
+import com.nurseflow.roster.domain.model.RestDayKind
+import com.nurseflow.roster.domain.model.RosterRestDay
 import com.nurseflow.roster.domain.model.ShiftKind
+import com.nurseflow.roster.domain.model.WorkPattern
 import com.nurseflow.roster.persistence.entity.DbAbsence
 import com.nurseflow.roster.persistence.entity.DbGenerationJob
 import com.nurseflow.roster.persistence.entity.DbNurse
@@ -15,6 +18,7 @@ import tools.jackson.databind.json.JsonMapper
 import java.sql.ResultSet
 import java.time.Instant
 import java.time.ZoneId
+import java.time.YearMonth
 import java.util.UUID
 
 @Repository
@@ -61,7 +65,7 @@ class RosterJdbcRepository(
 
     fun publishRoster(rosterId: UUID, publishedAt: Instant, confirmedBy: String) {
         jdbc.update(
-            "UPDATE rosters SET status='PUBLISHED',active=TRUE,revision=revision+1,published_at=?,confirmed_by=? WHERE roster_id=?",
+            "UPDATE rosters SET status='PUBLISHED',active=TRUE,needs_revalidation=FALSE,revision=revision+1,published_at=?,confirmed_by=? WHERE roster_id=?",
             publishedAt.toString(), confirmedBy, rosterId,
         )
     }
@@ -69,6 +73,47 @@ class RosterJdbcRepository(
     fun increment(id: UUID) {
         jdbc.update("UPDATE rosters SET revision=revision+1 WHERE roster_id=?", id)
     }
+
+    fun markDraftForRevalidation(id: UUID) {
+        jdbc.update("UPDATE rosters SET revision=revision+1,needs_revalidation=TRUE WHERE roster_id=?", id)
+    }
+
+    fun restDays(rosterId: UUID): List<RosterRestDay> = jdbc.query(
+        "SELECT nurse_id, rest_date, kind FROM roster_rest_days WHERE roster_id=? ORDER BY rest_date,nurse_id",
+        { rs, _ -> mapRestDay(rs) }, rosterId,
+    )
+
+    fun adjacentPublishedRestDays(wardId: UUID, month: String): List<RosterRestDay> = jdbc.query(
+        """SELECT d.nurse_id,d.rest_date,d.kind FROM roster_rest_days d
+            JOIN rosters r ON r.roster_id=d.roster_id
+            WHERE r.ward_id=? AND r.active=TRUE AND r.status='PUBLISHED' AND r.roster_month<>?""",
+        { rs, _ -> mapRestDay(rs) }, wardId, month,
+    )
+
+    fun copyRestDays(source: UUID, target: UUID) {
+        jdbc.update(
+            """INSERT INTO roster_rest_days(roster_id,nurse_id,rest_date,kind)
+                SELECT ?,nurse_id,rest_date,kind FROM roster_rest_days WHERE roster_id=?""",
+            target, source,
+        )
+    }
+
+    fun replaceRestDays(rosterId: UUID, items: List<RosterRestDay>) {
+        jdbc.update("DELETE FROM roster_rest_days WHERE roster_id=?", rosterId)
+        if (items.isEmpty()) return
+        jdbc.batchUpdate(
+            "INSERT INTO roster_rest_days(roster_id,nurse_id,rest_date,kind) VALUES(?,?,?,?)",
+            items.map { arrayOf<Any>(rosterId, it.nurseId, java.sql.Date.valueOf(it.date), it.kind.name) },
+        )
+    }
+
+    fun wardNurseIds(wardId: UUID): Set<UUID> = jdbc.query(
+        "SELECT nurse_id FROM nurses WHERE ward_id=?", { rs, _ -> uuid(rs, "nurse_id") }, wardId,
+    ).toSet()
+
+    private fun mapRestDay(rs: ResultSet) = RosterRestDay(
+        uuid(rs, "nurse_id"), rs.getDate("rest_date").toLocalDate(), RestDayKind.valueOf(rs.getString("kind")),
+    )
 
     fun lockRoster(id: UUID) {
         jdbc.query("SELECT roster_id FROM rosters WHERE roster_id=? FOR UPDATE", { rs, _ -> rs.getString(1) }, id)
@@ -82,20 +127,28 @@ class RosterJdbcRepository(
             ).isNotEmpty()
 
     fun memberships(wardId: UUID, subject: String): Set<String> = jdbc.query(
-        "SELECT role FROM ward_memberships WHERE ward_id=? AND subject=?",
+        "SELECT role FROM ward_memberships WHERE ward_id=? AND subject=? AND active=TRUE",
         { rs, _ -> rs.getString("role") }, wardId, subject,
     ).toSet()
 
     fun canViewWardCalendar(wardId: UUID, subject: String): Boolean =
         (jdbc.queryForObject(
-            "SELECT COUNT(*) FROM ward_memberships WHERE ward_id=? AND subject=? AND can_view_ward_calendar=TRUE",
+            "SELECT COUNT(*) FROM ward_memberships WHERE ward_id=? AND subject=? AND can_view_ward_calendar=TRUE AND active=TRUE",
             Int::class.java, wardId, subject,
         ) ?: 0) > 0
 
     // ── Slots ──
 
+    /** Code and kind of a slot, or of its type when the slot no longer exists. Null for an unknown type. */
+    fun slotShift(slotId: UUID, shiftTypeId: UUID): Pair<String, String>? = jdbc.query(
+        """SELECT COALESCE(s.shift_code,t.code) AS code,COALESCE(s.shift_kind,t.kind) AS kind FROM shift_types t
+            LEFT JOIN roster_slots s ON s.slot_id=? AND s.shift_type_id=t.shift_type_id WHERE t.shift_type_id=?""",
+        { rs, _ -> rs.getString("code") to rs.getString("kind") }, slotId, shiftTypeId,
+    ).firstOrNull()
+
     fun slots(rosterId: UUID): List<DbSlot> = jdbc.query(
-        """SELECT s.*,t.code,t.kind,n.display_name FROM roster_slots s
+        // The slot's own code and kind: a later shift type edit must not change a published roster.
+        """SELECT s.*,COALESCE(s.shift_code,t.code) AS code,COALESCE(s.shift_kind,t.kind) AS kind,n.display_name FROM roster_slots s
             JOIN shift_types t ON t.shift_type_id=s.shift_type_id
             LEFT JOIN nurses n ON n.nurse_id=s.nurse_id
             WHERE s.roster_id=? ORDER BY s.shift_date,s.starts_at,s.slot_id""",
@@ -106,10 +159,16 @@ class RosterJdbcRepository(
                 Instant.parse(rs.getString("starts_at")), Instant.parse(rs.getString("ends_at")),
                 mapper.readValue(rs.getString("required_qualifications"), strings).toSet(),
                 rs.getString("nurse_id")?.let(UUID::fromString), rs.getString("display_name"), rs.getBoolean("locked"),
+                rs.getObject("team_id", UUID::class.java), rs.getBoolean("senior_required"),
             )
         },
         rosterId,
     )
+
+    fun activeTeamIds(wardId: UUID): Set<UUID> = jdbc.query(
+        "SELECT team_id FROM ward_teams WHERE ward_id=? AND active=TRUE",
+        { rs, _ -> uuid(rs, "team_id") }, wardId,
+    ).toSet()
 
     fun deleteSlots(rosterId: UUID) {
         jdbc.update("DELETE FROM roster_slots WHERE roster_id=?", rosterId)
@@ -117,11 +176,11 @@ class RosterJdbcRepository(
 
     fun insertSlot(rosterId: UUID, slot: NewSlot) {
         jdbc.update(
-            """INSERT INTO roster_slots(slot_id,roster_id,shift_date,shift_type_id,starts_at,ends_at,required_qualifications)
-                VALUES(?,?,?,?,?,?,?)""",
-            UUID.randomUUID(), rosterId, slot.date, slot.shiftTypeId,
+            """INSERT INTO roster_slots(slot_id,roster_id,shift_date,shift_type_id,shift_code,shift_kind,starts_at,ends_at,required_qualifications,team_id,senior_required)
+                VALUES(?,?,?,?,?,?,?,?,?,?,?)""",
+            UUID.randomUUID(), rosterId, slot.date, slot.shiftTypeId, slot.shiftCode, slot.shiftKind.name,
             slot.startsAt.toString(), slot.endsAt.toString(),
-            mapper.writeValueAsString(slot.requiredQualifications),
+            mapper.writeValueAsString(slot.requiredQualifications), slot.teamId, slot.seniorRequired,
         )
     }
 
@@ -161,33 +220,86 @@ class RosterJdbcRepository(
 
     // ── Nurses ──
 
+    /**
+     * A record linked to an account is rostered only while that account is an active WARD_MEMBER and not an
+     * active admin (admins are never rostered; a deactivated member has no ward access). Membership and staff
+     * rules keep such records inactive; this predicate also covers data from before those rules, so candidates,
+     * manual and automatic assignment, confirmation and staffing counts agree. An unlinked fictional record
+     * requires the ward's explicit demo mode.
+     */
+    private val rosterable = """nurses.active=TRUE AND ((nurses.subject IS NULL AND EXISTS (
+        SELECT 1 FROM wards w WHERE w.ward_id=nurses.ward_id AND w.demo_mode=TRUE)) OR (
+        EXISTS (SELECT 1 FROM ward_memberships m WHERE m.ward_id=nurses.ward_id AND m.subject=nurses.subject
+            AND m.role='WARD_MEMBER' AND m.active=TRUE)
+        AND NOT EXISTS (SELECT 1 FROM ward_memberships m WHERE m.ward_id=nurses.ward_id AND m.subject=nurses.subject
+            AND m.role='WARD_ADMIN' AND m.active=TRUE)))"""
+
+    fun demoMode(wardId: UUID): Boolean? = jdbc.query(
+        "SELECT demo_mode FROM wards WHERE ward_id=?", { rs, _ -> rs.getBoolean(1) }, wardId,
+    ).firstOrNull()
+
+    fun setDemoMode(wardId: UUID, enabled: Boolean) {
+        jdbc.update("UPDATE wards SET demo_mode=? WHERE ward_id=?", enabled, wardId)
+    }
+
+    fun maxConsecutiveWorkDays(wardId: UUID): Int? = jdbc.query(
+        "SELECT max_consecutive_work_days FROM wards WHERE ward_id=?", { rs, _ -> rs.getInt(1) }, wardId,
+    ).firstOrNull()
+
+    fun setMaxConsecutiveWorkDays(wardId: UUID, limitDays: Int) {
+        jdbc.update("UPDATE wards SET max_consecutive_work_days=? WHERE ward_id=?", limitDays, wardId)
+    }
+
+    fun invalidateWardDrafts(wardId: UUID) {
+        jdbc.update("UPDATE rosters SET revision=revision+1,needs_revalidation=TRUE WHERE ward_id=? AND status='DRAFT'", wardId)
+    }
+
+    data class EligibilityRow(val id: UUID, val displayName: String, val staffActive: Boolean, val subject: String?,
+        val memberActive: Boolean, val adminActive: Boolean)
+
+    fun eligibilityRows(wardId: UUID): List<EligibilityRow> = jdbc.query(
+        """SELECT nurses.nurse_id,nurses.display_name,nurses.active,nurses.subject,
+                  EXISTS(SELECT 1 FROM ward_memberships m WHERE m.ward_id=nurses.ward_id AND m.subject=nurses.subject
+                      AND m.role='WARD_MEMBER' AND m.active=TRUE) AS member_active,
+                  EXISTS(SELECT 1 FROM ward_memberships m WHERE m.ward_id=nurses.ward_id AND m.subject=nurses.subject
+                      AND m.role='WARD_ADMIN' AND m.active=TRUE) AS admin_active
+           FROM nurses WHERE nurses.ward_id=? ORDER BY nurses.display_name,nurses.nurse_id""",
+        { rs, _ -> EligibilityRow(uuid(rs,"nurse_id"),rs.getString("display_name"),rs.getBoolean("active"),
+            rs.getString("subject"),rs.getBoolean("member_active"),rs.getBoolean("admin_active")) }, wardId,
+    )
+
     fun findNurse(id: UUID, wardId: UUID): DbNurse? = jdbc.query(
-        "SELECT nurse_id,qualifications,active FROM nurses WHERE nurse_id=? AND ward_id=?",
+        "SELECT nurse_id,qualifications,team_id,senior_eligible,work_pattern,($rosterable) AS active FROM nurses WHERE nurse_id=? AND ward_id=?",
         { rs, _ ->
             DbNurse(
                 uuid(rs, "nurse_id"),
                 mapper.readValue(rs.getString("qualifications"), strings).toSet(),
                 rs.getBoolean("active"),
+                rs.getObject("team_id", UUID::class.java), rs.getBoolean("senior_eligible"),
+                WorkPattern.valueOf(rs.getString("work_pattern")),
             )
         }, id, wardId,
     ).firstOrNull()
 
     fun activeNurses(wardId: UUID): List<DbNurse> = jdbc.query(
-        "SELECT nurse_id,qualifications,active FROM nurses WHERE ward_id=? AND active=TRUE",
+        "SELECT nurse_id,qualifications,team_id,senior_eligible,work_pattern,active FROM nurses WHERE ward_id=? AND $rosterable",
         { rs, _ ->
             DbNurse(
                 uuid(rs, "nurse_id"),
                 mapper.readValue(rs.getString("qualifications"), strings).toSet(),
                 rs.getBoolean("active"),
+                rs.getObject("team_id", UUID::class.java), rs.getBoolean("senior_eligible"),
+                WorkPattern.valueOf(rs.getString("work_pattern")),
             )
         }, wardId,
     )
 
     fun activeNurseCount(wardId: UUID): Int =
-        jdbc.queryForObject("SELECT COUNT(*) FROM nurses WHERE ward_id=? AND active=TRUE", Int::class.java, wardId) ?: 0
+        jdbc.queryForObject("SELECT COUNT(*) FROM nurses WHERE ward_id=? AND $rosterable", Int::class.java, wardId) ?: 0
 
     fun findNurseIdBySubject(wardId: UUID, subject: String): UUID? = jdbc.query(
-        "SELECT nurse_id FROM nurses WHERE ward_id=? AND subject=? AND active=TRUE",
+        // Same rule as rostering: an admin's (or inactive member's) leftover record has no personal calendar.
+        "SELECT nurse_id FROM nurses WHERE ward_id=? AND subject=? AND $rosterable",
         { rs, _ -> uuid(rs, "nurse_id") }, wardId, subject,
     ).firstOrNull()
 
@@ -222,10 +334,13 @@ class RosterJdbcRepository(
         { rs, _ -> mapAbsence(rs) }, wardId, month,
     )
 
-    fun adjacentPublishedRosterIds(wardId: UUID, month: String): List<UUID> = jdbc.query(
-        "SELECT roster_id FROM rosters WHERE ward_id=? AND active=TRUE AND status='PUBLISHED' AND roster_month<>?",
-        { rs, _ -> uuid(rs, "roster_id") }, wardId, month,
+    fun adjacentPublishedMonths(wardId: UUID, month: String): List<Pair<YearMonth, UUID>> = jdbc.query(
+        "SELECT roster_month,roster_id FROM rosters WHERE ward_id=? AND active=TRUE AND status='PUBLISHED' AND roster_month<>?",
+        { rs, _ -> YearMonth.parse(rs.getString("roster_month")) to uuid(rs, "roster_id") }, wardId, month,
     )
+
+    fun adjacentPublishedRosterIds(wardId: UUID, month: String): List<UUID> =
+        adjacentPublishedMonths(wardId, month).map { it.second }
 
     // ── Generation Jobs ──
 
@@ -291,7 +406,8 @@ class RosterJdbcRepository(
 
     fun markFailed(jobId: UUID) {
         jdbc.update(
-            """UPDATE generation_jobs SET status='FAILED',finished_at=?
+            // An accepted cancel wins over a failure, as in every other final decision of a generation.
+            """UPDATE generation_jobs SET status=CASE WHEN cancel_requested THEN 'CANCELLED' ELSE 'FAILED' END,finished_at=?
                 WHERE job_id=? AND status IN ('QUEUED','RUNNING')""",
             Instant.now().toString(), jobId,
         )
@@ -325,27 +441,6 @@ class RosterJdbcRepository(
     fun preserveLocked(jobId: UUID): Boolean =
         jdbc.queryForObject("SELECT preserve_locked FROM generation_jobs WHERE job_id=?", Boolean::class.java, jobId) == true
 
-    // ── Idempotency Replay ──
-
-    fun <T> replay(key: UUID, action: String, requestHash: String, type: Class<T>): ReplayLookup<T> {
-        val saved = jdbc.query(
-            "SELECT operation,request_hash,response_json FROM mutation_replays WHERE idempotency_key=?",
-            { rs, _ -> Triple(rs.getString("operation"), rs.getString("request_hash"), rs.getString("response_json")) },
-            key,
-        ).firstOrNull() ?: return ReplayLookup.Missing
-        if (saved.first != action || saved.second != requestHash) {
-            return ReplayLookup.Conflict
-        }
-        return ReplayLookup.Found(mapper.readValue(saved.third, type))
-    }
-
-    fun recordReplay(key: UUID, action: String, requestHash: String, response: Any) {
-        jdbc.update(
-            "INSERT INTO mutation_replays(idempotency_key,operation,request_hash,response_json) VALUES(?,?,?,?)",
-            key, action, requestHash, mapper.writeValueAsString(response),
-        )
-    }
-
     // ── Shared ──
 
     private fun mapRoster(rs: ResultSet) = DbRoster(
@@ -353,6 +448,7 @@ class RosterJdbcRepository(
         rs.getString("roster_month"), rs.getString("status"), rs.getInt("revision"),
         ZoneId.of(rs.getString("time_zone")),
         rs.getString("published_at")?.let(Instant::parse), rs.getString("confirmed_by"),
+        rs.getBoolean("needs_revalidation"),
     )
 
     private fun mapAbsence(rs: ResultSet) = DbAbsence(

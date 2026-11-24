@@ -25,3 +25,17 @@ data class LogoutRequest(
 
 /** 32 random bytes, base64url without padding. */
 const val REFRESH_TOKEN_PATTERN = OpaqueToken.PATTERN
+
+/** Web login start: the exact callback URI the web app will receive the code on. */
+data class WebKakaoAuthorizationRequest(
+    @field:NotBlank @field:Size(max = 2048)
+    val redirectUri: String,
+)
+
+/** Web login callback: the code and state Kakao appended to the redirect URI. */
+data class WebKakaoCodeRequest(
+    @field:NotBlank @field:Size(max = 2048)
+    val code: String,
+    @field:Pattern(regexp = OpaqueToken.PATTERN)
+    val state: String,
+)

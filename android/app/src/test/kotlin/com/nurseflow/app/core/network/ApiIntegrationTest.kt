@@ -76,6 +76,25 @@ class ApiIntegrationTest {
         }
     }
 
+    @Test fun publishedRosterPathsQueriesAndErrorCodes() = runBlocking {
+        MockWebServer().use { server ->
+            server.enqueue(json("""{"wardId":"demo-ward","month":"2026-11","revision":2,"timeZone":"Asia/Seoul","assignments":[{"date":"2026-11-10","shiftType":"D","startsAt":"2026-11-09T22:00:00Z","endsAt":"2026-11-10T06:00:00Z"}]}"""))
+            server.enqueue(json("""{"wardId":"demo-ward","month":"2026-11","revision":2,"timeZone":"Asia/Seoul","staffing":{"required":1,"assigned":1,"unfilled":0},"slots":[{"slotId":"s","date":"2026-11-10","shiftTypeId":"t","startAt":"2026-11-09T22:00:00Z","endAt":"2026-11-10T06:00:00Z","status":"FILLED","assignment":{"nurseId":"n","displayName":"가상 간호사","locked":false}}]}"""))
+            server.enqueue(json("""{"code":"PUBLISHED_ROSTER_NOT_FOUND"}""").setResponseCode(404))
+            server.enqueue(json("""{"code":"WARD_CALENDAR_VIEW_REQUIRED"}""").setResponseCode(403))
+            val base = server.url("/").toString()
+            val api = ApiFactory.nurseFlowApi(base, SessionManager(ApiFactory.authApi(base), MemoryTokenStore()))
+            assertEquals("D", api.publishedMine("demo-ward", "2026-11").assignments.single().shiftType)
+            assertEquals("가상 간호사", api.publishedWard("demo-ward", "2026-11").slots.single().assignment?.displayName)
+            assertEquals("/api/v1/wards/demo-ward/published-rosters/mine?month=2026-11", server.takeRequest(1, TimeUnit.SECONDS)!!.path)
+            assertEquals("/api/v1/wards/demo-ward/published-rosters?month=2026-11", server.takeRequest(1, TimeUnit.SECONDS)!!.path)
+            try { apiCall { api.publishedMine("demo-ward", "2026-12") }; fail("Expected 404") }
+            catch (e: ApiException) { assertEquals(404, e.status); assertEquals("PUBLISHED_ROSTER_NOT_FOUND", e.code) }
+            try { apiCall { api.publishedWard("demo-ward", "2026-12") }; fail("Expected 403") }
+            catch (e: ApiException) { assertEquals(403, e.status); assertEquals("WARD_CALENDAR_VIEW_REQUIRED", e.code) }
+        }
+    }
+
     @Test fun mapsOfflineError() = runBlocking {
         try { apiCall<Unit> { throw IOException("internal transport detail") }; fail("Expected network error") }
         catch (e: ApiException) { assertEquals(0, e.status); assertEquals("NETWORK", e.code) }

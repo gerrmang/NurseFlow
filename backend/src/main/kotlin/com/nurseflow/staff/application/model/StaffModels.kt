@@ -39,6 +39,24 @@ data class StaffResult(
     val linkedAccount: Boolean,
     val team: TeamResult?,
     val profile: CareerProfileResult,
+    /** Position inside the team, 1 = most senior; the admin's order wins over hire and career dates. */
+    val teamOrder: Int?,
+    val seniorEligible: Boolean,
+    val stageOverride: Int?,
+    /** Stage used for rostering: the admin override, else the confirmed computed stage. */
+    val rosterStage: Int?,
+)
+
+data class RosterSettingsInput(val seniorEligible: Boolean, val stageOverride: Int?)
+
+data class StaffAdjustmentResult(
+    val adjustmentId: UUID,
+    val kind: String,
+    val before: String?,
+    val after: String?,
+    val actorUserId: String,
+    val actorName: String?,
+    val at: Instant,
 )
 
 data class StaffInputCommand(val displayName: String, val qualifications: List<String>, val active: Boolean, val teamId: UUID?)

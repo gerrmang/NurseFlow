@@ -1,15 +1,19 @@
 package com.nurseflow.roster.application.service
 
 import tools.jackson.core.type.TypeReference
+import tools.jackson.databind.JsonNode
 import tools.jackson.databind.json.JsonMapper
+import tools.jackson.databind.node.ObjectNode
 import com.nurseflow.common.error.BusinessException
 import com.nurseflow.common.error.ErrorCode
 import com.nurseflow.roster.application.model.*
 import com.nurseflow.roster.domain.model.ApprovedAbsence
 import com.nurseflow.roster.domain.model.ApprovedAbsenceKind
+import com.nurseflow.roster.domain.model.RosterRestDay
 import com.nurseflow.roster.domain.model.RuleSeverity
 import com.nurseflow.roster.domain.model.ShiftAssignment
 import com.nurseflow.roster.domain.model.ShiftKind
+import com.nurseflow.roster.domain.rule.ConsecutiveWorkRule
 import com.nurseflow.roster.domain.rule.RosterRuleValidator
 import com.nurseflow.roster.persistence.entity.DbAbsence
 import com.nurseflow.roster.persistence.entity.DbGenerationJob
@@ -18,19 +22,24 @@ import com.nurseflow.roster.persistence.entity.DbRoster
 import com.nurseflow.roster.persistence.entity.DbSlot
 import com.nurseflow.roster.persistence.entity.NewSlot
 import com.nurseflow.roster.persistence.repository.RosterJdbcRepository
-import com.nurseflow.roster.persistence.repository.ReplayLookup
+import com.nurseflow.common.idempotency.IdempotencyKeyRaceException
+import com.nurseflow.common.idempotency.MutationReplayRepository
+import com.nurseflow.common.idempotency.ReplayLookup
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
-import java.security.MessageDigest
 import java.time.Instant
 import java.time.LocalDate
 import java.time.YearMonth
+import java.time.ZoneId
 import java.util.UUID
+
+data class RosterRestDays(val items: List<RosterRestDay>, val revision: Int)
 
 @Service
 class RosterService(
     private val repo: RosterJdbcRepository,
     private val mapper: JsonMapper,
+    private val replays: MutationReplayRepository,
 ) {
     private val validator = RosterRuleValidator()
     private val diagnosticList = object : TypeReference<List<RuleDiagnostic>>() {}
@@ -55,17 +64,20 @@ class RosterService(
         parseMonth(request.month)
         requireAdmin(wardId, subject)
         if (!repo.lockWard(wardId)) throw BusinessException(ErrorCode.WARD_NOT_FOUND)
+        requireAdmin(wardId, subject)
         val action = "create-roster:$wardId"
-        replay(idempotencyKey, action, request, RosterView::class.java)?.let { return it }
+        replayView(idempotencyKey, action, request)?.let { return it }
         if (repo.draftExistsForMonth(wardId, request.month)) {
             throw BusinessException(ErrorCode.DRAFT_EXISTS)
         }
-        val publishedAbsences = repo.activePublished(wardId, request.month)?.let { repo.absences(it.id) }.orEmpty()
+        val published = repo.activePublished(wardId, request.month)
+        val publishedAbsences = published?.let { repo.absences(it.id) }.orEmpty()
         val id = UUID.randomUUID()
         repo.insertRoster(id, wardId, request.month)
         publishedAbsences.forEach { absence ->
             repo.insertAbsence(UUID.randomUUID(), id, absence.nurseId, absence.kind, absence.startsAt, absence.endsAt)
         }
+        published?.let { repo.copyRestDays(it.id, id) }
         return view(repo.findRoster(id)!!).also { recordReplay(idempotencyKey, action, request, it) }
     }
 
@@ -86,7 +98,7 @@ class RosterService(
             }) {
             throw BusinessException(ErrorCode.INVALID_REQUIREMENTS)
         }
-        if (request.items.map { it.date to it.shiftTypeId }.toSet().size != request.items.size) {
+        if (request.items.map { Triple(it.date, it.shiftTypeId, it.teamId) }.toSet().size != request.items.size) {
             throw BusinessException(ErrorCode.DUPLICATE_REQUIREMENT)
         }
         if (request.items.sumOf { it.requiredCount } > 10000) {
@@ -96,7 +108,13 @@ class RosterService(
             throw BusinessException(ErrorCode.ASSIGNMENTS_EXIST)
         }
         val month = parseMonth(roster.month)
+        val teamIds = repo.activeTeamIds(roster.wardId)
         val newSlots = request.items.flatMap { item ->
+            val teamId = item.teamId
+            if (teamId != null && teamId !in teamIds) throw BusinessException(ErrorCode.TEAM_NOT_FOUND)
+            if (teamId == null && item.requiredCount > 0 && teamIds.isNotEmpty()) {
+                throw BusinessException(ErrorCode.TEAM_REQUIRED_FOR_DEMAND)
+            }
             if (YearMonth.from(item.date) != month) {
                 throw BusinessException(ErrorCode.DATE_OUTSIDE_ROSTER)
             }
@@ -108,8 +126,13 @@ class RosterService(
             if (!start.isBefore(end)) {
                 throw BusinessException(ErrorCode.INVALID_SHIFT_INTERVAL)
             }
-            List(item.requiredCount) {
-                NewSlot(item.date, item.shiftTypeId, start, end, item.requiredQualifications.distinct())
+            val qualifications = item.requiredQualifications.distinct()
+            if (teamId != null && item.requiredCount > 0 && shift.kind == ShiftKind.OTHER) {
+                throw BusinessException(ErrorCode.INVALID_REQUIREMENTS, safeDetail = "팀별 인력 수요는 D/E/N 근무 유형만 사용할 수 있습니다.")
+            }
+            List(item.requiredCount) { index ->
+                NewSlot(item.date, item.shiftTypeId, shift.code, shift.kind, start, end,
+                    qualifications, teamId, teamId != null && index == 0)
             }
         }
         repo.deleteSlots(roster.id)
@@ -122,6 +145,38 @@ class RosterService(
     fun listAbsences(rosterId: UUID, subject: String): List<ApprovedAbsenceView> {
         visibleToAdmin(rosterId, subject)
         return repo.absences(rosterId).map(::absenceView)
+    }
+
+    @Transactional(readOnly = true)
+    fun listRestDays(rosterId: UUID, subject: String): RosterRestDays {
+        val roster = visibleToAdmin(rosterId, subject)
+        return RosterRestDays(repo.restDays(rosterId), roster.revision)
+    }
+
+    @Transactional
+    fun replaceRestDays(rosterId: UUID, ifMatch: String, items: List<RosterRestDay>, subject: String): RosterRestDays {
+        val roster = lockedDraft(rosterId, ifMatch, subject)
+        if (items.size > 10_000 || items.distinctBy { it.nurseId to it.date }.size != items.size) {
+            throw BusinessException(ErrorCode.INVALID_REST_DAYS)
+        }
+        val month = YearMonth.parse(roster.month)
+        if (items.any { YearMonth.from(it.date) != month }) throw BusinessException(ErrorCode.DATE_OUTSIDE_ROSTER)
+        if (items.isNotEmpty()) {
+            val nurseIds = repo.wardNurseIds(roster.wardId)
+            if (items.any { it.nurseId !in nurseIds }) throw BusinessException(ErrorCode.NURSE_NOT_FOUND)
+        }
+        val existing = repo.restDays(rosterId)
+        if (items.toSet() == existing.toSet()) return RosterRestDays(existing, roster.revision)
+        val workDays = repo.slots(rosterId).mapNotNull { it.nurseId?.let { nurseId -> nurseId to it.date } }.toSet()
+        val annualLeave = (repo.absences(rosterId) + repo.adjacentPublishedAbsences(roster.wardId, roster.month))
+            .filter { it.kind == ApprovedAbsenceKind.APPROVED_LEAVE.name }.groupBy { it.nurseId }
+        if (items.any { rest ->
+                (rest.nurseId to rest.date) in workDays ||
+                    annualLeave[rest.nurseId]?.any { rest.conflictsWith(it, roster.zone) } == true
+            }) throw BusinessException(ErrorCode.REST_DAY_CONFLICT)
+        repo.replaceRestDays(rosterId, items)
+        repo.markDraftForRevalidation(rosterId)
+        return RosterRestDays(repo.restDays(rosterId), roster.revision + 1)
     }
 
     @Transactional
@@ -192,7 +247,7 @@ class RosterService(
         val roster = lockAuthorizedRoster(rosterId, subject)
         val action = "assign:$rosterId:$slotId"
         val payload = ifMatch to input
-        replay(idempotencyKey, action, payload, RosterView::class.java)?.let { return it }
+        replayView(idempotencyKey, action, payload)?.let { return it }
         checkRevision(roster, ifMatch)
         ensureDraft(roster)
         val slot = repo.slots(roster.id).firstOrNull { it.id == slotId }
@@ -239,7 +294,8 @@ class RosterService(
         val nursesById = mutableMapOf<UUID, DbNurse?>()
         val violations = currentSlots.filter { it.nurseId != null }.flatMap { slot ->
             candidateViolations(roster, slot, slot.nurseId!!, context, nursesById)
-        }.plus(draftAbsenceConflicts(roster)).distinctBy { it.code to it.affectedDate }
+        }.plus(draftAbsenceConflicts(roster)).plus(draftRestConflicts(roster, context))
+            .distinctBy { it.code to it.affectedDate }
         if (violations.isNotEmpty()) {
             throw BusinessException(
                 ErrorCode.RULE_VIOLATION, ruleViolations = violations,
@@ -295,10 +351,15 @@ class RosterService(
     fun cancelGeneration(jobId: UUID, idempotencyKey: UUID, subject: String): GenerationJob {
         val rosterId = repo.jobRosterId(jobId)
             ?: throw BusinessException(ErrorCode.GENERATION_JOB_NOT_FOUND)
-        visibleToAdmin(rosterId, subject)
+        val roster = visibleToAdmin(rosterId, subject)
         val action = "cancel-generation:$jobId"
-        replay(idempotencyKey, action, jobId, GenerationJob::class.java)?.let { return it }
+        // Only the job row, never the ward lock: a running generation holds the ward lock until it saves its
+        // result, so cancelling must be able to record the signal meanwhile. The role is checked again after
+        // this lock so a revocation committed while waiting still stops a revoked admin. The replay is read after
+        // both, so a revoked admin gets none and a same-key retry that waited here gets the first result.
         repo.lockGenerationJob(jobId)
+        requireAdmin(roster.wardId, subject)
+        replay(idempotencyKey, action, jobId, GenerationJob::class.java)?.let { return it }
         val job = readGenerationJob(jobId)
             ?: throw BusinessException(ErrorCode.GENERATION_JOB_NOT_FOUND)
         if (job.status !in setOf("QUEUED", "RUNNING")) {
@@ -323,9 +384,8 @@ class RosterService(
         val requestedBy = repo.generationRequestedBy(jobId)
         val roster = lockAuthorizedRoster(initial.rosterId, requestedBy)
         if (roster.status != "DRAFT" || roster.revision != initial.sourceRosterRevision) {
-            finishGeneration(
-                jobId, "FAILED", null, null,
-                listOf(RuleDiagnostic("STALE_ROSTER_REVISION", "HARD", "근무표가 변경되어 자동배치를 적용하지 않았습니다.")),
+            finishFailedUnlessCancelled(
+                jobId, listOf(RuleDiagnostic("STALE_ROSTER_REVISION", "HARD", "근무표가 변경되어 자동배치를 적용하지 않았습니다.")),
             )
             return
         }
@@ -337,17 +397,19 @@ class RosterService(
         val assignments = context.assignments.filterNot { it.assignmentId in removedIds }.toMutableList()
         val nurses = repo.activeNurses(roster.wardId)
         val nurseMap = nurses.associateBy { it.id }
-        val preexistingViolations = draftAbsenceConflicts(roster) + preserved.flatMap { slot ->
+        val preexistingViolations = draftAbsenceConflicts(roster) + draftRestConflicts(roster, context) + preserved.flatMap { slot ->
             val nurse = nurseMap[slot.nurseId]
             val candidate = slot.assignment()!!
             if (nurse == null || !nurse.qualifications.containsAll(slot.requiredQualifications)) {
                 listOf(RuleDiagnostic("LOCKED_ASSIGNMENT_INVALID", "HARD", "고정 배치가 현재 자격 또는 활성 상태와 맞지 않습니다.", slot.date))
             } else {
-                validator.validate(candidate, assignments, context.absences).map(RuleDiagnostic::from)
+                teamViolations(slot, nurse) + validator.validate(
+                    candidate, assignments, context.absences, nurse.workPattern, context.consecutiveWork,
+                ).map(RuleDiagnostic::from)
             }
         }
         if (preexistingViolations.isNotEmpty()) {
-            finishGeneration(jobId, "FAILED", null, null, preexistingViolations.distinctBy { it.code to it.affectedDate })
+            finishFailedUnlessCancelled(jobId, preexistingViolations.distinctBy { it.code to it.affectedDate })
             return
         }
         val counts = preserved.groupingBy { it.nurseId!! }.eachCount().toMutableMap()
@@ -357,7 +419,7 @@ class RosterService(
         var timedOut = false
         var cancelled = false
         generationLoop@ for (slot in allSlots.filter { it !in preserved }.sortedWith(
-            compareBy<DbSlot>({ it.date }, { it.startsAt }, { it.id.toString() }),
+            compareBy<DbSlot>({ it.date }, { it.startsAt }, { !it.seniorRequired }, { it.id.toString() }),
         )) {
             if (repo.generationCancelled(jobId)) { cancelled = true; break }
             if (System.nanoTime() >= deadline) { timedOut = true; break }
@@ -370,9 +432,9 @@ class RosterService(
             )
             for (nurse in ordered) {
                 if (System.nanoTime() >= deadline) { timedOut = true; break@generationLoop }
-                if (!nurse.qualifications.containsAll(slot.requiredQualifications)) continue
+                if (!nurse.qualifications.containsAll(slot.requiredQualifications) || teamViolations(slot, nurse).isNotEmpty()) continue
                 val candidate = ShiftAssignment(slot.id, nurse.id, slot.date, slot.kind, slot.startsAt, slot.endsAt)
-                if (validator.validate(candidate, assignments, context.absences).isNotEmpty()) continue
+                if (validator.validate(candidate, assignments, context.absences, nurse.workPattern, context.consecutiveWork).isNotEmpty()) continue
                 selected[slot.id] = nurse.id
                 assignments += candidate
                 counts[nurse.id] = (counts[nurse.id] ?: 0) + 1
@@ -380,7 +442,7 @@ class RosterService(
                 break
             }
         }
-        if (cancelled || repo.generationCancelled(jobId)) {
+        if (cancelRequestedUnderJobLock(jobId) || cancelled) {
             finishGeneration(jobId, "CANCELLED", null, null, emptyList())
             return
         }
@@ -391,16 +453,15 @@ class RosterService(
         val nurseCache = mutableMapOf<UUID, DbNurse?>()
         val finalViolations = finalSlots.filter { it.nurseId != null }.flatMap { slot ->
             candidateViolations(roster, slot, slot.nurseId!!, finalContext, nurseCache)
-        } + draftAbsenceConflicts(roster)
+        } + draftAbsenceConflicts(roster) + draftRestConflicts(roster, finalContext)
         if (finalViolations.isNotEmpty()) {
             throw IllegalStateException("Automatic roster assignment failed final hard-rule validation")
         }
         repo.increment(roster.id)
-        val staffing = StaffingSummary(
-            finalSlots.size, finalSlots.count { it.nurseId != null }, finalSlots.count { it.nurseId == null },
-        )
+        val staffing = staffing(finalSlots)
         val diagnostics = finalSlots.filter { it.nurseId == null }.map {
-            RuleDiagnostic("UNFILLED_SLOT", "SOFT", "현재 배치 순서와 필수 규칙으로 채우지 못한 칸입니다.", it.date)
+            if (it.seniorRequired) RuleDiagnostic("SENIOR_UNFILLED", "SOFT", "선임 필수 칸이 비어 있습니다.", it.date)
+            else RuleDiagnostic("UNFILLED_SLOT", "SOFT", "현재 배치 순서와 필수 규칙으로 채우지 못한 칸입니다.", it.date)
         }.distinctBy { it.code to it.affectedDate } + if (timedOut) {
             listOf(RuleDiagnostic("TIME_LIMIT_REACHED", "SOFT", "제한 시간에 도달해 남은 칸은 검토가 필요합니다."))
         } else {
@@ -448,23 +509,54 @@ class RosterService(
     ): List<RuleDiagnostic> {
         val nurse = nursesById.getOrPut(nurseId) { repo.findNurse(nurseId, roster.wardId) }
             ?: throw BusinessException(ErrorCode.NURSE_NOT_FOUND)
-        val extra = mutableListOf<RuleDiagnostic>()
+        val extra = teamViolations(slot, nurse).toMutableList()
         if (!nurse.active) extra += RuleDiagnostic("NURSE_INACTIVE", "HARD", "활성화되지 않은 간호사입니다.", slot.date)
         if (!nurse.qualifications.containsAll(slot.requiredQualifications)) {
             extra += RuleDiagnostic("QUALIFICATION_MISSING", "HARD", "필수 자격이 부족합니다.", slot.date)
         }
         val candidate = ShiftAssignment(slot.id, nurseId, slot.date, slot.kind, slot.startsAt, slot.endsAt)
-        return extra + validator.validate(candidate, context.assignments, context.absences).map(RuleDiagnostic::from)
+        return extra + validator.validate(
+            candidate, context.assignments, context.absences, nurse.workPattern, context.consecutiveWork,
+        ).map(RuleDiagnostic::from)
+    }
+
+    private fun teamViolations(slot: DbSlot, nurse: DbNurse): List<RuleDiagnostic> = buildList {
+        if (slot.teamId != null && slot.teamId != nurse.teamId) {
+            add(RuleDiagnostic("TEAM_MISMATCH", "HARD", "이 근무 칸과 간호사의 소속 팀이 다릅니다.", slot.date))
+        }
+        if (slot.seniorRequired && !nurse.seniorEligible) {
+            add(RuleDiagnostic("SENIOR_REQUIRED", "HARD", "선임 자격이 필요한 근무 칸입니다.", slot.date))
+        }
     }
 
     private fun loadValidationContext(roster: DbRoster, ownSlots: List<DbSlot> = repo.slots(roster.id)): ValidationContext {
-        val adjacentPublished = repo.adjacentPublishedRosterIds(roster.wardId, roster.month).flatMap { repo.slots(it) }
+        val publishedMonths = repo.adjacentPublishedMonths(roster.wardId, roster.month)
+        val adjacentPublished = publishedMonths.flatMap { (_, id) -> repo.slots(id) }
         val existing = (ownSlots + adjacentPublished).mapNotNull { it.assignment() }
+        val ownAbsences = repo.absences(roster.id)
         val adjacentAbsences = repo.adjacentPublishedAbsences(roster.wardId, roster.month)
-        val approved = (repo.absences(roster.id) + adjacentAbsences).map {
+        val approved = (ownAbsences + adjacentAbsences).map {
             ApprovedAbsence(it.nurseId, ApprovedAbsenceKind.valueOf(it.kind), it.startsAt, it.endsAt)
         }
-        return ValidationContext(existing, approved)
+        val month = YearMonth.parse(roster.month)
+        val available = publishedMonths.map { it.first }.toSet()
+        var first = month
+        var last = month
+        while (first.minusMonths(1) in available) first = first.minusMonths(1)
+        while (last.plusMonths(1) in available) last = last.plusMonths(1)
+        val covered = first.atDay(1)..last.atEndOfMonth()
+        val rests = repo.restDays(roster.id)
+        val adjacentRests = repo.adjacentPublishedRestDays(roster.wardId, roster.month)
+        val annualLeave = (ownAbsences + adjacentAbsences).filter { it.kind == ApprovedAbsenceKind.APPROVED_LEAVE.name }
+            .groupBy { it.nurseId }
+        val effectiveRests = (rests + adjacentRests).filter { rest ->
+            rest.date in covered && annualLeave[rest.nurseId]?.none { rest.conflictsWith(it, roster.zone) } != false
+        }
+        val policy = repo.maxConsecutiveWorkDays(roster.wardId) ?: throw BusinessException(ErrorCode.WARD_NOT_FOUND)
+        val consecutiveWork = ConsecutiveWorkRule(policy, covered, effectiveRests)
+        val restConflicts = restLeaveConflicts(rests, ownAbsences + adjacentAbsences, roster.zone) +
+            restLeaveConflicts(adjacentRests, ownAbsences, roster.zone)
+        return ValidationContext(existing, approved, consecutiveWork, restConflicts)
     }
 
     private fun validateAbsence(roster: DbRoster, input: ApprovedAbsenceInput) {
@@ -480,6 +572,10 @@ class RosterService(
         if (repo.findNurse(input.nurseId, roster.wardId) == null) {
             throw BusinessException(ErrorCode.NURSE_NOT_FOUND)
         }
+        if (input.kind == ApprovedAbsenceKind.APPROVED_LEAVE.name &&
+            (repo.restDays(roster.id) + repo.adjacentPublishedRestDays(roster.wardId, roster.month)).any {
+                it.nurseId == input.nurseId && dateOverlaps(it.date, roster.zone, input.startsAt, input.endsAt)
+            }) throw BusinessException(ErrorCode.REST_DAY_CONFLICT)
         val adjacentPublished = repo.adjacentPublishedRosterIds(roster.wardId, roster.month).flatMap { repo.slots(it) }
         val conflict = (repo.slots(roster.id) + adjacentPublished).any { slot ->
             slot.nurseId == input.nurseId && input.startsAt < slot.endsAt && slot.startsAt < input.endsAt
@@ -503,28 +599,58 @@ class RosterService(
         }
     }
 
+    private fun dateOverlaps(date: LocalDate, zone: ZoneId, start: Instant, end: Instant): Boolean =
+        start < date.plusDays(1).atStartOfDay(zone).toInstant() && date.atStartOfDay(zone).toInstant() < end
+
+    private fun RosterRestDay.conflictsWith(absence: DbAbsence, zone: ZoneId): Boolean =
+        dateOverlaps(date, zone, absence.startsAt, absence.endsAt)
+
+    private fun restLeaveConflicts(
+        restDays: List<RosterRestDay>, absences: List<DbAbsence>, zone: ZoneId,
+    ): List<RuleDiagnostic> {
+        val leave = absences.filter { it.kind == ApprovedAbsenceKind.APPROVED_LEAVE.name }.groupBy { it.nurseId }
+        return restDays.filter { rest -> leave[rest.nurseId]?.any { rest.conflictsWith(it, zone) } == true }
+            .map { RuleDiagnostic("REST_DAY_CONFLICT", "HARD", "휴식일과 승인 연차가 겹칩니다.", it.date) }
+    }
+
+    private fun draftRestConflicts(roster: DbRoster, context: ValidationContext): List<RuleDiagnostic> {
+        val month = YearMonth.parse(roster.month)
+        val bridge = context.consecutiveWork.bridgedViolation(month.atDay(1)..month.atEndOfMonth(), context.assignments)
+        return context.restConflicts + listOfNotNull(bridge?.let(RuleDiagnostic::from))
+    }
+
     private fun view(roster: DbRoster): RosterView {
         val all = repo.slots(roster.id)
         return RosterView(
             roster.id, roster.wardId, roster.month, roster.status, roster.revision, roster.zone.id,
-            StaffingSummary(all.size, all.count { it.nurseId != null }, all.count { it.nurseId == null }),
+            staffing(all),
             all.map {
                 SlotView(
-                    it.id, it.date, it.shiftTypeId, it.startsAt, it.endsAt,
+                    it.id, it.date, it.shiftTypeId, it.shiftCode, it.kind.name, it.startsAt, it.endsAt,
                     if (it.nurseId == null) "UNFILLED" else "FILLED",
                     it.nurseId?.let { nurseId -> AssignmentView(nurseId, it.nurseName ?: "", it.locked) },
+                    it.teamId, it.seniorRequired,
                 )
             },
             roster.publishedAt,
+            roster.needsRevalidation && roster.status == "DRAFT",
         )
     }
+
+    private fun staffing(slots: List<DbSlot>): StaffingSummary = StaffingSummary(
+        required = slots.size,
+        assigned = slots.count { it.nurseId != null },
+        unfilled = slots.count { it.nurseId == null },
+        seniorUnfilled = slots.count { it.seniorRequired && it.nurseId == null },
+    )
 
     private fun summary(roster: DbRoster): RosterSummary {
         val all = repo.slots(roster.id)
         return RosterSummary(
             roster.id, roster.wardId, roster.month, roster.status, roster.revision, roster.zone.id,
-            StaffingSummary(all.size, all.count { it.nurseId != null }, all.count { it.nurseId == null }),
+            staffing(all),
             roster.publishedAt,
+            roster.needsRevalidation && roster.status == "DRAFT",
         )
     }
 
@@ -538,6 +664,8 @@ class RosterService(
     private fun lockAuthorizedRoster(id: UUID, subject: String): DbRoster {
         val roster = visibleToAdmin(id, subject)
         if (!repo.lockWard(roster.wardId)) throw BusinessException(ErrorCode.WARD_NOT_FOUND)
+        // A membership change committed while this request waited must not let a revoked admin finish.
+        requireAdmin(roster.wardId, subject)
         repo.lockRoster(id)
         return repo.findRoster(id)!!
     }
@@ -575,6 +703,23 @@ class RosterService(
         finishedAt = job.finishedAt,
     )
 
+    /**
+     * Every final decision of a generation is taken under the job row lock: a cancel either commits before it
+     * (and wins) or waits until this transaction ends and then finds the job finished. Without the lock a cancel
+     * landing after the last unlocked check was answered RUNNING while the job still ended another way.
+     */
+    private fun cancelRequestedUnderJobLock(jobId: UUID): Boolean {
+        repo.lockGenerationJob(jobId)
+        return repo.generationCancelled(jobId)
+    }
+
+    private fun finishFailedUnlessCancelled(jobId: UUID, diagnostics: List<RuleDiagnostic>) =
+        if (cancelRequestedUnderJobLock(jobId)) {
+            finishGeneration(jobId, "CANCELLED", null, null, emptyList())
+        } else {
+            finishGeneration(jobId, "FAILED", null, null, diagnostics)
+        }
+
     private fun finishGeneration(
         jobId: UUID, status: String, resultRevision: Int?,
         staffing: StaffingSummary?, diagnostics: List<RuleDiagnostic>,
@@ -584,18 +729,37 @@ class RosterService(
     )
 
     private fun <T> replay(key: UUID, action: String, payload: Any, type: Class<T>): T? =
-        when (val result = repo.replay(key, action, requestHash(payload), type)) {
+        when (val result = replays.replay(key, action, replays.requestHash(payload), type)) {
             ReplayLookup.Missing -> null
             ReplayLookup.Conflict -> throw BusinessException(ErrorCode.IDEMPOTENCY_KEY_REUSED)
             is ReplayLookup.Found -> result.value
         }
 
-    private fun recordReplay(key: UUID, action: String, payload: Any, response: Any) =
-        repo.recordReplay(key, action, requestHash(payload), response)
+    /**
+     * Roster responses saved before slots carried their code and kind (A8) lack both fields; a retry of such a
+     * request reads them from the slot's stored values, or from its type once the slot is gone.
+     */
+    private fun replayView(key: UUID, action: String, payload: Any): RosterView? {
+        val saved = replay(key, action, payload, JsonNode::class.java) ?: return null
+        val slots = saved.get("slots")
+        for (i in 0 until (slots?.size() ?: 0)) {
+            val slot = slots.get(i) as ObjectNode
+            if (slot.has("shiftCode") && slot.has("shiftKind")) continue
+            val (code, kind) = repo.slotShift(
+                UUID.fromString(slot.get("slotId").asString()), UUID.fromString(slot.get("shiftTypeId").asString()),
+            ) ?: continue
+            slot.put("shiftCode", code)
+            slot.put("shiftKind", kind)
+        }
+        return mapper.treeToValue(saved, RosterView::class.java)
+    }
 
-    private fun requestHash(payload: Any): String = MessageDigest.getInstance("SHA-256")
-        .digest(mapper.writeValueAsBytes(payload))
-        .joinToString("") { "%02x".format(it) }
+    /** Every caller holds the ward or roster lock, so a concurrent same key is another roster's or job's request. */
+    private fun recordReplay(key: UUID, action: String, payload: Any, response: Any) = try {
+        replays.recordReplay(key, action, replays.requestHash(payload), response)
+    } catch (_: IdempotencyKeyRaceException) {
+        throw BusinessException(ErrorCode.IDEMPOTENCY_KEY_REUSED)
+    }
 
     private fun checkRevision(roster: DbRoster, ifMatch: String) {
         if (ifMatch != "\"${etag(roster.id, roster.revision)}\"") {
@@ -633,5 +797,7 @@ class RosterService(
     private data class ValidationContext(
         val assignments: List<ShiftAssignment>,
         val absences: List<ApprovedAbsence>,
+        val consecutiveWork: ConsecutiveWorkRule,
+        val restConflicts: List<RuleDiagnostic>,
     )
 }

@@ -19,6 +19,8 @@ data class DbSlot(
     val nurseId: UUID?,
     val nurseName: String?,
     val locked: Boolean,
+    val teamId: UUID?,
+    val seniorRequired: Boolean,
 ) {
     fun assignment(): ShiftAssignment? = nurseId?.let {
         ShiftAssignment(id, it, date, kind, startsAt, endsAt)

@@ -14,7 +14,6 @@ import com.nurseflow.invitation.persistence.entity.DbInvitation
 import com.nurseflow.invitation.persistence.repository.InvitationJdbcRepository
 import com.nurseflow.ward.application.model.WardRole
 import com.nurseflow.ward.application.service.WardService
-import com.nurseflow.ward.persistence.repository.WardJdbcRepository
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.time.Duration
@@ -25,15 +24,13 @@ import java.util.UUID
 @Service
 class InvitationService(
     private val repo: InvitationJdbcRepository,
-    private val wardRepo: WardJdbcRepository,
     private val wards: WardService,
     private val audit: AuditLog,
     private val properties: InvitationProperties,
 ) {
     @Transactional
     fun create(wardId: UUID, command: CreateInvitationCommand, actor: String): IssuedInvitation {
-        wards.requireAdmin(wardId, actor)
-        if (!wardRepo.lockWard(wardId)) throw BusinessException(ErrorCode.WARD_NOT_FOUND)
+        wards.lockAsAdmin(wardId, actor)
         if (command.role == WardRole.WARD_ADMIN && command.nurseId != null) {
             // Admin accounts are excluded from rostering, so they never take over a nurse record.
             throw BusinessException(ErrorCode.INVALID_INVITATION)
@@ -47,10 +44,10 @@ class InvitationService(
     /** Reissues an invitation with the same role and nurse target, revoking its old unused link. */
     @Transactional
     fun reissue(wardId: UUID, invitationId: UUID, actor: String): IssuedInvitation {
-        wards.requireAdmin(wardId, actor)
+        // Ward first, then the invitation row: the same order as create and redemption, so they cannot deadlock.
+        wards.lockAsAdmin(wardId, actor)
         val previous = repo.lockInWard(wardId, invitationId)
             ?: throw BusinessException(ErrorCode.INVITATION_NOT_FOUND)
-        if (!wardRepo.lockWard(wardId)) throw BusinessException(ErrorCode.WARD_NOT_FOUND)
         val now = Instant.now()
         when (previous.statusAt(now)) {
             InvitationStatus.REDEEMED -> throw BusinessException(ErrorCode.INVITATION_ALREADY_REDEEMED)
@@ -99,7 +96,7 @@ class InvitationService(
     /** Idempotent for already revoked invitations; a redeemed invitation cannot be revoked. */
     @Transactional
     fun revoke(wardId: UUID, invitationId: UUID, actor: String) {
-        wards.requireAdmin(wardId, actor)
+        wards.lockAsAdmin(wardId, actor)
         val invitation = repo.lockInWard(wardId, invitationId)
             ?: throw BusinessException(ErrorCode.INVITATION_NOT_FOUND)
         when (invitation.statusAt(Instant.now())) {

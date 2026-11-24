@@ -18,7 +18,7 @@ import java.util.UUID
 
 /**
  * Login only proves who the user is. It never grants ward access: wards and roles come
- * exclusively from ward_memberships created by bootstrap or invitation redemption.
+ * exclusively from ward_memberships created by ward creation or invitation redemption.
  */
 @Service
 class AuthService(
@@ -30,7 +30,11 @@ class AuthService(
 ) {
     fun loginWithKakao(command: KakaoLoginCommand): SessionResult {
         // Verify outside the transaction: it may fetch Kakao's JWKS over the network.
-        val identity = verifier.verify(command.idToken, command.nonce)
+        return loginWithVerifiedIdentity(verifier.verify(command.idToken, command.nonce))
+    }
+
+    /** Starts a session for an identity already proven by a verified Kakao ID token. */
+    fun loginWithVerifiedIdentity(identity: VerifiedIdentity): SessionResult {
         return try {
             transactions.execute { startSession(identity) }!!
         } catch (_: DuplicateKeyException) {

@@ -5,7 +5,7 @@ import java.time.Instant
 import java.time.LocalDate
 import java.util.UUID
 
-data class StaffingSummary(val required: Int, val assigned: Int, val unfilled: Int, val hardRuleViolations: Int = 0)
+data class StaffingSummary(val required: Int, val assigned: Int, val unfilled: Int, val hardRuleViolations: Int = 0, val seniorUnfilled: Int = 0)
 
 data class AssignmentView(val nurseId: UUID, val displayName: String, val locked: Boolean)
 
@@ -13,10 +13,15 @@ data class SlotView(
     val slotId: UUID,
     val date: LocalDate,
     val shiftTypeId: UUID,
+    /** Code and kind stored with the slot: a published slot keeps them even after the type is edited. */
+    val shiftCode: String,
+    val shiftKind: String,
     val startAt: Instant,
     val endAt: Instant,
     val status: String,
     val assignment: AssignmentView?,
+    val teamId: UUID? = null,
+    val seniorRequired: Boolean = false,
 )
 
 data class RosterSummary(
@@ -28,6 +33,7 @@ data class RosterSummary(
     val timeZone: String,
     val staffing: StaffingSummary,
     val publishedAt: Instant? = null,
+    val needsRevalidation: Boolean = false,
 )
 
 data class RosterView(
@@ -40,6 +46,7 @@ data class RosterView(
     val staffing: StaffingSummary,
     val slots: List<SlotView>,
     val publishedAt: Instant? = null,
+    val needsRevalidation: Boolean = false,
 )
 
 data class ApprovedAbsenceView(

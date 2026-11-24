@@ -13,4 +13,5 @@ data class DbRoster(
     val zone: ZoneId,
     val publishedAt: Instant?,
     val confirmedBy: String?,
+    val needsRevalidation: Boolean = false,
 )

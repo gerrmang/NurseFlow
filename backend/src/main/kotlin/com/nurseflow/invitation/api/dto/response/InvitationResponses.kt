@@ -33,4 +33,5 @@ data class InvitationPreviewResponse(
     val role: String,
     val expiresAt: Instant,
     val linksExistingNurse: Boolean,
+    val hospitalName: String?,
 )

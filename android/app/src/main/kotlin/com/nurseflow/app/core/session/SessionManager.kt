@@ -17,6 +17,9 @@ sealed interface SessionState {
     data class SignedIn(val userId: String, val displayName: String, val generation: Long) : SessionState
 }
 
+// Kept out of UI state and without a generated toString that could expose credentials.
+internal class SessionCredentials(val identity: SessionState.SignedIn, val accessToken: String)
+
 /** Network operations are serialized separately from local credentials. Tokens never enter UI state. */
 class SessionManager(private val authApi: AuthApi, private val store: TokenStore) {
     private val mutex = Mutex()
@@ -25,8 +28,9 @@ class SessionManager(private val authApi: AuthApi, private val store: TokenStore
     val state = mutableState.asStateFlow()
     private var generation = 0L
     private var revision = 0L
-    @Volatile var accessToken: String? = null
+    @Volatile internal var credentials: SessionCredentials? = null
         private set
+    val accessToken: String? get() = credentials?.accessToken
 
     suspend fun restore() {
         val started = mutex.withLock {
@@ -51,7 +55,7 @@ class SessionManager(private val authApi: AuthApi, private val store: TokenStore
             } catch (e: Exception) {
                 mutex.withLock {
                     if (started != revision) return
-                    accessToken = null
+                    credentials = null
                     if (e is ApiException && e.status == 401) signOutLocked()
                     else mutableState.value = SessionState.RestoreFailed(e.userMessage())
                 }
@@ -112,15 +116,16 @@ class SessionManager(private val authApi: AuthApi, private val store: TokenStore
         val refresh = requireNotNull(session.refreshToken)
         try { store.write(refresh) }
         catch (e: Exception) { signOutLocked(); throw e }
-        accessToken = session.accessToken
         val previous = mutableState.value as? SessionState.SignedIn
         if (previous == null || previous.userId != session.user.userId) generation++
-        mutableState.value = SessionState.SignedIn(session.user.userId, session.user.displayName, generation)
+        val identity = SessionState.SignedIn(session.user.userId, session.user.displayName, generation)
+        credentials = SessionCredentials(identity, session.accessToken)
+        mutableState.value = identity
     }
 
     private suspend fun signOutLocked() = withContext(NonCancellable) {
         revision++
-        accessToken = null
+        credentials = null
         mutableState.value = SessionState.SignedOut
         try { store.clear() }
         catch (e: CancellationException) { throw e }

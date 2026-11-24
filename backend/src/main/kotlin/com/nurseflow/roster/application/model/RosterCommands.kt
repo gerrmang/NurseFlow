@@ -11,6 +11,7 @@ data class StaffingRequirement(
     val shiftTypeId: UUID,
     val requiredCount: Int,
     val requiredQualifications: List<String>,
+    val teamId: UUID? = null,
 )
 
 data class ReplaceRequirementsRequest(val items: List<StaffingRequirement>)

@@ -1,6 +1,5 @@
 package com.nurseflow.auth.config
 
-import com.nurseflow.common.config.BootstrapProperties
 import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
@@ -23,7 +22,7 @@ import javax.crypto.spec.SecretKeySpec
  * (see KakaoIdTokenVerifier) and are never accepted as API bearer tokens.
  */
 @Configuration
-@EnableConfigurationProperties(AuthProperties::class, BootstrapProperties::class)
+@EnableConfigurationProperties(AuthProperties::class)
 class AuthConfiguration(private val properties: AuthProperties) {
     private val sessionKey: SecretKey by lazy {
         val bytes = properties.session.secret.toByteArray(Charsets.UTF_8)

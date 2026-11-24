@@ -20,10 +20,24 @@
         <activity
             android:name=".MainActivity"
             android:exported="true"
+            android:launchMode="singleTop"
             android:windowSoftInputMode="adjustResize">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <!-- Development invitation link (decision §7 #6): nurseflow://invite#token=...
+                 Not a production link; HTTPS App Links need a verified domain and are a follow-up.
+                 Distinct from the Kakao OAuth return scheme handled below. singleTop delivers a link
+                 to the running screen via onNewIntent without clearing activities (such as a Kakao
+                 login in progress); any extra instance shares the same in-memory invitation. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data
+                    android:host="invite"
+                    android:scheme="nurseflow" />
             </intent-filter>
         </activity>
 

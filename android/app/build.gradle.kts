@@ -37,9 +37,13 @@ android {
     buildTypes {
         debug {
             buildConfigField("String", "API_BASE_URL", "\"$debugApiBaseUrl\"")
+            // Fallback when the server omits inviteUrl (no NURSEFLOW_INVITE_LINK_BASE). Development only.
+            buildConfigField("String", "INVITE_LINK_BASE", "\"nurseflow://invite\"")
         }
         release {
             buildConfigField("String", "API_BASE_URL", "\"$releaseApiBaseUrl\"")
+            // No production link format yet (HTTPS App Links are a follow-up): issuance is disabled.
+            buildConfigField("String", "INVITE_LINK_BASE", "\"\"")
         }
     }
 
@@ -54,6 +58,12 @@ android {
     }
     kotlinOptions {
         jvmTarget = "17"
+    }
+}
+
+tasks.withType<org.gradle.api.tasks.testing.Test>().configureEach {
+    testLogging {
+        exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL
     }
 }
 
@@ -87,5 +97,9 @@ dependencies {
     testImplementation("com.squareup.okhttp3:mockwebserver:4.12.0")
     androidTestImplementation("androidx.test:runner:1.6.2")
     androidTestImplementation("androidx.test.ext:junit:1.2.1")
+    // Compose 1.7.0 brings Espresso 3.5.0, whose InputManager reflection fails on API 37.
+    androidTestImplementation("androidx.test.espresso:espresso-core:3.7.0")
+    androidTestImplementation("androidx.compose.ui:ui-test-junit4:1.7.0")
+    debugImplementation("androidx.compose.ui:ui-test-manifest:1.7.0")
     androidTestImplementation("com.squareup.okhttp3:mockwebserver:4.12.0")
 }

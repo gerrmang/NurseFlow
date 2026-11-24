@@ -28,4 +28,6 @@ data class InvitationPreview(
     val role: WardRole,
     val expiresAt: Instant,
     val linksExistingNurse: Boolean,
+    /** Same ward names are allowed across hospitals; this tells the invitee which one they join. */
+    val hospitalName: String?,
 )

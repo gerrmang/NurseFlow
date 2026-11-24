@@ -21,6 +21,8 @@ class SecurityConfig(private val mapper: JsonMapper) {
             it.requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                 .requestMatchers(HttpMethod.POST, "/api/v1/auth/kakao/session", "/api/v1/auth/session/refresh",
                     "/api/v1/auth/logout").permitAll()
+                // Web login and cookie session: guarded by WebClientRequestGuard (custom header + Origin).
+                .requestMatchers(HttpMethod.POST, "/api/v1/auth/web/**").permitAll()
                 .anyRequest().authenticated()
         }
         .exceptionHandling {
