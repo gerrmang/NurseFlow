@@ -21,6 +21,7 @@ class RosterRuleValidator {
         existingAssignments: Collection<ShiftAssignment>,
         approvedAbsences: Collection<ApprovedAbsence>,
         workPattern: WorkPattern = WorkPattern.GENERAL,
+        consecutiveWork: ConsecutiveWorkRule? = null,
     ): List<RuleViolation> {
         if (!candidate.startsAt.isBefore(candidate.endsAt)) {
             return listOf(
@@ -34,6 +35,7 @@ class RosterRuleValidator {
         }
 
         val violations = mutableListOf<RuleViolation>()
+        consecutiveWork?.validate(candidate, existingAssignments)?.let(violations::add)
         if (!workPattern.allows(candidate.kind)) {
             violations += RuleViolation("SHIFT_KIND_NOT_ALLOWED", RuleSeverity.HARD,
                 "간호사의 근무 형태에서 허용하지 않는 근무입니다.", candidate.shiftDate)
