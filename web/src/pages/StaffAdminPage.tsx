@@ -42,6 +42,7 @@ export function StaffAdminPage({ wardId }: { wardId: string }) {
     </section>}
     {data && !state.forbidden && <>
       <nav className="actions" aria-label="관리 화면">
+        <Link className="button secondary" to={`/wards/${encodeURIComponent(wardId)}/schedule-settings`}>근무 설정 · 근무 형태</Link>
         <button className={tab === 'staff' ? '' : 'secondary'} disabled={!!confirmation} aria-pressed={tab === 'staff'} onClick={() => setTab('staff')}>팀·간호사</button>
         <button className={tab === 'detail' ? '' : 'secondary'} disabled={!!confirmation} aria-pressed={tab === 'detail'} onClick={() => setTab('detail')}>간호사 상세</button>
         <button className={tab === 'members' ? '' : 'secondary'} disabled={!!confirmation} aria-pressed={tab === 'members'} onClick={() => setTab('members')}>구성원</button>

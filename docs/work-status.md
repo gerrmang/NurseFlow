@@ -1,5 +1,37 @@
 # 공유 작업 현황
 
+## B7b 승인 부재 원본 시각 보존 수정·독립 재리뷰 (2026-11-24, Codex)
+
+- 사용자 수정 요청으로 같은 공유 worktree·`feat/web-schedule-settings`, HEAD `00f086c890de19b99c10bf0e3615346bed0e4271`에서 앞선 독립 리뷰 P3를 수정했다. 기존 B7b 변경·사용자 DB/trace를 보존했고 새 브랜치/worktree는 만들지 않았다. 아래 '미수정' 절은 수정 전 시점 기록이다.
+- `AbsenceForm`은 시작/종료 입력을 각각 원래 표시값과 비교해 미변경 endpoint는 `selected.startsAt`·`selected.endsAt` 원본을 그대로 전송한다. 변경한 endpoint만 `toInstant`로 변환한다. 시간 문자열의 직접 비교를 절대 시각 비교로 바꿔 UTC 오프셋이 다른 원본도 검사하며, 같은 밀리초 안의 나노초 정밀도는 별도로 보존한다. 같은 정밀도 패턴을 검색해 승인 부재 API 유효성 검사에도 동일 비교를 적용했다. 새로 입력하거나 실제 변경한 모호한 DST 시각 차단은 유지한다.
+- 수정 전 새 화면 회귀 6개가 초/소수초 손실·DST 저장 거절·미변경 endpoint 정밀도 손실로 실패(exit 1), 나머지 14개 통과를 확인했다. 수정 후 초/소수초·서로 다른 offset·DST 두 회차·같은 현지 분의 1ns 간격·한쪽 endpoint 변경·새 DST 모호 입력 거절·역전 구간과 비교기 순서를 검증했다. 관련 3파일 39개 통과, 최종 전체 웹 **437개 통과·opt-in 4개 건너뜀·실패 0**(총 441개/25파일, 21파일 통과·4파일 건너뜀). typecheck·lint·build exit 0, JS gzip 114.55 kB, `git diff --check` 통과. 계약/생성 타입 미변경으로 기존 api:check 성공 기록을 유지한다.
+- 별도 `b7b_independent_review` 에이전트가 수정 부분을 읽기 전용 재리뷰했다. **원 P3 해결, 새 P1~P5 발견 없음**. 수정 회귀 10개를 독립 실행해 통과·실패 0(exit 0), 필터로 나머지 15개는 선택 제외했음을 구분한다. 전체 검사 성공은 부모 실행 결과다. 이 재리뷰는 GitHub 승인 리뷰나 CI 성공을 뜻하지 않는다.
+- 재리뷰 코드 기준은 위 HEAD의 미커밋 수정 5파일(`web/src/pages/ScheduleSettingsPage.tsx`·같은 이름 test, `web/src/schedule/timeZone.ts`·같은 이름 test, `web/src/api/scheduleSettingsApi.ts`)이다. 5파일 경로 정렬 후 각 줄 `path SHA256`의 LF join UTF-8 manifest SHA256은 `4b6bbab99f355102a80c52efeba3b4fb176f3740fd7ee1c9a7fc6d1002f3d110`이다. 리뷰 뒤 제품 코드는 변경하지 않았다.
+- API·DB·서버 규칙·환경·의존성 변경 없음, backend·OpenAPI diff 0줄. 이번 작은 클라이언트 시각 보존 수정은 실제 페이지/API 직렬화 DOM 회귀로 검증해 실서버·브라우저·Kakao·Android·GitHub CI를 재실행하지 않았다. 최초 실서버 1개·브라우저 인수 기록은 수정 전 검증으로 유지한다. 웹 빌드 영향, 배포 없음. 롤백은 이번 원본 시각 보존 수정 제거 및 이전 웹 빌드 복원이다.
+- 공유 인계: 같은 task branch의 미커밋 코드·검사·README·검증·PR 초안·이 기록을 유지한다. 검증 문서는 최신 437개 결과와 수정 재리뷰 완료를 반영했다. 커밋·푸시·PR 게시·병합·배포 없음. 사용자 DB·trace는 보존·커밋 제외한다. 다음 단계는 변경 파일만 커밋·푸시한 뒤 dev 대상 PR 게시와 최종 원격 CI 확인이다.
+
+## B7b 독립 코드 리뷰 (2026-11-24, Codex 별도 리뷰 에이전트)
+
+- 사용자 요청으로 구현 에이전트와 별도인 `b7b_independent_review`가 읽기 전용 검토했다. 같은 공유 worktree·`feat/web-schedule-settings`, HEAD `00f086c890de19b99c10bf0e3615346bed0e4271`. 상태 문서 제외 tracked diff SHA256 `1571e9e58ac8f623735915c48884043aa15651f9e579fa1b9056fee59aa4c677` (`git diff HEAD -- . ':!docs/work-status.md' | Out-String` UTF-8), web 신규 13파일의 정렬 경로+SHA256 manifest `2607bbc7739e50299e641cbf114ed85a695b1817a81988987d65e1ee94725042` (각 줄 `path hash`, LF join) 기준이다. 사용자 DB·trace는 검토하지 않았다.
+- 결과: P1/P2 발견 없음, **P3·데이터/런타임 1건 미수정**. `web/src/pages/ScheduleSettingsPage.tsx:165~168`은 기존 승인 부재의 시작/종료를 `localTime`으로 분 단위 문자열로 바꾼 뒤 매번 `toInstant`로 저장한다. 서버는 Instant와 date-time 계약으로 초·소수초를 허용하므로 원본 `2026-11-05T00:00:30.250Z`가 Asia/Seoul 표시 `2026-11-05T09:00`을 거쳐 시간 미변경 저장에도 `2026-11-05T00:00:00.000Z`로 바뀐다. America/New_York의 `2026-11-01T05:30:00Z`는 표시 `2026-11-01T01:30` 뒤 DST 중복 시각으로 거절된다. 간호사/구분만 변경해도 유효한 원본 시간 경계를 보존하지 못한다.
+- 소스 변환 함수를 Node에서 직접 실행해 위 두 경우를 재현했다. 수정 방향은 시간 필드가 원래 표시값과 같으면 `selected.startsAt`·`selected.endsAt` 원본을 보내고, 시간 필드 변경 시에만 변환하는 것이다. 초/소수초·DST 반복 구간에서 다른 필드만 바꾸는 회귀 검사가 필요하다. 실행 오류인 P3이므로 병합 전 수정·수정 부분 재리뷰 대상으로 남긴다. 앞선 PR 게시 준비 판정은 이 결함 확인 전의 자체 점검 기록이다.
+- 검증: 독립 리뷰 중 B7b 신규 4파일 43개 검사 통과·실패/건너뜀 0, exit 0. `git diff --check` 통과. A8/A9/A10·부재 서버 계약/구현, 세션/권한 경계·ETag·수요 전체 교체·응답 유실 처리와 테스트를 대조했다. 전체 회귀·실서버·브라우저·실제 Kakao·GitHub CI는 이번 리뷰에서 재실행하지 않았다. 별도 에이전트의 코드 리뷰이며 GitHub 승인 리뷰나 CI 통과를 뜻하지 않는다.
+- 인계: 같은 공유 브랜치의 제품 코드·테스트를 그대로 보존하고 부모가 이 리뷰 기록만 추가했다. 수정·커밋·푸시·PR 게시·병합·배포 없음. 다음 작업은 위 P3 수정과 회귀 검증 후 재리뷰다. API·DB·배포 영향 없음.
+
+## B7b 웹 근무 설정 구현·실연동 검증 (2026-11-24, Codex)
+
+- PR 게시 준비 재확인: 같은 HEAD `00f086c`·미커밋 변경에서 구현/API/상태 관리/화면 진입과 검증·PR 초안을 재대조했다. 기존 검사 이후 제품 코드 변경 없음. 기록된 웹 427개·실서버 1개 통과와 브라우저 인수, API/DB 미변경 근거로 리뷰 요청용 일반 PR 게시 가능 수준으로 판단한다. 구현자 자체 재점검이며 독립 리뷰·최종 원격 CI·병합 승인을 대신하지 않는다. 이번에는 검사를 반복하거나 커밋·푸시·PR 게시를 하지 않았다. 사용자 DB·trace 제외와 같은 task branch 인계를 유지한다.
+
+- 사용자 승인 계획을 구현했다. Git 흐름·breakdown 소유 경로·진행/인계를 확인하고 `git fetch origin` 후 최신 `origin/dev` `00f086c` 기반 `feat/web-schedule-settings`를 같은 공유 worktree에서 만들었다. B6 `chore/demo-seed-script`는 보존했고 별도 worktree는 만들지 않았다. 시작 시 tracked 변경 없음, 기존 미추적 `nurseflow.mv.db`·`nurseflow.trace.db` 보존.
+- 소유 범위 `web/**`에 관리자 근무 설정 네 메뉴를 추가했다. D/E/N 시간·자정 경과·휴게·인정·환산 생성/수정·영향 preview·비활성화·재활성화, 간호사 일반/D·E/N 전담 조회·저장, 월별 초안 명시 생성·팀 수요 전체 교체·선임 칸/미충원 표시, 승인 VY·반차 등록·수정·삭제를 실제 API로 연결했다. 기존 OTHER는 조회·비활성화만 제공한다. 내 병동·팀 관리에서 진입한다.
+- 정책/초안 ETag·쓰기를 직렬 처리하고 저장 후 최신 서버 값을 재조회한다. 부재 조회 전후 초안 ETag가 다르면 혼합 snapshot 편집을 막는다. 412·기존 배치·입력 오류 안내, 응답 유실/5xx/성공 JSON 오류의 재전송 차단·최신 결과 확인, 권한/세션 상실 데이터 폐기·늦은 응답 무시를 적용했다. 근무 형태 조회 실패는 GENERAL로 추정하지 않고, 저장 후 선택한 간호사의 값을 다시 읽는다.
+- 수요 조회 API에 기존 필요 자격이 없어 기존 칸은 읽기 전용으로 표시하고, 모든 날짜·팀·근무·필요 자격을 새 목록으로 작성해 전체 교체함을 체크·확인한다. 배치가 남아 있으면 교체를 막는다. 사유를 수집하지 않고 승인 부재 시각은 초안 병동 시간대로 변환한다. 희망 오프·휴일/월 목표·Night 순환·배치 해제/자동배치/확정은 후속 범위다.
+- 최종 Windows `web/` api:check·typecheck·lint·build exit 0. 전체 Vitest **427개 통과·opt-in 4개 건너뜀·실패 0**(21파일 통과·4파일 건너뜀, 총 431개/25파일). B7b 신규 기본 검사 43개. JS gzip 114.44 kB. `git diff --check` 통과. 중간 타입/린트·Headers 기대값·StrictMode Response 대역 재사용 실패는 정정 후 통과했으며 상세는 `web/B7b-verification.md`에 적었다.
+- JDK 21 backend `bootJar --offline --no-daemon` BUILD SUCCESSFUL, 4개 작업 UP-TO-DATE. 가상 OIDC + 실제 Spring + 별도 메모리 H2에서 B7b opt-in 인수 **1개 통과·실패/건너뜀 0**: 유형 CRUD·자정 경과, 팀 2칸/선임 1칸·미충원, 초안 시각/revision/재검증 갱신, 부재 CRUD·VY, 근무 형태, 새 Store 복원, 412·성공 응답 유실 재전송 차단, 간호사 관리자 API 403. 실제 Kakao 검증과 구분한다.
+- 브라우저 가상 관리자 로그인 후 D 월 환산 420분 preview·저장, D/E 전담 저장, 11월 4일 A팀 D 3명·필요 자격 전체 교체, 11월 5일 09~13시 반차 저장·재조회·reload 유지 확인. 가상 데이터 스크린샷 `web/B7b-browser-verification.jpg` 보존. 이후 간호사 선택 유지 보완은 DOM 회귀로 검증했다. 실제 Kakao·실제 다중 관리자 브라우저 경합·전체 화면 크기·물리 기기·운영·독립 리뷰·CI는 미검증. backend/Android 미변경으로 전체 회귀 생략.
+- API·DB·환경변수 계약·의존성·서버 필수 규칙 변경 없음. backend·OpenAPI diff 0줄. 웹 정적 빌드 영향, 데이터 이전·수동 배포 없음. 롤백은 B7b 웹 변경 revert와 이전 웹 빌드 복원. 검증용 Java·가상 공급자·Vite 종료와 18090/18091/5174 포트 해제를 확인했다.
+- 공유 인계: `C:\Users\jjang\IdeaProjects\NurseFlow`, `feat/web-schedule-settings`, 기준 HEAD `00f086c`의 미커밋 변경으로 유지한다. `web/B7b-verification.md`·`web/B7b-pr-draft.md`에 검증/생략/배포/롤백을 기록했다. 자체 diff·호출 경로 점검 완료, 다음은 B7b 전체 변경 독립 리뷰다. 커밋·푸시·PR 게시·병합·배포 없음. 사용자 DB·trace는 커밋 대상에서 제외한다.
+
 ## A9 PR #53 최신 dev 반영 (2026-11-23, Codex)
 
 - A10 스쿼시 병합 커밋 `d072565`를 `codex/team-demand-senior`에 반영했다. 서비스·저장소·DB 스키마·통합 테스트·작업 현황의 충돌을 해결했고 후보·수동·자동·확정에서 팀·선임과 근무 형태 제한이 함께 적용된다. OpenAPI 계약을 병합하고 웹 타입을 재생성했다.
