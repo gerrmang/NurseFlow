@@ -7,7 +7,7 @@ import { ADMIN, MEMBER, NURSE_A, NURSE_B, POLICY, TEAM_A, TEAM_B, WARD_1 } from 
 
 function open(roles: ('WARD_ADMIN' | 'WARD_MEMBER')[] = ['WARD_ADMIN']) {
   const app = setupApp(`/wards/${WARD_1.wardId}/staff`, { configure: ({ server, backend }) => { server.signInAs(USER_A); backend.addMember(WARD_1.wardId, USER_A.userId, roles) } })
-  const data = { staff: structuredClone([NURSE_A, NURSE_B]), teams: [TEAM_A, TEAM_B], members: [ADMIN, MEMBER] }
+  const data = { staff: structuredClone([NURSE_A, NURSE_B]), teams: [TEAM_A, TEAM_B], members: [ADMIN, MEMBER], demoMode: false, eligibilityFails: false }
   const writes = vi.fn().mockImplementation(async () => json(200, NURSE_A))
   const base = app.backend.fetch
   vi.spyOn(app.backend, 'fetch').mockImplementation(async (url, init) => {
@@ -18,6 +18,7 @@ function open(roles: ('WARD_ADMIN' | 'WARD_MEMBER')[] = ['WARD_ADMIN']) {
       if (path === '/staff?includeInactive=true') return json(200, { items: data.staff })
       if (path === '/members') return json(200, { items: data.members })
       if (path === '/career-policy') return json(200, POLICY)
+      if (path === '/roster-eligibility') return data.eligibilityFails ? json(503, { code: 'UNAVAILABLE' }) : json(200, { demoMode: data.demoMode, policyRevision: 0, items: [] })
       if (path.endsWith('/adjustments')) return json(200, { items: [{ adjustmentId: 'fictional-change', kind: 'STAGE_OVERRIDE', before: '2', after: '4', actorName: '가상 관리자', actorUserId: USER_A.userId, at: '2026-11-16T03:00:00Z' }] })
     }
     return base(url, init)
@@ -25,6 +26,39 @@ function open(roles: ('WARD_ADMIN' | 'WARD_MEMBER')[] = ['WARD_ADMIN']) {
   return { ...app, user: userEvent.setup(), writes, data }
 }
 const body = (app: ReturnType<typeof open>, index = 0) => JSON.parse(app.writes.mock.calls[index]![1].body)
+it('labels server demo mode and replaces it after a successful refresh', async () => {
+  const app = open()
+  app.data.demoMode = true
+  expect(await screen.findByText(/시연 모드 · 계정이 연결되지 않은/)).toBeInTheDocument()
+  app.data.demoMode = false
+  await app.user.click(screen.getByRole('button', { name: '최신 목록 불러오기' }))
+  expect(await screen.findByText(/일반 모드 · 초대를 수락한/)).toBeInTheDocument()
+  expect(screen.queryByText(/시연 모드 · 계정이 연결되지 않은/)).not.toBeInTheDocument()
+})
+it('does not label a failed mode refresh as normal mode', async () => {
+  const app = open()
+  app.data.demoMode = true
+  await screen.findByText(/시연 모드 · 계정이 연결되지 않은/)
+  app.data.eligibilityFails = true
+  await app.user.click(screen.getByRole('button', { name: '최신 목록 불러오기' }))
+  await screen.findByText(/시연 모드 확인 불가/)
+  expect(screen.queryByText(/일반 모드 · 초대를 수락한/)).not.toBeInTheDocument()
+  await app.user.type(screen.getByLabelText('새 팀 이름'), '가상 C팀')
+  expect(screen.getByRole('button', { name: '팀 추가' })).toBeEnabled()
+  expect(screen.getByRole('button', { name: NURSE_A.displayName })).toBeInTheDocument()
+  app.data.eligibilityFails = false
+  await app.user.click(screen.getByRole('button', { name: '최신 목록 불러오기' }))
+  expect(await screen.findByText(/시연 모드 · 계정이 연결되지 않은/)).toBeInTheDocument()
+})
+it('keeps management available when only mode lookup fails on entry', async () => {
+  const app = open()
+  app.data.eligibilityFails = true
+  await screen.findByText(/시연 모드 확인 불가/)
+  expect(screen.getByRole('button', { name: NURSE_A.displayName })).toBeInTheDocument()
+  expect(screen.queryByText(/일반 모드 · 초대를 수락한/)).not.toBeInTheDocument()
+  await app.user.type(screen.getByLabelText('새 팀 이름'), '가상 C팀')
+  expect(screen.getByRole('button', { name: '팀 추가' })).toBeEnabled()
+})
 async function detail(app: ReturnType<typeof open>) { await app.user.click(await screen.findByRole('button', { name: NURSE_A.displayName })) }
 
 it('rejects direct management navigation for a member without loading staff lists', async () => {
