@@ -884,9 +884,10 @@ export interface paths {
          * 희망 오프 제출(본인) 또는 대리 입력(관리자)
          * @description 간호사는 `nurseId`를 생략하거나 본인 기록을 보낸다. 관리자는 대상 간호사의 `nurseId`가 필요하며 입력 주체는 `source`로 기록한다.
          *     제출 직후 상태는 SUBMITTED이고 선호로만 쓰인다. 관리자가 확정해야 배치 금지(CONFIRMED_OFF_REQUEST)가 된다.
-         *     간호사 본인 제출만 병동의 월 한도(SUBMITTED·CONFIRMED 합계, 입력 주체 무관)를 넘을 수 없다. 관리자 입력은 한도를 받지 않는다.
+         *     간호사 본인 제출만 병동의 월 한도(간호사 본인이 입력한 SUBMITTED·CONFIRMED 합계)를 넘을 수 없다. 관리자 입력은 한도를 받지 않고 개수에도 들어가지 않는다.
+         *     간호사는 병동 현지 날짜 기준 지난 날짜를 선택할 수 없다(400).
          *     마감(대상 월 전달의 설정일이 끝나는 병동 현지 자정) 이후의 제출은 `afterDeadline: true` 예외 요청으로 저장되며,
-         *     관리자가 확정해야 효력이 생긴다.
+         *     관리자가 확정해야 효력이 생긴다. 그 전에는 자동배치 선호에도 반영하지 않는다. 관리자의 마감 뒤 입력은 예외 접수로 보고 선호에 반영한다.
          */
         post: operations["submitOffRequest"];
         delete?: never;
@@ -1957,7 +1958,7 @@ export interface components {
              * @description 연속근무 상한 위반은 CONSECUTIVE_WORK_LIMIT, 명시 휴식일 배치는 REST_DAY_ASSIGNMENT_CONFLICT,
              *     명시 휴식일과 승인 연차의 겹침은 REST_DAY_CONFLICT이며 모두 HARD이다.
              *     관리자가 확정한 희망 오프 날짜의 배치는 CONFIRMED_OFF_REQUEST(HARD)이다.
-             *     자동배치가 미확정 희망 오프를 지키지 못한 날짜는 OFF_REQUEST_NOT_HONORED(SOFT)로 알린다.
+             *     자동배치가 직접 배정하면서 미확정 희망 오프를 지키지 못한 날짜는 날짜별 건수와 함께 OFF_REQUEST_NOT_HONORED(SOFT)로 알린다. 고정 배치는 제외한다.
              */
             code: string;
             /** @enum {string} */

@@ -465,7 +465,7 @@ class RosterService(
         val diagnostics = finalSlots.filter { it.nurseId == null }.map {
             if (it.seniorRequired) RuleDiagnostic("SENIOR_UNFILLED", "SOFT", "선임 필수 칸이 비어 있습니다.", it.date)
             else RuleDiagnostic("UNFILLED_SLOT", "SOFT", "현재 배치 순서와 필수 규칙으로 채우지 못한 칸입니다.", it.date)
-        }.distinctBy { it.code to it.affectedDate } + unmetOffRequests(finalSlots, finalContext) + if (timedOut) {
+        }.distinctBy { it.code to it.affectedDate } + unmetOffRequests(selected, finalSlots, finalContext) + if (timedOut) {
             listOf(RuleDiagnostic("TIME_LIMIT_REACHED", "SOFT", "제한 시간에 도달해 남은 칸은 검토가 필요합니다."))
         } else {
             emptyList()
@@ -560,7 +560,7 @@ class RosterService(
         val restConflicts = restLeaveConflicts(rests, ownAbsences + adjacentAbsences, roster.zone) +
             restLeaveConflicts(adjacentRests, ownAbsences, roster.zone)
         val confirmedOffs = ConfirmedOffRequestRule(repo.offRequestDays(roster.wardId, month, "CONFIRMED"))
-        val requestedOffs = repo.offRequestDays(roster.wardId, month, "SUBMITTED").toSet()
+        val requestedOffs = repo.offRequestDays(roster.wardId, month, "SUBMITTED", onTimeOnly = true).toSet()
         return ValidationContext(existing, approved, consecutiveWork, restConflicts, confirmedOffs, requestedOffs)
     }
 
@@ -624,11 +624,19 @@ class RosterService(
         return context.restConflicts + listOfNotNull(bridge?.let(RuleDiagnostic::from))
     }
 
-    /** One SOFT diagnostic per date where a submitted off request could not be kept (preference, A12). */
-    private fun unmetOffRequests(slots: List<DbSlot>, context: ValidationContext): List<RuleDiagnostic> =
-        slots.filter { slot -> slot.nurseId?.let { it to slot.date } in context.requestedOffs }
-            .map { RuleDiagnostic("OFF_REQUEST_NOT_HONORED", "SOFT", "필요 인원과 필수 규칙 때문에 희망 오프를 반영하지 못했습니다.", it.date) }
-            .distinctBy { it.affectedDate }
+    /**
+     * One SOFT diagnostic per date where generation itself assigned nurses against their submitted off requests
+     * (preference, A12), with how many. Preserved locked assignments were the admin's choice, not generation's.
+     */
+    private fun unmetOffRequests(selected: Map<UUID, UUID>, slots: List<DbSlot>, context: ValidationContext): List<RuleDiagnostic> {
+        val dates = slots.associate { it.id to it.date }
+        return selected.mapNotNull { (slotId, nurseId) -> dates[slotId]?.let { nurseId to it } }
+            .filter { it in context.requestedOffs }.distinct()
+            .groupingBy { it.second }.eachCount().toSortedMap()
+            .map { (date, count) ->
+                RuleDiagnostic("OFF_REQUEST_NOT_HONORED", "SOFT", "필요 인원과 필수 규칙 때문에 희망 오프 ${count}건을 반영하지 못했습니다.", date)
+            }
+    }
 
     private fun view(roster: DbRoster): RosterView {
         val all = repo.slots(roster.id)

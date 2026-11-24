@@ -26,8 +26,9 @@ data class OffRequestPolicySnapshot(val policy: OffRequestPolicy, val policyRevi
  * Preferred days off (A12). A nurse submits their own; a ward admin may enter one for any rosterable nurse of the
  * ward and is the only one who confirms or rejects. Before the month's deadline a nurse may submit (within the
  * monthly limit) and withdraw an undecided request. After it, a nurse can no longer withdraw; a new submission is
- * kept as an exception request marked `afterDeadline` that only takes effect once an admin confirms it. Admin
- * entries are not limited by the deadline or the monthly limit.
+ * kept as an exception request marked `afterDeadline` that only takes effect once an admin confirms it. A nurse
+ * cannot pick a past date. Admin entries are not limited by the deadline or the monthly limit and do not use up
+ * the nurse's monthly count.
  *
  * Every write takes the ward lock first, so status, limit and duplicate checks see committed state. Only confirming,
  * or withdrawing a confirmed request, changes hard validation, so only those mark the month's drafts for
@@ -64,7 +65,11 @@ class OffRequestService(
         val month = YearMonth.from(date)
         val policy = policy(wardId)
         val now = Instant.now()
-        if (!admin && requests.openCount(target, month) >= policy.monthlyLimit) {
+        val zone = requests.wardZone(wardId) ?: throw BusinessException(ErrorCode.WARD_NOT_FOUND)
+        if (!admin && date.isBefore(LocalDate.now(zone))) {
+            throw BusinessException(ErrorCode.INVALID_REQUEST, safeDetail = "지난 날짜에는 희망 오프를 신청할 수 없습니다.")
+        }
+        if (!admin && requests.openNurseEntries(target, month) >= policy.monthlyLimit) {
             throw BusinessException(ErrorCode.OFF_REQUEST_LIMIT_REACHED, safeDetail = "희망 오프는 한 달에 ${policy.monthlyLimit}일까지 신청할 수 있습니다.")
         }
         val request = OffRequest(

@@ -51,10 +51,10 @@
 | 특수 근무 코드·반차 구간 정책 | 없음 | 미구현 | 관리자 정의 코드, 반차 배치 불가 구간·환산시간 | 후속 정책 PR (초기 범위는 결정 필요) |
 | 승인 VY·반차 등록 | `RosterController` `/rosters/{id}/absences`, `approved_absences`(APPROVED_LEAVE / APPROVED_HALF_DAY, 시간 구간), `RosterRuleValidator`의 겹침 판정 | 일부 구현 | 구간 겹침 금지는 동작. VY라는 코드 이름·환산시간·반차 표준 구간이 없다. 같은 달 새 초안에 공개본의 부재를 복사함 | 시간 환산과 VY 상태(연속근무 계산에서 별도 처리) 연결 |
 | 필요 인원 입력 | `PUT /rosters/{id}/requirements`(날짜·근무 유형·인원·자격) → `roster_slots` | 일부 구현 | **팀 단위가 아니다.** 선임 필요 칸 개념 없음 | 팀별 수요와 팀·근무별 선임 1명 칸 추가 |
-| 필수 규칙 검증기 | `roster/domain/rule/RosterRuleValidator`: 구간 오류, 휴가·반차 겹침, 동시간 중복, Night→다음 날 Day, Evening→다음 날 Day. `RosterService.candidateViolations`: 비활성, 자격 부족. 인접 월 공개 근무 포함 | 일부 구현 | 연속근무 5일, 허용 근무 유형, 확정 희망 오프, 팀 간 지원 허용, 선임 자격 칸이 없다 | 규칙별 PR로 같은 검증기에 추가 (후보·수동·자동·확정 공통) |
+| 필수 규칙 검증기 | `roster/domain/rule/RosterRuleValidator`: 구간 오류, 휴가·반차 겹침, 동시간 중복, Night→다음 날 Day, Evening→다음 날 Day. `RosterService.candidateViolations`: 비활성, 자격 부족. 인접 월 공개 근무 포함 | 일부 구현 | 연속근무 5일, 허용 근무 유형, 팀 간 지원 허용, 선임 자격 칸이 없다. 확정 희망 오프(`CONFIRMED_OFF_REQUEST`)는 A12에서 추가했다 | 규칙별 PR로 같은 검증기에 추가 (후보·수동·자동·확정 공통) |
 | 근무 형태(일반/DE 전담/N 전담) | 없음 | 미구현 | | 신규 |
 | 연속근무 최대 5일 | 없음 | 미구현 | 월 경계 포함, `OF`/`SOF`만 초기화, `VY`는 근무일도 초기화일도 아님 | 신규 규칙 |
-| 희망 오프(제출·확정·반려·마감·예외) | 없음 | 미구현 | | 신규 |
+| 희망 오프(제출·확정·반려·마감·예외) | `offrequest/**`, `off_requests` 테이블, 병동 한도·마감일 정책, `CONFIRMED_OFF_REQUEST` 규칙, 자동배치 선호·`OFF_REQUEST_NOT_HONORED` 진단 (A12) | 구현 | 주말 목표·희망 오프 최적화(A19), 화면(B8) | A19, B8 |
 | 휴일 달력·월 목표시간·개인별 시간 | 없음 | 미구현 | | 신규 |
 | SOF·Night 전담 순환 | 없음 | 미구현 | | 신규 (결정 사항 많음) |
 | 팀 간 지원근무 허용 | 없음 | 미구현 | | 신규 |

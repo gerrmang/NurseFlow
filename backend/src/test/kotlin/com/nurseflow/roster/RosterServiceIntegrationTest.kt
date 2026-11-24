@@ -569,6 +569,16 @@ class RosterServiceIntegrationTest @Autowired constructor(
         // Whichever nurse the default order would pick first is the one with the request.
         val first = listOf(nurseId, other).minBy { it.toString() }
         val second = listOf(nurseId, other).single { it != first }
+        // A nurse's own exception request after the deadline is not a preference until an admin confirms it.
+        jdbc.update("""INSERT INTO off_requests(request_id,ward_id,nurse_id,off_date,status,source,submitted_by,submitted_at,after_deadline)
+            VALUES(?,?,?,?,'SUBMITTED','NURSE','test-nurse',?,TRUE)""", UUID.randomUUID(), wardId, first, date, Instant.now().toString())
+        val late = newRoster("2026-11", date, dayTypeId)
+        waitForGeneration(generation.start(late.rosterId, tag(late), UUID.randomUUID(), StartGenerationRequest(false), admin))
+        assertEquals(first, service.getRoster(late.rosterId, admin).slots.single().assignment?.nurseId)
+        jdbc.update("DELETE FROM off_requests")
+        jdbc.update("DELETE FROM generation_jobs WHERE roster_id=?", late.rosterId)
+        jdbc.update("DELETE FROM roster_slots WHERE roster_id=?", late.rosterId)
+        jdbc.update("DELETE FROM rosters WHERE roster_id=?", late.rosterId)
         offRequests.submit(wardId, first, date, admin)
 
         val single = newRoster("2026-11", date, dayTypeId)
@@ -587,7 +597,7 @@ class RosterServiceIntegrationTest @Autowired constructor(
         val twoSlots = service.getRoster(both.rosterId, admin)
         val unmet = waitForGeneration(generation.start(twoSlots.rosterId, tag(twoSlots), UUID.randomUUID(), StartGenerationRequest(false), admin))
         assertEquals("COMPLETED", unmet.status)
-        assertTrue(unmet.diagnostics.any { it.code == "OFF_REQUEST_NOT_HONORED" && it.severity == "SOFT" && it.affectedDate == date })
+        assertEquals(1, unmet.diagnostics.count { it.code == "OFF_REQUEST_NOT_HONORED" && it.severity == "SOFT" && it.affectedDate == date })
     }
 
     private fun newRoster(month: String, date: LocalDate, shiftTypeId: UUID): RosterView =

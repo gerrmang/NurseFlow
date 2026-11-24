@@ -43,9 +43,9 @@ class OffRequestJdbcRepository(private val jdbc: JdbcTemplate) {
         Int::class.java, nurseId, Date.valueOf(date),
     ) ?: 0) > 0
 
-    /** Open (SUBMITTED or CONFIRMED) requests of the nurse in [month], whoever entered them. */
-    fun openCount(nurseId: UUID, month: YearMonth): Int = jdbc.queryForObject(
-        """SELECT COUNT(*) FROM off_requests WHERE nurse_id=?
+    /** Open (SUBMITTED or CONFIRMED) requests the nurse entered themselves in [month]; admin entries do not count. */
+    fun openNurseEntries(nurseId: UUID, month: YearMonth): Int = jdbc.queryForObject(
+        """SELECT COUNT(*) FROM off_requests WHERE nurse_id=? AND source='NURSE'
             AND status IN ('SUBMITTED','CONFIRMED') AND off_date BETWEEN ? AND ?""",
         Int::class.java, nurseId, Date.valueOf(month.atDay(1)), Date.valueOf(month.atEndOfMonth()),
     ) ?: 0

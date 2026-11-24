@@ -5,12 +5,17 @@ import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
+import java.time.LocalDate
+import java.time.YearMonth
+import java.time.ZoneId
 import java.util.UUID
 
 class OffRequestHttpTest : ApiTestBase() {
-    // Its deadline (2031-02-15, end of day in the ward zone) is still ahead; 2026-11's has passed.
+    // Its deadline (2031-02-15, end of day in the ward zone) is still ahead; the current month's has always passed.
     private val openMonth = "2031-03"
-    private val closedMonth = "2026-11"
+    private val today = LocalDate.now(ZoneId.of("Asia/Seoul"))
+    private val lateDay = YearMonth.from(today).atEndOfMonth().toString()
+    private val adminLateDay = YearMonth.from(today).atDay(1).toString()
 
     private data class Ward(val id: UUID, val adminToken: String, val nurse: UUID, val nurseToken: String)
 
@@ -48,12 +53,13 @@ class OffRequestHttpTest : ApiTestBase() {
 
         val withdrawn = http.post("${path(w)}/${first.json!!.get("requestId").asString()}/withdraw", null, w.nurseToken)
         assertEquals("WITHDRAWN", withdrawn.json!!.get("status").asString(), withdrawn.body)
-        // The withdrawn day is free again, but the admin's entry keeps the count at the limit.
-        assertEquals("OFF_REQUEST_LIMIT_REACHED", http.post(path(w), mapOf("date" to "$openMonth-02"), w.nurseToken).code)
+        // Admin entries do not use up the nurse's count, so the withdrawn day can be requested again, up to the limit.
+        assertEquals(201, http.post(path(w), mapOf("date" to "$openMonth-02"), w.nurseToken).status)
+        assertEquals("OFF_REQUEST_LIMIT_REACHED", http.post(path(w), mapOf("date" to "$openMonth-07"), w.nurseToken).code)
 
         val list = http.get("${path(w)}?month=$openMonth", w.nurseToken)
         assertEquals(200, list.status, list.body)
-        assertEquals(5, list.json!!.get("items").size())
+        assertEquals(6, list.json!!.get("items").size())
         assertEquals(4, list.json!!.get("monthlyLimit").asInt())
         assertEquals("2031-02-15T15:00:00Z", list.json!!.get("deadline").asString())
         assertEquals("private, no-store", list.header("Cache-Control"))
@@ -62,15 +68,17 @@ class OffRequestHttpTest : ApiTestBase() {
         grant(w.id, peer, "WARD_MEMBER")
         val peerNurse = insertNurse(w.id, subject = peer.toString())
         assertEquals(201, http.post(path(w), mapOf("date" to "$openMonth-09", "nurseId" to peerNurse), w.adminToken).status)
-        assertEquals(5, http.get("${path(w)}?month=$openMonth", w.nurseToken).json!!.get("items").size())
-        assertEquals(6, http.get("${path(w)}?month=$openMonth", w.adminToken).json!!.get("items").size())
+        assertEquals(6, http.get("${path(w)}?month=$openMonth", w.nurseToken).json!!.get("items").size())
+        assertEquals(7, http.get("${path(w)}?month=$openMonth", w.adminToken).json!!.get("items").size())
         assertEquals("INVALID_MONTH", http.get("${path(w)}?month=2031-3", w.adminToken).code)
     }
 
     @Test
     fun `after the deadline a nurse leaves an exception request and only the admin can decide it`() {
         val w = ward()
-        val late = http.post(path(w), mapOf("date" to "$closedMonth-20"), w.nurseToken)
+        val past = http.post(path(w), mapOf("date" to today.minusDays(1).toString()), w.nurseToken)
+        assertEquals(400, past.status, past.body)
+        val late = http.post(path(w), mapOf("date" to lateDay), w.nurseToken)
         assertEquals(201, late.status, late.body)
         assertTrue(late.json!!.get("afterDeadline").asBoolean())
         val id = late.json!!.get("requestId").asString()
@@ -83,17 +91,17 @@ class OffRequestHttpTest : ApiTestBase() {
         assertTrue(confirmed.json!!.has("decidedAt"))
         assertEquals("OFF_REQUEST_STATE_CONFLICT", http.post("${path(w)}/$id/reject", null, w.adminToken).code)
         assertEquals("OFF_REQUEST_STATE_CONFLICT", http.post("${path(w)}/$id/confirm", null, w.adminToken).code)
-        assertEquals("OFF_REQUEST_DUPLICATE", http.post(path(w), mapOf("date" to "$closedMonth-20", "nurseId" to w.nurse), w.adminToken).code)
+        assertEquals("OFF_REQUEST_DUPLICATE", http.post(path(w), mapOf("date" to lateDay, "nurseId" to w.nurse), w.adminToken).code)
         assertEquals("WITHDRAWN", http.post("${path(w)}/$id/withdraw", null, w.adminToken).json!!.get("status").asString())
         assertEquals("OFF_REQUEST_STATE_CONFLICT", http.post("${path(w)}/$id/withdraw", null, w.adminToken).code)
 
-        val adminEntry = http.post(path(w), mapOf("date" to "$closedMonth-21", "nurseId" to w.nurse), w.adminToken)
+        val adminEntry = http.post(path(w), mapOf("date" to adminLateDay, "nurseId" to w.nurse), w.adminToken)
         assertEquals("ADMIN", adminEntry.json!!.get("source").asString())
         assertTrue(adminEntry.json!!.get("afterDeadline").asBoolean())
         val rejected = http.post("${path(w)}/${adminEntry.json!!.get("requestId").asString()}/reject", null, w.adminToken)
         assertEquals("REJECTED", rejected.json!!.get("status").asString())
         // A rejected day is no longer held, so it can be requested again.
-        assertEquals(201, http.post(path(w), mapOf("date" to "$closedMonth-21", "nurseId" to w.nurse), w.adminToken).status)
+        assertEquals(201, http.post(path(w), mapOf("date" to adminLateDay, "nurseId" to w.nurse), w.adminToken).status)
     }
 
     @Test
