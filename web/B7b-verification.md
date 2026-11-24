@@ -1,6 +1,7 @@
 # B7b 웹 관리자 근무 설정 검증
 
 - 게시: [PR #59](https://github.com/gerrmang/NurseFlow/pull/59), 대상 `dev`, 일반 PR. 구현·통합 head `deeb6bb`, 원격 SHA 일치 확인. GitHub Verify와 최종 게시 기록은 `docs/work-status.md` 최신 절을 확인한다. 아래 '게시 없음' 표현은 당시 시점 기록이다.
+- 원격 검증: 문서 head `1739798`의 [Verify 45406333985](https://github.com/gerrmang/NurseFlow/actions/runs/45406333985)에서 Backend tests·Android debug build·Web checks·Demo seed checks 모두 success. 이전 구현 head에서는 기존 Android 테스트 1건이 실패했고 동일 Android 소스의 최신 실행은 통과했다. 정확한 검사명과 제한은 공유 현황에 기록했다. GitHub 승인 리뷰는 별도다.
 
 ## 최신 dev 통합 검증 (2026-11-24 22:40 KST)
 

@@ -2,6 +2,9 @@
 
 ## B7b PR #59 게시 확인 (2026-11-24, Codex)
 
+- CI 후속 확인: 게시 기록 head `17397988a6632ad25e1b09dd32d5a5aa92e3408a`의 [Verify 45406333985](https://github.com/gerrmang/NurseFlow/actions/runs/45406333985)는 completed/success, Backend tests·Android debug build·Web checks·Demo seed checks 모두 success를 gh로 확인했다. PR의 Vercel·Preview Comments도 pass다. 최신 원격 dev는 여전히 `74886b6`이고 HEAD 조상 포함·원격 기능 head 일치를 확인했다. GitHub는 MERGEABLE·REVIEW_REQUIRED/BLOCKED를 유지한다.
+- 이전 구현 head Verify `45406128424`는 Android의 기존 `StaffAdminViewModelTest.modeHttpErrorsRetainAccessChecksWithResponseWrapper` assertion 1건 실패(197개 중 1실패·1건너뜀), 나머지 작업 성공이었다. 두 head의 차이는 문서뿐이며 Android 소스는 동일하고 최신 실행은 통과했다. 간헐적 실패 관찰로 기록하며 원인을 확정하거나 Android 코드를 이번 웹 PR에서 변경하지 않았다. 이 CI 결과 기록만 추가로 커밋·푸시하며 해당 최종 문서 head의 검사 상태도 확인한다.
+
 - 최신 dev `74886b6c9831982acebc80b02f0805b39cf6347b`를 통합한 `deeb6bb6bd740b9e29f279c2e1dde4cfd537e9cc`를 `origin/feat/web-schedule-settings`에 푸시하고 로컬·원격 head 일치를 확인했다. [PR #59](https://github.com/gerrmang/NurseFlow/pull/59)를 `dev` 대상 일반 PR로 게시했으며 OPEN·isDraft=false·MERGEABLE을 확인했다. GitHub는 REVIEW_REQUIRED/BLOCKED이므로 독립 GitHub 승인이나 즉시 병합 가능 상태로 표현하지 않는다.
 - GitHub 연결 도구의 PR 생성이 integration 권한 403으로 실패해 기존 인증된 gh의 `--body-file web/B7b-pr-draft.md`로 게시했다. 승인 리뷰 요청·댓글·병합·자동 병합·수동 배포는 하지 않았다. 기존 Vercel 자동 Preview는 성공으로 표시됐으며 별도 수동 배포를 수행한 것은 아니다.
 - 게시 head의 [Verify 45406128424](https://github.com/gerrmang/NurseFlow/actions/runs/45406128424)는 조회 시 in_progress, Backend tests·Android debug build·Web checks·Demo seed checks가 시작됐다. 이 시점 기록을 CI 통과로 해석하지 않는다. 게시 기록 문서 커밋 이후 최종 head의 검사 상태도 별도로 확인한다.

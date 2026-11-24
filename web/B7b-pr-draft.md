@@ -15,6 +15,7 @@
 - 최신 dev 통합 후 `web/`: `npm run api:check`·`npm run typecheck`·`npm run lint`·`npm run build` exit 0. `npm test -- --run`: 447개 통과·opt-in 4개 건너뜀·실패 0. JS gzip 114.84 kB, `git diff --cached --check` 통과.
 - 독립 리뷰 P3(기존 승인 부재의 시간 미변경 저장에서 정밀도 손실/DST 거절)를 수정했다. 수정 전 새 회귀 6건 실패 확인, 수정 후 초/소수초·오프셋·DST 양 회차·나노초 구간·한쪽 끝만 수정하는 DOM/API 회귀 통과. 별도 에이전트 수정 재리뷰에서 원 P3 해결·새 P1~P5 발견 없음, 수정 회귀 독립 실행 10개 통과(필터 15개 선택 제외). GitHub 승인 리뷰와 구분한다.
 - 최신 dev JAR로 `NURSEFLOW_B7B_E2E=1`의 실제 서버 인수 검사 1개 통과·실패/건너뜀 0. JDK 21 backend `test bootJar --offline --no-daemon` BUILD SUCCESSFUL, XML 총 288개 중 283개 통과·opt-in 5개 건너뜀·실패/오류 0. 상세는 `web/B7b-verification.md` 참조.
+- 문서 head `1739798`의 [Verify 45406333985](https://github.com/gerrmang/NurseFlow/actions/runs/45406333985)에서 Backend tests·Android debug build·Web checks·Demo seed checks 모두 success. 이후 CI 결과 기록만 바꾼 문서 head도 확인한다.
 - 가상 OIDC + 실제 Spring + 별도 메모리 H2 인수 검사와 브라우저 저장·재조회·reload 확인. 실제 Kakao 인증과 구분한다.
 - 미실행: 실제 Kakao·실제 두 관리자 브라우저 경합·전체 화면 크기·물리 기기·운영. Android 자체 추가 변경이 없어 로컬 전체 검사는 생략하며 PR CI로 확인한다. 최초 독립 리뷰와 P3 수정 부분 재리뷰 완료. 브라우저 검사는 최초 구현 시점이며 최신 dev 통합 후 실제 서버·DOM/API 회귀를 다시 확인했다. 최종 원격 CI는 PR 게시 후 확인한다.
 
@@ -36,6 +37,7 @@
 ## 남은 위험과 후속 작업
 
 - 근무 형태는 마지막 저장 우선이며 수요는 전체 교체다. 기존 배치가 있는 초안은 B10b 배치 편집에서 먼저 해제해야 한다.
+- 이전 CI는 기존 Android `modeHttpErrorsRetainAccessChecksWithResponseWrapper` assertion 1건이 실패했으나 동일 Android 소스의 최신 실행은 통과했다. 간헐적 실패 관찰로 남기며 원인 미확정·이 PR에서 Android 추가 변경 없음.
 - 희망 오프·휴일/목표시간 정책·Night 순환·자동배치/확정 화면은 후속이다. 실서버 검사와 브라우저 확인의 상세 범위는 검증 기록 참조.
 - 문서 충돌은 B7b와 dev의 기록을 모두 보존해 해결했다. 공유 브랜치에 커밋·푸시하고 [PR #59](https://github.com/gerrmang/NurseFlow/pull/59)를 dev 대상 일반 PR로 게시했다. 최종 원격 CI와 게시 결과는 공유 현황에 기록한다. 병합·자동 병합·수동 배포는 하지 않았다.
 
