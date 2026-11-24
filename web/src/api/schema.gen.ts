@@ -1015,7 +1015,9 @@ export interface paths {
          *     근무 유형 목록이다. 근무 유형 목록이 비어 있으면 그 기간의 모든 근무 유형을 허용한다. 날짜는 근무 칸의 근무일이며
          *     자정을 넘는 Night는 시작한 날로 본다. 허용은 팀 조건만 완화하고 휴가·반차·휴식·중복·연속근무 등 다른 필수 규칙은 그대로 적용한다.
          *     허용된 지원 배치는 실제 배치 팀의 충원에 계산된다. 허용 범위만 넓히므로 기존 초안의 revision은 바꾸지 않는다.
-         *     같은 간호사·배치 팀·기간·근무 유형의 활성 기록이 이미 있으면 새로 만들지 않고 그 기록을 200으로 반환한다(재시도 안전).
+         *     같은 `Idempotency-Key`로 재시도하면(응답 유실 등) 처음 요청의 결과를 같은 상태 코드로 돌려주되 기록은 현재 상태로 보여준다.
+         *     그 사이 철회됐다면 REVOKED로 보이며 다시 허용하지 않는다. 같은 범위를 다시 허용하려면 새 키로 요청한다.
+         *     새 키로 같은 간호사·배치 팀·기간·근무 유형의 활성 기록을 다시 요청하면 새로 만들지 않고 그 기록을 200으로 반환한다.
          */
         post: operations["createSupportAllowance"];
         delete?: never;
@@ -4745,7 +4747,10 @@ export interface operations {
     createSupportAllowance: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Unique UUID per logical mutation; retrying the same key must not duplicate the operation. */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
             path: {
                 wardId: components["parameters"]["WardId"];
             };
@@ -4777,7 +4782,7 @@ export interface operations {
             };
             /**
              * @description INVALID_SUPPORT_ALLOWANCE(종료일이 시작일보다 앞섬, 366일 초과, 배치 팀이 소속 팀과 같음),
-             *     SHIFT_TYPE_NOT_FOUND(병동의 활성 근무 유형이 아님), INVALID_REQUEST(필수값 누락, 근무 유형 20개 초과).
+             *     SHIFT_TYPE_NOT_FOUND(병동의 활성 근무 유형이 아님), INVALID_REQUEST(필수값·Idempotency-Key 누락, 근무 유형 20개 초과, null 원소).
              */
             400: {
                 headers: {
@@ -4791,6 +4796,15 @@ export interface operations {
             403: components["responses"]["Forbidden"];
             /** @description WARD_NOT_FOUND, NURSE_NOT_FOUND, TEAM_NOT_FOUND(병동의 활성 팀이 아님) */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description IDEMPOTENCY_KEY_REUSED(같은 키를 다른 요청에 사용) */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };

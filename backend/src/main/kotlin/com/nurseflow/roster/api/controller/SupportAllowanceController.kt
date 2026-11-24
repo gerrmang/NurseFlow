@@ -15,6 +15,7 @@ import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestBody
+import org.springframework.web.bind.annotation.RequestHeader
 import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RequestParam
 import org.springframework.web.bind.annotation.RestController
@@ -36,11 +37,12 @@ class SupportAllowanceController(private val service: SupportAllowanceService) {
     fun create(
         @PathVariable wardId: UUID,
         @Valid @RequestBody request: CreateSupportAllowanceRequest,
+        @RequestHeader("Idempotency-Key") idempotencyKey: UUID,
         @CurrentSubject actor: String,
     ): ResponseEntity<SupportAllowanceResponse> {
         val grant = service.create(wardId, SupportAllowanceInput(
             request.nurseId, request.teamId, request.startDate, request.endDate, request.shiftTypes(),
-        ), actor)
+        ), idempotencyKey, actor)
         return ResponseEntity.status(if (grant.created) HttpStatus.CREATED else HttpStatus.OK).body(grant.allowance.toResponse())
     }
 

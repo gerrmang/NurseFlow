@@ -82,7 +82,7 @@ class CrossTeamSupportIntegrationTest @Autowired constructor(
         assertEquals("RULE_VIOLATION", manual.errorCode.name)
         assertTrue(manual.ruleViolations.filterIsInstance<RuleDiagnostic>().any { it.code == "CROSS_TEAM_NOT_ALLOWED" })
 
-        val granted = allowances.create(wardId, SupportAllowanceInput(nurseB, teamA, d10, d10, listOf(dayTypeId)), admin).allowance
+        val granted = allowances.create(wardId, SupportAllowanceInput(nurseB, teamA, d10, d10, listOf(dayTypeId)), UUID.randomUUID(), admin).allowance
         roster = service.getRoster(roster.rosterId, admin)
         assertFalse(roster.needsRevalidation, "a grant only widens what is allowed")
         assertTrue(codes(roster, a10, nurseB).isEmpty())
@@ -100,11 +100,11 @@ class CrossTeamSupportIntegrationTest @Autowired constructor(
         assertEquals(2, roster.staffing.assigned)
 
         // Same scope again is the existing record, not a twin that would outlive its revocation.
-        val again = allowances.create(wardId, SupportAllowanceInput(nurseB, teamA, d10, d10, listOf(dayTypeId)), admin)
+        val again = allowances.create(wardId, SupportAllowanceInput(nurseB, teamA, d10, d10, listOf(dayTypeId)), UUID.randomUUID(), admin)
         assertFalse(again.created)
         assertEquals(granted.id, again.allowance.id)
         // An allowance for a shift type the draft does not use for this nurse flags nothing.
-        val nightOnly = allowances.create(wardId, SupportAllowanceInput(nurseB, teamA, d10, d10, listOf(nightTypeId)), admin)
+        val nightOnly = allowances.create(wardId, SupportAllowanceInput(nurseB, teamA, d10, d10, listOf(nightTypeId)), UUID.randomUUID(), admin)
         assertEquals(0, allowances.revoke(wardId, nightOnly.allowance.id, admin).flaggedDrafts)
         assertEquals(roster.revision, service.getRoster(roster.rosterId, admin).revision)
 
@@ -126,7 +126,7 @@ class CrossTeamSupportIntegrationTest @Autowired constructor(
         assertTrue(confirm.ruleViolations.filterIsInstance<RuleDiagnostic>().any { it.code == "CROSS_TEAM_NOT_ALLOWED" })
 
         // A new grant makes the stored assignment valid again; publishing keeps it even after a later revocation.
-        val regranted = allowances.create(wardId, SupportAllowanceInput(nurseB, teamA, d10, d10, emptyList()), admin).allowance
+        val regranted = allowances.create(wardId, SupportAllowanceInput(nurseB, teamA, d10, d10, emptyList()), UUID.randomUUID(), admin).allowance
         roster = service.getRoster(roster.rosterId, admin)
         service.confirm(roster.rosterId, tag(roster), UUID.randomUUID(), ConfirmRosterRequest(2), admin)
         assertEquals(0, allowances.revoke(wardId, regranted.id, admin).flaggedDrafts)
@@ -137,7 +137,7 @@ class CrossTeamSupportIntegrationTest @Autowired constructor(
         // A nurse who has since joined the team holds own-team slots: revoking an old allowance flags nothing.
         val next = draft("2027-02", StaffingRequirement(LocalDate.parse("2027-02-03"), dayTypeId, 1, emptyList(), teamA))
         val old = allowances.create(wardId, SupportAllowanceInput(nurseB, teamA, LocalDate.parse("2027-02-01"),
-            LocalDate.parse("2027-02-28"), emptyList()), admin).allowance
+            LocalDate.parse("2027-02-28"), emptyList()), UUID.randomUUID(), admin).allowance
         jdbc.update("UPDATE nurses SET team_id=? WHERE nurse_id=?", teamA, nurseB)
         val joined = assign(service.getRoster(next.rosterId, admin), next.slots.single().slotId, nurseB)
         assertEquals(0, allowances.revoke(wardId, old.id, admin).flaggedDrafts)
@@ -149,7 +149,7 @@ class CrossTeamSupportIntegrationTest @Autowired constructor(
     fun `automatic generation prefers own team and uses support only inside the allowance`() {
         val d10 = LocalDate.parse("2027-01-10")
         val d11 = LocalDate.parse("2027-01-11")
-        allowances.create(wardId, SupportAllowanceInput(nurseB, teamA, d10, d10, emptyList()), admin)
+        allowances.create(wardId, SupportAllowanceInput(nurseB, teamA, d10, d10, emptyList()), UUID.randomUUID(), admin)
         var roster = draft("2027-01",
             StaffingRequirement(d10, dayTypeId, 1, emptyList(), teamA),
             StaffingRequirement(d11, dayTypeId, 1, emptyList(), teamA),

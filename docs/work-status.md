@@ -13,6 +13,7 @@
 - dev 반영(2026-11-24): A12 #56 병합 후 `origin/dev` `74886b6`을 병합했다. 충돌은 `RosterService`(검증 맥락에 확정 희망 오프·미확정 희망 오프·지원 허용을 함께 둠), `ApiTestBase` 정리 목록, `openapi.yaml`(경로·스키마·진단 설명을 양쪽 모두 유지), `schema.gen.ts`(재생성), 이 파일이다. 자동배치 후보 순서는 같은 팀 → 미확정 희망 오프 없음 → 배치 횟수 순으로 정했다.
 - 병합 후 검증: backend 전체 `LC_ALL=C.UTF-8 ./gradlew test` 294개 중 289개 통과·5개 건너뜀·실패 0. web `api:check`·`typecheck`·`lint` 통과, vitest 394개 통과·3개 건너뜀.
 - 병합 후 코드 리뷰(자체, medium) 반영: `shiftTypeIds`의 null 원소를 500 대신 400 `INVALID_REQUEST`로 거부, 철회 시 이미 그 팀 소속이 된 간호사의 배치는 재검증 표시에서 제외, 자동배치 주석을 칸 단위 같은 팀 우선이라는 실제 동작에 맞춤. 반영 후 backend 전체 294개 중 289개 통과·5개 건너뜀·실패 0.
+- PR #57 리뷰 P2 반영(hyen11, `discussion_r4680974733`): 생성에 `Idempotency-Key`를 필수로 받고 결과를 재생한다. 재생은 기록을 현재 상태로 다시 읽으므로 생성→철회→같은 키 재시도에서 활성 허용이 생기지 않고 REVOKED가 보인다. 다른 요청에 같은 키는 `IDEMPOTENCY_KEY_REUSED`, 새 키는 의도적 재허용이다. HTTP 회귀 추가. backend 전체 294개 중 289개 통과·5개 건너뜀·실패 0, web `api:check`·`typecheck` 통과.
 - 공유 인계: 같은 브랜치로 dev 대상 PR을 연다. A13 PR도 공유 파일을 바꾸므로 공유 파일을 건드리는 PR은 하나씩 병합하고 뒤 PR은 최신 dev에 맞춘 뒤 다시 검증한다.
 
 ## A12 희망 오프 구현 (2026-11-24, Claude)

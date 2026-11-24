@@ -3,6 +3,9 @@ package com.nurseflow.roster.application.service
 import com.nurseflow.common.audit.AuditLog
 import com.nurseflow.common.error.BusinessException
 import com.nurseflow.common.error.ErrorCode
+import com.nurseflow.common.idempotency.IdempotencyKeyRaceException
+import com.nurseflow.common.idempotency.MutationReplayRepository
+import com.nurseflow.common.idempotency.ReplayLookup
 import com.nurseflow.roster.domain.model.SupportAllowance
 import com.nurseflow.roster.persistence.repository.RosterJdbcRepository
 import com.nurseflow.roster.persistence.repository.SupportAllowanceJdbcRepository
@@ -38,6 +41,7 @@ class SupportAllowanceService(
     private val roster: RosterJdbcRepository,
     private val allowances: SupportAllowanceJdbcRepository,
     private val audit: AuditLog,
+    private val replays: MutationReplayRepository,
 ) {
     @Transactional(readOnly = true)
     fun list(wardId: UUID, includeRevoked: Boolean, actor: String): List<SupportAllowance> {
@@ -46,8 +50,18 @@ class SupportAllowanceService(
     }
 
     @Transactional
-    fun create(wardId: UUID, input: SupportAllowanceInput, actor: String): SupportAllowanceGrant {
+    fun create(wardId: UUID, input: SupportAllowanceInput, idempotencyKey: UUID, actor: String): SupportAllowanceGrant {
         wards.lockAsAdmin(wardId, actor)
+        // Read after the ward lock: a retry of a request whose response was lost replays that request, and returns
+        // the record as it is now. A revocation in between stays in force; only a new key grants the scope again.
+        val requestHash = replays.requestHash(listOf(actor, wardId, input))
+        when (val saved = replays.replay(idempotencyKey, CREATE_OPERATION, requestHash, CreateReplay::class.java)) {
+            ReplayLookup.Missing -> Unit
+            ReplayLookup.Conflict -> throw BusinessException(ErrorCode.IDEMPOTENCY_KEY_REUSED)
+            is ReplayLookup.Found -> return SupportAllowanceGrant(
+                allowances.find(wardId, saved.value.allowanceId)!!, saved.value.created,
+            )
+        }
         if (input.endDate < input.startDate || ChronoUnit.DAYS.between(input.startDate, input.endDate) >= MAX_DAYS ||
             input.shiftTypeIds.size > MAX_SHIFT_TYPES) {
             throw BusinessException(ErrorCode.INVALID_SUPPORT_ALLOWANCE)
@@ -65,12 +79,23 @@ class SupportAllowanceService(
             UUID.randomUUID(), wardId, input.nurseId, input.teamId, input.startDate, input.endDate,
             shiftTypeIds, Instant.now(), actor,
         )
-        // Idempotent by scope: a retry after a lost response must not leave a twin that outlives a later revocation.
-        allowances.findActiveSame(allowance)?.let { return SupportAllowanceGrant(it, created = false) }
-        allowances.insert(allowance)
-        audit.record(wardId, actor, "SUPPORT_ALLOWANCE_CREATED", allowance.id.toString())
-        return SupportAllowanceGrant(allowance, created = true)
+        // A second grant of an active scope returns that record instead of a twin that would outlive its revocation.
+        val grant = allowances.findActiveSame(allowance)?.let { SupportAllowanceGrant(it, created = false) }
+            ?: SupportAllowanceGrant(allowance, created = true).also {
+                allowances.insert(allowance)
+                audit.record(wardId, actor, "SUPPORT_ALLOWANCE_CREATED", allowance.id.toString())
+            }
+        try {
+            replays.recordReplay(idempotencyKey, CREATE_OPERATION, requestHash, CreateReplay(grant.allowance.id, grant.created))
+        } catch (_: IdempotencyKeyRaceException) {
+            // The same key committed for another ward first; this ward was locked, so it is not this request.
+            throw BusinessException(ErrorCode.IDEMPOTENCY_KEY_REUSED)
+        }
+        return grant
     }
+
+    /** What a replay needs: the record is re-read, so a retry shows a revocation made after the first request. */
+    data class CreateReplay(val allowanceId: UUID, val created: Boolean)
 
     /** Idempotent: revoking a revoked allowance returns it unchanged and flags nothing. */
     @Transactional
@@ -86,6 +111,7 @@ class SupportAllowanceService(
 
     companion object {
         const val MAX_DAYS = 366L
+        const val CREATE_OPERATION = "create-support-allowance"
         const val MAX_SHIFT_TYPES = 20
     }
 }
