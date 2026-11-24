@@ -28,7 +28,7 @@ class StaffAdminScreenUiTest {
             "staff" -> Items(nurses())
             "members" -> Items(listOf(AdminMember("u1", "가상 관리자", listOf("WARD_ADMIN"), true)))
             "policy" -> AdminCareerPolicy(listOf(12, 36, 72, 120), listOf("간호사"), true)
-            "eligibility" -> AdminEligibility(true, 1)
+            "eligibility" -> retrofit2.Response.success(AdminEligibility(true, 1))
             "adjustments" -> Items<AdminAdjustment>(emptyList())
             "order" -> { saved = (args!![2] as AdminTeamOrder).nurseIds; names = saved!!; Items(nurses()) }
             "membership" -> {

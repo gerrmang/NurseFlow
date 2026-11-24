@@ -83,7 +83,13 @@ class StaffAdminViewModel(
                 val members = async { apiCall { api.members(wardId) }.items }
                 val policy = async { apiCall { api.policy(wardId) } }
                 val eligibility = async {
-                    try { apiCall { api.eligibility(wardId) } }
+                    try {
+                        apiCall {
+                            val response = api.eligibility(wardId)
+                            if (!response.isSuccessful) throw retrofit2.HttpException(response)
+                            response.body()
+                        }
+                    }
                     catch (e: CancellationException) { throw e }
                     catch (e: ApiException) {
                         if (e.status == 401 || e.status == 403 || e.code == "WARD_NOT_FOUND" || e.code == "USER_NOT_FOUND") throw e

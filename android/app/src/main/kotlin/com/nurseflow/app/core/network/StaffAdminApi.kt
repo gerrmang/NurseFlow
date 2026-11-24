@@ -1,6 +1,7 @@
 package com.nurseflow.app.core.network
 
 import kotlinx.serialization.Serializable
+import retrofit2.Response
 import retrofit2.http.*
 
 /** A5/A6 contract. This interface uses the non-retrying authenticated client. */
@@ -9,7 +10,7 @@ interface StaffAdminApi {
     @GET("api/v1/wards/{w}/staff?includeInactive=true") suspend fun staff(@Path("w") ward: String): Items<AdminStaff>
     @GET("api/v1/wards/{w}/members") suspend fun members(@Path("w") ward: String): Items<AdminMember>
     @GET("api/v1/wards/{w}/career-policy") suspend fun policy(@Path("w") ward: String): AdminCareerPolicy
-    @GET("api/v1/wards/{w}/roster-eligibility") suspend fun eligibility(@Path("w") ward: String): AdminEligibility
+    @GET("api/v1/wards/{w}/roster-eligibility") suspend fun eligibility(@Path("w") ward: String): Response<AdminEligibility>
     @POST("api/v1/wards/{w}/teams") suspend fun createTeam(@Path("w") ward: String, @Body input: AdminTeamInput): AdminTeam
     @PUT("api/v1/wards/{w}/teams/{id}") suspend fun updateTeam(@Path("w") ward: String, @Path("id") id: String, @Body input: AdminTeamInput): AdminTeam
     @DELETE("api/v1/wards/{w}/teams/{id}") suspend fun deleteTeam(@Path("w") ward: String, @Path("id") id: String)

@@ -1,5 +1,14 @@
 # 공유 작업 현황
 
+## B6 PR #51 무본문 응답 리뷰 수정·dev 확인 (2026-11-24, Codex)
+
+- 같은 공유 worktree·`chore/demo-seed-script`, 시작 HEAD와 원격 PR head `82544f2` 일치, tracked 변경 없음 확인. 미추적 `nurseflow.mv.db`·`nurseflow.trace.db`를 보존했다. `git fetch origin` 후 최신 `origin/dev`는 `00f086c`이며 이미 HEAD의 조상이므로 추가 통합 커밋 없이 최신 dev 반영 상태다. backend·OpenAPI·웹 생성 타입은 dev와 동일하다.
+- 미해결 P3 `discussion_r4669526377`: Android 모드 조회를 `Response<AdminEligibility>`로 받아 성공 응답의 null body를 모드 미확인으로 처리한다. 비성공 응답은 HttpException을 기존 apiCall로 전달해 401·403·WARD_NOT_FOUND·USER_NOT_FOUND 처리를 보존한다. SerializationException·통신 오류 분리 및 CancellationException 재전파도 유지한다. 모든 eligibility 호출·대역을 검색해 단위/기기 fixture를 함께 맞췄다. 서버 API 계약·규칙은 바꾸지 않았다.
+- 실제 Retrofit+MockWebServer로 204·205·빈 200 첫 진입, 204 새로고침·205 저장 후 재조회·정상 모드 복구를 추가했다. 무본문 회귀 2개는 수정 전 모두 실패(exit 1), 수정 후 통과했다. 실제 HTTP 401·403·404의 목록 폐기 및 503의 목록 유지도 추가 검증했다. ViewModel 33개 통과, 기존 취소·인증 회귀 포함. 수정 diff 자체 재검토 완료, 독립 재리뷰는 별도다.
+- JDK 21, `GRADLE_USER_HOME=C:\Users\jjang\.gradle`, Android `:app:testDebugUnitTest :app:assembleDebug :app:assembleDebugAndroidTest :app:lintDebug --offline --no-daemon`: BUILD SUCCESSFUL(1분 15초). XML 197개 중 196개 통과·실서버 opt-in 1개 건너뜀·실패/오류 0. `git diff --check` 통과. 웹·backend·시드 통합·기기 UI·실제 Kakao는 Android 응답 처리 수정 범위라 로컬 재실행하지 않았으며 최종 PR CI는 푸시 후 확인한다.
+- API/DB/환경·의존성 변경 없음. Android 빌드 영향, 수동 배포 없음. 롤백은 이번 수정 커밋 revert와 이전 Android 빌드 복원. GitHub dev rules 조회에서 승인 1건 필요·필수 check 목록은 빈 배열·strict=true를 확인했다. 현재 PR은 MERGEABLE이나 REVIEW_REQUIRED/BLOCKED이며 독립 승인 완료나 즉시 병합 가능으로 표현하지 않는다.
+- 공유 인계: 같은 브랜치에 이번 수정·회귀·PR 초안·이 기록만 커밋·푸시하고 PR 설명과 해당 스레드를 갱신한다. 최종 head CI·미해결 대화·dev 포함 여부를 재확인한다. 사용자 DB 제외, dev/main 직접 푸시·PR 병합·자동 병합 설정 없음.
+
 ## B6 PR #51 게시·최신 dev 충돌 정리 (2026-11-23, Codex)
 
 - JSON 파싱 수정 `c40d090`을 기존 PR 브랜치에 푸시했고 원격 SHA 일치를 확인했다. 연결 GitHub 도구는 PR 설명 수정·스레드 해결에 403을 반환해 기존 gh 인증으로 PR 초안 파일을 본문에 반영하고 P3 스레드를 해결 표시했다. 재조회에서 미해결 스레드 0건을 확인했으며 독립 승인과 구분한다.
