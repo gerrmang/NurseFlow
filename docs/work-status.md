@@ -910,4 +910,5 @@ Claude와 Codex가 같은 진행 기록을 사용한다. PR 또는 정기 리뷰
 - 최종 검증: JDK 21 `./gradlew check`(LC_ALL=C.UTF-8) 300개 중 295개 통과·5개 opt-in 건너뜀·실패 0. web api:check·lint·typecheck·테스트 394개 통과(3개 건너뜀)·build 성공.
 - PR #58 리뷰(hyen11, P2 2건) 반영: 달력 응답의 목록과 월 목표를 같은 조회 결과로 계산, 다른 달 공개본의 장기 연차를 저장 월이 아닌 대상 월과의 겹침으로 조회(9월 공개본의 9/30~11/3 연차 회귀 테스트).
 - A14 통합(2026-11-24): A14 PR #57 병합본(`db5e412`)을 병합했다. `schema.sql`은 A13 표 뒤에 A14 `cross_team_support_allowances`를 두었고, `ApiTestBase.kt` 초기화 목록은 양쪽 표를 모두 포함한다. `openapi.yaml`은 dev 쪽에 A13 변경(472줄 추가, 삭제 없음)을 다시 적용했고 `schema.gen.ts`는 다시 생성했다. 동작 변경은 없다. 검증: `./gradlew check`(LC_ALL=C.UTF-8) 306개 중 301개 통과·5개 opt-in 건너뜀·실패 0, web api:check·lint·typecheck·테스트 394개 통과(3개 건너뜀)·build 성공.
+- PR #58 재검토(hyen11, P2 1건·P3 1건) 반영: 공휴일 응답은 `totalCount`가 0으로 명시된 경우만 빈 달로 저장하고, `body`·`totalCount` 누락이나 항목 수 불일치는 `HOLIDAY_SOURCE_UNAVAILABLE`로 처리해 저장값을 유지한다. 연차 날짜는 대상 월의 날짜만 확인한다(3일 이상 연차는 가운데 날짜를 온전히 덮으므로 시작일 대체 규칙은 2일 이하 연차에만 적용). 테스트 3개 추가. 검증: `./gradlew check`(LC_ALL=C.UTF-8) 309개 중 304개 통과·5개 opt-in 건너뜀·실패 0.
 - 인계: A14가 먼저 병합되었으므로 PR #58은 최신 dev 기준으로 병합 가능하다.

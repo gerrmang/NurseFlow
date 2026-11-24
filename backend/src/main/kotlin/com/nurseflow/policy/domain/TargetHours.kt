@@ -183,21 +183,29 @@ object TargetHourCalculator {
         )
     }
 
-    /** Ward-local dates of [month] that an approved leave interval overlaps. */
     /**
-     * Ward-local dates of an approved leave, then kept if in [month]. A date counts when the leave covers at least
+     * Ward-local dates of [month] that an approved leave counts on. A date counts when the leave covers at least
      * half of it, so a 22:00-07:00 leave over a Night is one day, not two; a leave covering no date that much counts
-     * once, on its start date.
+     * once, on its start date. Only the dates of [month] are visited, so a long leave costs at most 31 checks.
      */
     private fun leaveDatesInMonth(absence: HourAbsence, month: YearMonth, zone: ZoneId): List<LocalDate> {
         val first = absence.startsAt.atZone(zone).toLocalDate()
         val last = absence.endsAt.minusNanos(1).atZone(zone).toLocalDate()
-        val covered = generateSequence(first) { it.plusDays(1) }.takeWhile { !it.isAfter(last) }.filter { date ->
+        fun covers(date: LocalDate): Boolean {
             val start = date.atStartOfDay(zone).toInstant()
             val end = date.plusDays(1).atStartOfDay(zone).toInstant()
             val overlap = Duration.between(maxOf(start, absence.startsAt), minOf(end, absence.endsAt))
-            overlap.multipliedBy(2) >= Duration.between(start, end)
-        }.toList().ifEmpty { listOf(first) }
+            return overlap.multipliedBy(2) >= Duration.between(start, end)
+        }
+        fun days(from: LocalDate, to: LocalDate) = generateSequence(from) { it.plusDays(1) }.takeWhile { !it.isAfter(to) }
+        // A leave over three or more dates fully covers a middle date, so the start-date fallback only concerns
+        // leave on one or two dates.
+        if (!first.plusDays(2).isAfter(last)) {
+            val from = maxOf(first, month.atDay(1))
+            val to = minOf(last, month.atEndOfMonth())
+            return days(from, to).filter(::covers).toList()
+        }
+        val covered = days(first, last).filter(::covers).toList().ifEmpty { listOf(first) }
         return covered.filter { YearMonth.from(it) == month }
     }
 }

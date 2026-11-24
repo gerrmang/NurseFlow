@@ -63,7 +63,8 @@ class PublicHolidayClient(private val properties: HolidayProperties, private val
         return parse(body, month)
     }
 
-    private fun parse(body: String, month: YearMonth): List<CalendarDay> {
+    /** Internal for tests: the body of one month's response. */
+    internal fun parse(body: String, month: YearMonth): List<CalendarDay> {
         reasonCode(body)?.let {
             log.warn("Holiday source rejected the request: reasonCode={}", it)
             throw unavailable()
@@ -79,12 +80,24 @@ class PublicHolidayClient(private val properties: HolidayProperties, private val
             log.warn("Holiday source returned resultCode={}", resultCode.take(10))
             throw unavailable()
         }
-        // `item` is an array, a single object for one holiday, and absent (`items: ""`) for none.
-        val item = response.path("body").path("items").path("item")
+        // `item` is an array, a single object for one holiday, and absent (`items: ""`) for none. Only a stated
+        // totalCount of 0 means an empty month: a body missing its structure or count would otherwise replace the
+        // stored holidays with nothing.
+        val responseBody = response.path("body")
+        val totalCount = responseBody.path("totalCount")
+        if (!totalCount.canConvertToExactIntegral() || totalCount.asInt() < 0) {
+            log.warn("Holiday source returned no totalCount")
+            throw unavailable()
+        }
+        val item = responseBody.path("items").path("item")
         val nodes = when {
             item.isArray -> item.toList()
             item.isObject -> listOf(item)
             else -> emptyList()
+        }
+        if (nodes.size != totalCount.asInt() || nodes.any { !it.isObject || !it.path("isHoliday").isString }) {
+            log.warn("Holiday source returned {} items for totalCount={}", nodes.size, totalCount.asInt())
+            throw unavailable()
         }
         val days = nodes.filter { it.path("isHoliday").asString("") == "Y" }.map { node ->
             val date = runCatching { LocalDate.parse(node.path("locdate").asString(""), BASIC_DATE) }.getOrNull()

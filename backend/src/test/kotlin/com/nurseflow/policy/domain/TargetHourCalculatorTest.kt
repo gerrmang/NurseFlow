@@ -6,6 +6,7 @@ import com.nurseflow.roster.domain.model.ShiftKind
 import com.nurseflow.roster.domain.model.WorkPattern
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.Timeout
 import java.time.LocalDate
 import java.time.LocalTime
 import java.time.YearMonth
@@ -61,6 +62,21 @@ class TargetHourCalculatorTest {
             .associateBy { it.nurse.nurseId }
         assertEquals(1, result.getValue(general.nurseId).leaveDays) // Nov 10 only; the Saturday is outside its target
         assertEquals(1, result.getValue(dedicated.nurseId).leaveDays)
+    }
+
+    @Test
+    @Timeout(5)
+    fun `a leave spanning centuries visits only the month's dates`() {
+        val nurse = HourNurse(UUID.randomUUID(), "가상 간호사 1", WorkPattern.GENERAL, true)
+        val absences = listOf(
+            HourAbsence(
+                nurse.nurseId, ApprovedAbsenceKind.APPROVED_LEAVE,
+                LocalDate.of(1000, 1, 1).atStartOfDay(zone).toInstant(), LocalDate.of(9999, 12, 31).atStartOfDay(zone).toInstant(),
+            ),
+        )
+        val target = TargetHourCalculator.monthTarget(november, emptyList(), 480)
+        val result = TargetHourCalculator.diagnose(november, zone, target, TargetHourPolicy(), listOf(nurse), emptyList(), absences, emptyList())
+        assertEquals(21, result.single().leaveDays) // every target day of November, nothing else
     }
 
     @Test

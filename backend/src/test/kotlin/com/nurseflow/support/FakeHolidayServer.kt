@@ -37,6 +37,7 @@ object FakeHolidayServer {
                         """{"dateKind":"01","dateName":"가상 명절","isHoliday":"Y","locdate":20260926,"seq":1},""" +
                         """{"dateKind":"01","dateName":"대체공휴일(가상 명절)","isHoliday":"Y","locdate":20260928,"seq":1},""" +
                         """{"dateKind":"01","dateName":"쉬지 않는 날","isHoliday":"N","locdate":20260929,"seq":1}]""",
+                    count = 6,
                 ))
                 "2026-10" -> exchange.reply(200, normal("""{"dateKind":"01","dateName":"가상 국경일","isHoliday":"Y","locdate":20261005,"seq":1}"""))
                 "2026-12" -> exchange.reply(500, "internal error")
@@ -49,8 +50,8 @@ object FakeHolidayServer {
 
     val baseUri: String get() = "http://127.0.0.1:${server.address.port}/B090041/openapi/service/SpcdeInfoService"
 
-    private fun normal(item: String) = """{"response":{"header":{"resultCode":"00","resultMsg":"NORMAL SERVICE."},""" +
-        """"body":{"items":{"item":$item},"numOfRows":50,"pageNo":1,"totalCount":1}}}"""
+    private fun normal(item: String, count: Int = 1) = """{"response":{"header":{"resultCode":"00","resultMsg":"NORMAL SERVICE."},""" +
+        """"body":{"items":{"item":$item},"numOfRows":50,"pageNo":1,"totalCount":$count}}}"""
 
     private fun HttpExchange.reply(status: Int, body: String) {
         val bytes = body.toByteArray()
