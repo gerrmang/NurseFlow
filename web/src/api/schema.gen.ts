@@ -864,6 +864,136 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/wards/{wardId}/off-requests": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                wardId: components["parameters"]["WardId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * 월별 희망 오프 목록
+         * @description 관리자는 병동 전체, 간호사는 본인 요청만 본다. 철회·반려된 요청도 이력으로 포함한다.
+         *     `deadline`(배타적)과 `monthlyLimit`은 화면의 마감·한도 표시에 쓴다.
+         */
+        get: operations["listOffRequests"];
+        put?: never;
+        /**
+         * 희망 오프 제출(본인) 또는 대리 입력(관리자)
+         * @description 간호사는 `nurseId`를 생략하거나 본인 기록을 보낸다. 관리자는 대상 간호사의 `nurseId`가 필요하며 입력 주체는 `source`로 기록한다.
+         *     제출 직후 상태는 SUBMITTED이고 선호로만 쓰인다. 관리자가 확정해야 배치 금지(CONFIRMED_OFF_REQUEST)가 된다.
+         *     간호사 본인 제출만 병동의 월 한도(간호사 본인이 입력한 SUBMITTED·CONFIRMED 합계)를 넘을 수 없다. 관리자 입력은 한도를 받지 않고 개수에도 들어가지 않는다.
+         *     간호사는 병동 현지 날짜 기준 지난 날짜를 선택할 수 없다(400).
+         *     마감(대상 월 전달의 설정일이 끝나는 병동 현지 자정) 이후의 제출은 `afterDeadline: true` 예외 요청으로 저장되며,
+         *     관리자가 확정해야 효력이 생긴다. 그 전에는 자동배치 선호에도 반영하지 않는다. 관리자의 마감 뒤 입력은 예외 접수로 보고 선호에 반영한다.
+         */
+        post: operations["submitOffRequest"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/wards/{wardId}/off-requests/{requestId}/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                wardId: components["parameters"]["WardId"];
+                requestId: components["parameters"]["OffRequestId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 희망 오프 확정
+         * @description SUBMITTED만 확정할 수 있다. 확정하면 해당 월의 비공개 초안 revision을 올리고 재검증 대상으로 표시한다.
+         *     이미 그날 배정된 초안은 후보·수동·자동·확정 모두에서 CONFIRMED_OFF_REQUEST로 거부된다. 공개본은 재확정 전까지 유지한다.
+         */
+        post: operations["confirmOffRequest"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/wards/{wardId}/off-requests/{requestId}/reject": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                wardId: components["parameters"]["WardId"];
+                requestId: components["parameters"]["OffRequestId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 희망 오프 반려
+         * @description SUBMITTED만 반려할 수 있다. 반려된 날짜는 고정 오프가 아니며 같은 날짜를 다시 요청할 수 있다. 초안 revision은 바뀌지 않는다.
+         */
+        post: operations["rejectOffRequest"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/wards/{wardId}/off-requests/{requestId}/withdraw": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                wardId: components["parameters"]["WardId"];
+                requestId: components["parameters"]["OffRequestId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 희망 오프 철회
+         * @description 간호사는 마감 전에 본인의 SUBMITTED 요청만 철회한다. 마감 뒤에는 OFF_REQUEST_DEADLINE_PASSED이며 관리자에게 요청한다.
+         *     관리자는 SUBMITTED와 CONFIRMED를 철회할 수 있고, CONFIRMED 철회는 해당 월 초안을 재검증 대상으로 표시한다.
+         */
+        post: operations["withdrawOffRequest"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/wards/{wardId}/off-requests/policy": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                wardId: components["parameters"]["WardId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * 병동 희망 오프 한도·마감일 조회
+         * @description 기본값은 월 4일, 대상 월 전달 15일 마감이다. 응답 ETag는 병동 공통 정책 revision이다.
+         */
+        get: operations["getOffRequestPolicy"];
+        /**
+         * 병동 희망 오프 한도·마감일 변경
+         * @description 이후의 간호사 제출·철회에만 적용한다. 기존 요청과 초안 revision은 바꾸지 않는다.
+         *     변경하면 병동 정책 revision을 올린다. 현재 값과 같은 요청은 revision을 올리지 않는다. 정수 JSON 숫자만 받는다.
+         */
+        put: operations["replaceOffRequestPolicy"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/wards/{wardId}/support-allowances": {
         parameters: {
             query?: never;
@@ -1800,6 +1930,65 @@ export interface components {
             /** @example 5 */
             maxConsecutiveWorkDays: number;
         };
+        OffRequestInput: {
+            /** Format: date */
+            date: string;
+            /**
+             * Format: uuid
+             * @description 관리자 대리 입력에서 필수. 간호사는 생략하거나 본인 기록만 보낼 수 있다.
+             */
+            nurseId?: string;
+        };
+        OffRequest: {
+            /** Format: uuid */
+            requestId: string;
+            /** Format: uuid */
+            nurseId: string;
+            /** Format: date */
+            date: string;
+            /**
+             * @description SUBMITTED는 선호, CONFIRMED는 배치 금지, REJECTED·WITHDRAWN은 이력이다.
+             * @enum {string}
+             */
+            status: "SUBMITTED" | "CONFIRMED" | "REJECTED" | "WITHDRAWN";
+            /**
+             * @description 입력 주체. 계정 식별자는 응답에 포함하지 않는다.
+             * @enum {string}
+             */
+            source: "NURSE" | "ADMIN";
+            /** Format: date-time */
+            submittedAt: string;
+            /**
+             * Format: date-time
+             * @description 확정·반려·철회 시각
+             */
+            decidedAt?: string | null;
+            /** @description 마감 뒤 접수된 예외 요청 */
+            afterDeadline: boolean;
+        };
+        OffRequestList: {
+            items: components["schemas"]["OffRequest"][];
+            /**
+             * Format: date-time
+             * @description 이 시각부터의 간호사 제출은 예외 요청이 되고 본인 철회는 막힌다.
+             */
+            deadline: string;
+            monthlyLimit: number;
+        };
+        OffRequestPolicy: {
+            /** @example 4 */
+            monthlyLimit: number;
+            /**
+             * @description 대상 월 전달의 이 날짜가 끝날 때(병동 현지 자정) 마감한다.
+             * @example 15
+             */
+            deadlineDay: number;
+            policyRevision: number;
+        };
+        OffRequestPolicyInput: {
+            monthlyLimit: number;
+            deadlineDay: number;
+        };
         ConsecutiveWorkPolicy: {
             /** @example 5 */
             maxConsecutiveWorkDays: number;
@@ -1869,6 +2058,8 @@ export interface components {
              * @description 연속근무 상한 위반은 CONSECUTIVE_WORK_LIMIT, 명시 휴식일 배치는 REST_DAY_ASSIGNMENT_CONFLICT,
              *     명시 휴식일과 승인 연차의 겹침은 REST_DAY_CONFLICT, 관리자 허용 범위 밖의 다른 팀 칸 배치는
              *     CROSS_TEAM_NOT_ALLOWED이며 모두 HARD이다.
+             *     관리자가 확정한 희망 오프 날짜의 배치는 CONFIRMED_OFF_REQUEST(HARD)이다.
+             *     자동배치가 직접 배정하면서 미확정 희망 오프를 지키지 못한 날짜는 날짜별 건수와 함께 OFF_REQUEST_NOT_HONORED(SOFT)로 알린다. 고정 배치는 제외한다.
              */
             code: string;
             /** @enum {string} */
@@ -2059,6 +2250,24 @@ export interface components {
                 "application/problem+json": components["schemas"]["ApiProblem"];
             };
         };
+        /** @description 변경된 희망 오프 */
+        OffRequestDecided: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["OffRequest"];
+            };
+        };
+        /** @description OFF_REQUEST_STATE_CONFLICT. 현재 상태에서는 허용되지 않는 전이다. 목록을 다시 조회한다. */
+        OffRequestStateConflict: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/problem+json": components["schemas"]["ApiProblem"];
+            };
+        };
         /** @description 내부 오류. 민감정보는 응답에 포함하지 않는다. */
         InternalError: {
             headers: {
@@ -2080,6 +2289,7 @@ export interface components {
          */
         WebClientHeader: "web";
         WardId: string;
+        OffRequestId: string;
         RosterId: string;
         AbsenceId: string;
         NurseId: string;
@@ -4259,6 +4469,235 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ConsecutiveWorkPolicy"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            /** @description STALE_POLICY_REVISION. 최신 정책을 조회한 뒤 다시 저장한다. */
+            412: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+        };
+    };
+    listOffRequests: {
+        parameters: {
+            query: {
+                /** @description 희망 오프 날짜가 속한 월 */
+                month: string;
+            };
+            header?: never;
+            path: {
+                wardId: components["parameters"]["WardId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 해당 월 요청과 마감·한도 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OffRequestList"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            /** @description NURSE_IDENTITY_REQUIRED. 관리자가 아니고 연결된 간호사 기록도 없다. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+        };
+    };
+    submitOffRequest: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                wardId: components["parameters"]["WardId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OffRequestInput"];
+            };
+        };
+        responses: {
+            /** @description 제출된 희망 오프 */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OffRequest"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            /** @description WARD_ADMIN_REQUIRED(간호사가 다른 간호사를 지정) 또는 NURSE_IDENTITY_REQUIRED. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description WARD_NOT_FOUND 또는 NURSE_NOT_FOUND(다른 병동·편성 대상이 아닌 간호사). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description OFF_REQUEST_DUPLICATE(같은 날짜에 SUBMITTED·CONFIRMED 요청이 있음) 또는 OFF_REQUEST_LIMIT_REACHED. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+        };
+    };
+    confirmOffRequest: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                wardId: components["parameters"]["WardId"];
+                requestId: components["parameters"]["OffRequestId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["OffRequestDecided"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["OffRequestStateConflict"];
+        };
+    };
+    rejectOffRequest: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                wardId: components["parameters"]["WardId"];
+                requestId: components["parameters"]["OffRequestId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["OffRequestDecided"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["OffRequestStateConflict"];
+        };
+    };
+    withdrawOffRequest: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                wardId: components["parameters"]["WardId"];
+                requestId: components["parameters"]["OffRequestId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["OffRequestDecided"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            /** @description OFF_REQUEST_STATE_CONFLICT 또는 OFF_REQUEST_DEADLINE_PASSED. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+        };
+    };
+    getOffRequestPolicy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                wardId: components["parameters"]["WardId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 희망 오프 정책과 병동 정책 revision */
+            200: {
+                headers: {
+                    ETag: components["headers"]["PolicyETag"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OffRequestPolicy"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    replaceOffRequestPolicy: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description 마지막으로 받은 병동 공통 정책 ETag.
+                 * @example "policy-3"
+                 */
+                "If-Match": components["parameters"]["PolicyIfMatch"];
+            };
+            path: {
+                wardId: components["parameters"]["WardId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OffRequestPolicyInput"];
+            };
+        };
+        responses: {
+            /** @description 적용된 정책과 병동 정책 revision */
+            200: {
+                headers: {
+                    ETag: components["headers"]["PolicyETag"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OffRequestPolicy"];
                 };
             };
             400: components["responses"]["BadRequest"];
