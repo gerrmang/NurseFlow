@@ -8,6 +8,7 @@
 - JDK 21, `GRADLE_USER_HOME=C:\Users\jjang\.gradle`, Android `:app:testDebugUnitTest :app:assembleDebug :app:assembleDebugAndroidTest :app:lintDebug --offline --no-daemon`: BUILD SUCCESSFUL(1분 15초). XML 197개 중 196개 통과·실서버 opt-in 1개 건너뜀·실패/오류 0. `git diff --check` 통과. 웹·backend·시드 통합·기기 UI·실제 Kakao는 Android 응답 처리 수정 범위라 로컬 재실행하지 않았으며 최종 PR CI는 푸시 후 확인한다.
 - API/DB/환경·의존성 변경 없음. Android 빌드 영향, 수동 배포 없음. 롤백은 이번 수정 커밋 revert와 이전 Android 빌드 복원. GitHub dev rules 조회에서 승인 1건 필요·필수 check 목록은 빈 배열·strict=true를 확인했다. 현재 PR은 MERGEABLE이나 REVIEW_REQUIRED/BLOCKED이며 독립 승인 완료나 즉시 병합 가능으로 표현하지 않는다.
 - 공유 인계: 같은 브랜치에 이번 수정·회귀·PR 초안·이 기록만 커밋·푸시하고 PR 설명과 해당 스레드를 갱신한다. 최종 head CI·미해결 대화·dev 포함 여부를 재확인한다. 사용자 DB 제외, dev/main 직접 푸시·PR 병합·자동 병합 설정 없음.
+- 게시 확인: 수정 커밋 `6909ea0` 푸시·원격 head 일치 확인. 연결 도구의 PR 수정/스레드 해결은 integration 권한 403으로 실패해 기존 인증된 gh로 PR 설명 반영과 해당 스레드 해결을 완료했다. 최신 dev 재조회도 `00f086c` 포함 상태이며 GitHub는 MERGEABLE·REVIEW_REQUIRED/BLOCKED다. 구현 head Verify `45332824330`이 시작됐으며 이 게시 기록 커밋을 포함한 최종 CI는 별도 확인한다. 다음 공유 인계는 동일 브랜치의 수정 diff 독립 재리뷰·필요 승인 1건이며 병합은 수행하지 않았다.
 
 ## B6 PR #51 게시·최신 dev 충돌 정리 (2026-11-23, Codex)
 
