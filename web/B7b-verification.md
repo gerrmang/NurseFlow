@@ -1,5 +1,13 @@
 # B7b 웹 관리자 근무 설정 검증
 
+## A14 포함 dev 재통합 검증 (2026-11-24 23:38 KST)
+
+- 사용자 요청으로 `9e72855`에서 최신 `origin/dev` `db5e4120d04f9cd259bdb4ad509088ebf1598cd6`(A14 #57)을 같은 B7b 브랜치에 통합했다. 충돌은 작업 현황 문서 한 곳이며 B7b와 A14 기록을 모두 보존했다. B7b 동작 코드는 바꾸지 않았다. backend·OpenAPI·웹 생성 타입은 dev와 동일하고 지원 허용 관리 UI는 새로 추가하지 않는다.
+- 웹 api:check·typecheck·lint·build exit 0. 전체 **447개 통과·opt-in 4개 건너뜀·실패 0**(총 451개/25파일), JS gzip 114.84 kB. JDK 21 backend `test bootJar --offline --no-daemon` BUILD SUCCESSFUL(1분 54초), XML 총 294개 중 **289개 통과·opt-in 5개 건너뜀·실패/오류 0**. `git diff --cached --check` 통과.
+- A14 통합 JAR·가상 OIDC·새 메모리 H2 `b7b_a14_merge_e2e`에서 실제 서버 인수 **1개 통과·실패/건너뜀 0**, exit 0. 검증용 Java·공급자 종료와 18090/18091 포트 해제를 확인했다. 사용자 DB·trace는 변경하지 않았다.
+- 이번 재통합에서 브라우저·실제 Kakao·운영·물리 기기·Android 로컬 전체 검사는 반복하지 않았다. 최종 PR CI에서 Android를 포함해 확인한다. API·DB·환경·서버 규칙의 B7b 추가 변경 없음. 웹 빌드 영향, 수동 배포 없음. 롤백은 이번 통합 커밋을 첫 부모 기준 revert하고 이전 웹 빌드를 복원한다.
+- 이전 최종 head `9e72855`의 Verify `45406922044` 전체 성공은 확인된 기록이며 이번 통합 head CI와 구분한다. 현재 PR #59의 본문·원격 head와 최종 CI를 푸시 후 확인한다.
+
 - 게시: [PR #59](https://github.com/gerrmang/NurseFlow/pull/59), 대상 `dev`, 일반 PR. 구현·통합 head `deeb6bb`, 원격 SHA 일치 확인. GitHub Verify와 최종 게시 기록은 `docs/work-status.md` 최신 절을 확인한다. 아래 '게시 없음' 표현은 당시 시점 기록이다.
 - 원격 검증: 문서 head `1739798`의 [Verify 45406333985](https://github.com/gerrmang/NurseFlow/actions/runs/45406333985)에서 Backend tests·Android debug build·Web checks·Demo seed checks 모두 success. 이전 구현 head에서는 기존 Android 테스트 1건이 실패했고 동일 Android 소스의 최신 실행은 통과했다. 정확한 검사명과 제한은 공유 현황에 기록했다. GitHub 승인 리뷰는 별도다.
 

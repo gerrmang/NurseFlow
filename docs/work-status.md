@@ -1,5 +1,13 @@
 # 공유 작업 현황
 
+## B7b PR #59 A14 포함 최신 dev 재통합 (2026-11-24, Codex)
+
+- 사용자 요청으로 같은 공유 worktree·`feat/web-schedule-settings`, 시작 head `9e728551f5d4da98b18fe7505f68b8c93fe64e6c`에서 `git fetch origin` 후 최신 dev `db5e4120d04f9cd259bdb4ad509088ebf1598cd6`(A14 #57)을 통합했다. 시작 tracked 변경 없음, 사용자 DB·trace 보존. 충돌은 `docs/work-status.md` 한 곳이며 B7b와 A14 기록을 모두 보존했다. B7b 동작 코드는 바꾸지 않았고 backend·OpenAPI·웹 생성 타입은 dev와 동일하다.
+- 웹 api:check·typecheck·lint·build exit 0, **447개 통과·opt-in 4개 건너뜀·실패 0**(총 451개/25파일), JS gzip 114.84 kB. JDK 21 backend `test bootJar --offline --no-daemon` BUILD SUCCESSFUL(1분 54초), XML **289개 통과·opt-in 5개 건너뜀·실패/오류 0**(총 294개). `git diff --cached --check` 통과.
+- A14 통합 JAR·가상 OIDC·새 메모리 H2 `b7b_a14_merge_e2e`로 B7b 실제 서버 인수 **1개 통과·실패/건너뜀 0**. 검증용 Java·공급자 종료와 18090/18091 포트 해제 확인. 브라우저·실제 Kakao·운영·물리 기기·Android 로컬 전체 검사는 반복하지 않았으며 Android 포함 원격 PR CI로 확인한다.
+- 이전 최종 head `9e72855`의 [Verify 45406922044](https://github.com/gerrmang/NurseFlow/actions/runs/45406922044)는 Backend tests·Android debug build·Web checks·Demo seed checks 모두 success를 확인한 기록이다. 이는 이번 통합 head CI를 대신하지 않는다. A14는 서버 필수 배치 규칙 확장이며 B7b에 지원 허용 관리 화면을 추가하지 않는다.
+- B7b의 추가 API·DB·환경·서버 규칙 변경 없음. 웹 빌드 영향·수동 배포 없음. 되돌리기는 이번 통합 커밋을 첫 부모 기준 revert하고 이전 웹 빌드 복원. 같은 task branch에 통합·검증 문서·PR 초안을 커밋·푸시해 기존 [PR #59](https://github.com/gerrmang/NurseFlow/pull/59)를 갱신하고 최종 원격 head·dev 포함·CI 상태를 확인한다. 사용자 DB·trace는 커밋 제외, dev/main 직접 푸시·PR 병합·자동 병합·수동 배포 없음.
+
 ## B7b PR #59 게시 확인 (2026-11-24, Codex)
 
 - CI 후속 확인: 게시 기록 head `17397988a6632ad25e1b09dd32d5a5aa92e3408a`의 [Verify 45406333985](https://github.com/gerrmang/NurseFlow/actions/runs/45406333985)는 completed/success, Backend tests·Android debug build·Web checks·Demo seed checks 모두 success를 gh로 확인했다. PR의 Vercel·Preview Comments도 pass다. 최신 원격 dev는 여전히 `74886b6`이고 HEAD 조상 포함·원격 기능 head 일치를 확인했다. GitHub는 MERGEABLE·REVIEW_REQUIRED/BLOCKED를 유지한다.
@@ -49,6 +57,22 @@
 - 브라우저 가상 관리자 로그인 후 D 월 환산 420분 preview·저장, D/E 전담 저장, 11월 4일 A팀 D 3명·필요 자격 전체 교체, 11월 5일 09~13시 반차 저장·재조회·reload 유지 확인. 가상 데이터 스크린샷 `web/B7b-browser-verification.jpg` 보존. 이후 간호사 선택 유지 보완은 DOM 회귀로 검증했다. 실제 Kakao·실제 다중 관리자 브라우저 경합·전체 화면 크기·물리 기기·운영·독립 리뷰·CI는 미검증. backend/Android 미변경으로 전체 회귀 생략.
 - API·DB·환경변수 계약·의존성·서버 필수 규칙 변경 없음. backend·OpenAPI diff 0줄. 웹 정적 빌드 영향, 데이터 이전·수동 배포 없음. 롤백은 B7b 웹 변경 revert와 이전 웹 빌드 복원. 검증용 Java·가상 공급자·Vite 종료와 18090/18091/5174 포트 해제를 확인했다.
 - 공유 인계: `C:\Users\jjang\IdeaProjects\NurseFlow`, `feat/web-schedule-settings`, 기준 HEAD `00f086c`의 미커밋 변경으로 유지한다. `web/B7b-verification.md`·`web/B7b-pr-draft.md`에 검증/생략/배포/롤백을 기록했다. 자체 diff·호출 경로 점검 완료, 다음은 B7b 전체 변경 독립 리뷰다. 커밋·푸시·PR 게시·병합·배포 없음. 사용자 DB·trace는 커밋 대상에서 제외한다.
+## A14 팀 간 지원 구현 (2026-11-24, Claude)
+
+- 브랜치 `feat/cross-team-support`(최신 dev `548552b`에서 분기). A12 PR #56과 `RosterService`·`schema.sql`·`openapi.yaml`·`ApiTestBase`를 함께 바꾸므로, 규칙 PR은 하나씩 병합한다는 순서에 따라 **#56 병합 뒤 최신 dev에 맞춰 PR을 연다.** 그 전에는 브랜치에만 둔다.
+- 사용자 결정(2026-11-24): 허용 범위는 간호사·배치 팀·시작~종료일(포함, 최대 366일)·근무 유형(비우면 전체). 철회는 기록을 남겨 REVOKED로 바꾸고, 그 간호사가 허용 기간·근무 유형 안에서 배치 팀 칸에 배치된 DRAFT를 revision 증가·재검증 표시한다. 공개본은 바꾸지 않는다. `requirements.md`·`feature-breakdown.md`에 반영했다.
+- 서버: `cross_team_support_allowances` 테이블, `GET/POST /wards/{wardId}/support-allowances`, `POST .../{allowanceId}/revoke`(관리자 전용, 병동 잠금, 감사 기록). 같은 범위의 활성 기록이 있으면 새로 만들지 않고 200으로 그 기록을 반환한다. 철회는 멱등이다. 허용 생성은 범위만 넓히므로 초안 revision을 바꾸지 않는다. 병동 정책 revision도 올리지 않는다(다른 정책 화면 ETag 영향 회피).
+- 규칙: `CrossTeamSupportRule`이 후보·수동·자동(고정 포함)·확정 4경로에서 팀 조건을 판단한다. 기존 `TEAM_MISMATCH` 진단은 `CROSS_TEAM_NOT_ALLOWED`로 대체했다. 허용은 팀 조건만 완화하고 시간 중복·휴가·휴식·연속근무 등은 그대로 적용한다. 날짜는 칸의 근무일(Night는 시작일). 지원 배치는 칸의 팀, 즉 배치 팀 충원에 계산된다. 자동배치는 칸마다 같은 팀 간호사를 먼저 시도하고 아무도 못 맡을 때만 지원을 쓴다(날짜순 탐욕 배치라 앞선 지원 배치가 뒤 칸의 같은 팀 배치 여지를 줄일 수는 있다).
+- 테스트: 규칙 단위(경계일·근무 유형·다른 팀·철회), 통합(허용 전 거부→허용 안 통과·범위 밖 날짜/근무 거부→동시간 중복 거부→배치 팀 충원→철회 시 초안 표시·고정 자동배치 FAILED·확정 거부→재허용 후 공개→공개 뒤 철회는 공개본 유지, 자동배치 같은 팀 우선·허용 범위 밖 미충원), HTTP(권한·검증·중복 생성·타 병동·멱등 철회·감사).
+- 검증: backend 전체 `LC_ALL=C.UTF-8 ./gradlew test` 284개 중 279개 통과·opt-in 5개 건너뜀·실패 0(리뷰 반영 후 재실행). 로캘 미지정 첫 실행은 병원 CSV 한글 파일명 테스트 3개만 `InvalidPathException`으로 실패했고 UTF-8 로캘에서 통과해 환경 문제로 판단했다. web `npm run api:check`·`npm run typecheck` 통과. Android·웹 화면은 B 트랙 범위라 변경·실행하지 않았다.
+- 코드 리뷰(자체, medium): 같은 범위 중복 생성, 철회 시 근무 유형 무시한 과다 표시, created_at 문자열 정렬을 반영했다. 비활성 간호사 대상 허용 생성 허용과 팀 삭제 시 허용 기록 유지는 판정에 영향이 없어(배치 시 규칙이 차단, 비활성 팀 칸 없음) 이번 범위에서 제외했다.
+- API/DB: 신규 테이블·엔드포인트·오류 코드 `INVALID_SUPPORT_ALLOWANCE`·`SUPPORT_ALLOWANCE_NOT_FOUND`. 진단 코드 이름 변경(`TEAM_MISMATCH`→`CROSS_TEAM_NOT_ALLOWED`)은 클라이언트에서 참조하지 않음을 검색으로 확인했다. 롤백은 이 브랜치 커밋 revert이며 새 테이블은 남아도 무해하다.
+- dev 반영(2026-11-24): A12 #56 병합 후 `origin/dev` `74886b6`을 병합했다. 충돌은 `RosterService`(검증 맥락에 확정 희망 오프·미확정 희망 오프·지원 허용을 함께 둠), `ApiTestBase` 정리 목록, `openapi.yaml`(경로·스키마·진단 설명을 양쪽 모두 유지), `schema.gen.ts`(재생성), 이 파일이다. 자동배치 후보 순서는 같은 팀 → 미확정 희망 오프 없음 → 배치 횟수 순으로 정했다.
+- 병합 후 검증: backend 전체 `LC_ALL=C.UTF-8 ./gradlew test` 294개 중 289개 통과·5개 건너뜀·실패 0. web `api:check`·`typecheck`·`lint` 통과, vitest 394개 통과·3개 건너뜀.
+- 병합 후 코드 리뷰(자체, medium) 반영: `shiftTypeIds`의 null 원소를 500 대신 400 `INVALID_REQUEST`로 거부, 철회 시 이미 그 팀 소속이 된 간호사의 배치는 재검증 표시에서 제외, 자동배치 주석을 칸 단위 같은 팀 우선이라는 실제 동작에 맞춤. 반영 후 backend 전체 294개 중 289개 통과·5개 건너뜀·실패 0.
+- PR #57 리뷰 P2 반영(hyen11, `discussion_r4680974733`): 생성에 `Idempotency-Key`를 필수로 받고 결과를 재생한다. 재생은 기록을 현재 상태로 다시 읽으므로 생성→철회→같은 키 재시도에서 활성 허용이 생기지 않고 REVOKED가 보인다. 다른 요청에 같은 키는 `IDEMPOTENCY_KEY_REUSED`, 새 키는 의도적 재허용이다. HTTP 회귀 추가. backend 전체 294개 중 289개 통과·5개 건너뜀·실패 0, web `api:check`·`typecheck` 통과.
+- 공유 인계: 같은 브랜치로 dev 대상 PR을 연다. A13 PR도 공유 파일을 바꾸므로 공유 파일을 건드리는 PR은 하나씩 병합하고 뒤 PR은 최신 dev에 맞춘 뒤 다시 검증한다.
+
 ## A12 희망 오프 구현 (2026-11-24, Claude)
 
 - `origin/dev` `b101bb4`(A11 병합)에서 분기했다. 실행 환경의 푸시 제한 때문에 브랜치 이름은 `claude/project-thread-owc2gs`이며, 문서상 이름은 `feat/off-requests`다. 결정 15는 사용자 답변으로 정했다. 한도는 병동별 기본 4일이고 간호사 본인 제출에만 적용한다. 마감은 전달 15일이며 병동별로 1~28일 중에서 바꿀 수 있다. 마감 뒤에는 간호사 예외 요청을 관리자가 접수한다. 마감 시각은 사용자가 정하지 않아 병동 현지 자정으로 가정했다. 주말 목표는 A19로 미뤘다.
