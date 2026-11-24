@@ -14,6 +14,7 @@ import com.nurseflow.roster.domain.model.RuleSeverity
 import com.nurseflow.roster.domain.model.ShiftAssignment
 import com.nurseflow.roster.domain.model.ShiftKind
 import com.nurseflow.roster.domain.rule.ConsecutiveWorkRule
+import com.nurseflow.roster.domain.rule.CrossTeamSupportRule
 import com.nurseflow.roster.domain.rule.RosterRuleValidator
 import com.nurseflow.roster.persistence.entity.DbAbsence
 import com.nurseflow.roster.persistence.entity.DbGenerationJob
@@ -22,6 +23,7 @@ import com.nurseflow.roster.persistence.entity.DbRoster
 import com.nurseflow.roster.persistence.entity.DbSlot
 import com.nurseflow.roster.persistence.entity.NewSlot
 import com.nurseflow.roster.persistence.repository.RosterJdbcRepository
+import com.nurseflow.roster.persistence.repository.SupportAllowanceJdbcRepository
 import com.nurseflow.common.idempotency.IdempotencyKeyRaceException
 import com.nurseflow.common.idempotency.MutationReplayRepository
 import com.nurseflow.common.idempotency.ReplayLookup
@@ -40,6 +42,7 @@ class RosterService(
     private val repo: RosterJdbcRepository,
     private val mapper: JsonMapper,
     private val replays: MutationReplayRepository,
+    private val supportAllowances: SupportAllowanceJdbcRepository,
 ) {
     private val validator = RosterRuleValidator()
     private val diagnosticList = object : TypeReference<List<RuleDiagnostic>>() {}
@@ -403,7 +406,7 @@ class RosterService(
             if (nurse == null || !nurse.qualifications.containsAll(slot.requiredQualifications)) {
                 listOf(RuleDiagnostic("LOCKED_ASSIGNMENT_INVALID", "HARD", "고정 배치가 현재 자격 또는 활성 상태와 맞지 않습니다.", slot.date))
             } else {
-                teamViolations(slot, nurse) + validator.validate(
+                teamViolations(slot, nurse, context.crossTeam) + validator.validate(
                     candidate, assignments, context.absences, nurse.workPattern, context.consecutiveWork,
                 ).map(RuleDiagnostic::from)
             }
@@ -418,6 +421,7 @@ class RosterService(
         val deadline = System.nanoTime() + repo.timeLimitNanos(jobId)
         var timedOut = false
         var cancelled = false
+        // Own-team nurses first: an allowance lets support fill a slot, never take it from the team's own staff.
         generationLoop@ for (slot in allSlots.filter { it !in preserved }.sortedWith(
             compareBy<DbSlot>({ it.date }, { it.startsAt }, { !it.seniorRequired }, { it.id.toString() }),
         )) {
@@ -425,6 +429,7 @@ class RosterService(
             if (System.nanoTime() >= deadline) { timedOut = true; break }
             val ordered = nurses.sortedWith(
                 compareBy<DbNurse>(
+                    { slot.teamId != null && it.teamId != slot.teamId },
                     { counts[it.id] ?: 0 },
                     { nightCounts[it.id] ?: 0 },
                     { it.id.toString() },
@@ -432,7 +437,7 @@ class RosterService(
             )
             for (nurse in ordered) {
                 if (System.nanoTime() >= deadline) { timedOut = true; break@generationLoop }
-                if (!nurse.qualifications.containsAll(slot.requiredQualifications) || teamViolations(slot, nurse).isNotEmpty()) continue
+                if (!nurse.qualifications.containsAll(slot.requiredQualifications) || teamViolations(slot, nurse, context.crossTeam).isNotEmpty()) continue
                 val candidate = ShiftAssignment(slot.id, nurse.id, slot.date, slot.kind, slot.startsAt, slot.endsAt)
                 if (validator.validate(candidate, assignments, context.absences, nurse.workPattern, context.consecutiveWork).isNotEmpty()) continue
                 selected[slot.id] = nurse.id
@@ -509,7 +514,7 @@ class RosterService(
     ): List<RuleDiagnostic> {
         val nurse = nursesById.getOrPut(nurseId) { repo.findNurse(nurseId, roster.wardId) }
             ?: throw BusinessException(ErrorCode.NURSE_NOT_FOUND)
-        val extra = teamViolations(slot, nurse).toMutableList()
+        val extra = teamViolations(slot, nurse, context.crossTeam).toMutableList()
         if (!nurse.active) extra += RuleDiagnostic("NURSE_INACTIVE", "HARD", "활성화되지 않은 간호사입니다.", slot.date)
         if (!nurse.qualifications.containsAll(slot.requiredQualifications)) {
             extra += RuleDiagnostic("QUALIFICATION_MISSING", "HARD", "필수 자격이 부족합니다.", slot.date)
@@ -520,10 +525,9 @@ class RosterService(
         ).map(RuleDiagnostic::from)
     }
 
-    private fun teamViolations(slot: DbSlot, nurse: DbNurse): List<RuleDiagnostic> = buildList {
-        if (slot.teamId != null && slot.teamId != nurse.teamId) {
-            add(RuleDiagnostic("TEAM_MISMATCH", "HARD", "이 근무 칸과 간호사의 소속 팀이 다릅니다.", slot.date))
-        }
+    private fun teamViolations(slot: DbSlot, nurse: DbNurse, crossTeam: CrossTeamSupportRule): List<RuleDiagnostic> = buildList {
+        crossTeam.validate(nurse.id, nurse.teamId, slot.teamId, slot.date, slot.shiftTypeId)
+            ?.let { add(RuleDiagnostic.from(it)) }
         if (slot.seniorRequired && !nurse.seniorEligible) {
             add(RuleDiagnostic("SENIOR_REQUIRED", "HARD", "선임 자격이 필요한 근무 칸입니다.", slot.date))
         }
@@ -556,7 +560,8 @@ class RosterService(
         val consecutiveWork = ConsecutiveWorkRule(policy, covered, effectiveRests)
         val restConflicts = restLeaveConflicts(rests, ownAbsences + adjacentAbsences, roster.zone) +
             restLeaveConflicts(adjacentRests, ownAbsences, roster.zone)
-        return ValidationContext(existing, approved, consecutiveWork, restConflicts)
+        val crossTeam = CrossTeamSupportRule(supportAllowances.activeOverlapping(roster.wardId, month.atDay(1), month.atEndOfMonth()))
+        return ValidationContext(existing, approved, consecutiveWork, restConflicts, crossTeam)
     }
 
     private fun validateAbsence(roster: DbRoster, input: ApprovedAbsenceInput) {
@@ -799,5 +804,6 @@ class RosterService(
         val absences: List<ApprovedAbsence>,
         val consecutiveWork: ConsecutiveWorkRule,
         val restConflicts: List<RuleDiagnostic>,
+        val crossTeam: CrossTeamSupportRule,
     )
 }

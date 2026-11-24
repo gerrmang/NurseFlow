@@ -135,7 +135,7 @@ class RosterServiceIntegrationTest @Autowired constructor(
         val senior = current.slots.single { it.seniorRequired }
         assertTrue(current.slots.all { it.teamId == team })
         assertTrue(service.validate(current.rosterId, tag(current), ValidateAssignmentRequest(senior.slotId, nurseId), admin)
-            .hardViolations.any { it.code == "TEAM_MISMATCH" })
+            .hardViolations.any { it.code == "CROSS_TEAM_NOT_ALLOWED" })
         staff.assignTeam(wardId, nurseId, team, admin)
         val updated = service.getRoster(draft.rosterId, admin)
         assertTrue(updated.needsRevalidation)

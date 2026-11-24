@@ -864,6 +864,60 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/wards/{wardId}/support-allowances": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                wardId: components["parameters"]["WardId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * 팀 간 지원 허용 기록 조회
+         * @description 기본은 철회되지 않은 기록만 반환한다. includeRevoked=true면 철회된 기록도 함께 반환한다. 시작일·종료일 순.
+         */
+        get: operations["listSupportAllowances"];
+        put?: never;
+        /**
+         * 팀 간 지원 허용
+         * @description 간호사가 소속 팀이 아닌 배치 팀의 근무 칸에 배치될 수 있는 범위를 허용한다. 범위는 시작일~종료일(포함, 최대 366일)과
+         *     근무 유형 목록이다. 근무 유형 목록이 비어 있으면 그 기간의 모든 근무 유형을 허용한다. 날짜는 근무 칸의 근무일이며
+         *     자정을 넘는 Night는 시작한 날로 본다. 허용은 팀 조건만 완화하고 휴가·반차·휴식·중복·연속근무 등 다른 필수 규칙은 그대로 적용한다.
+         *     허용된 지원 배치는 실제 배치 팀의 충원에 계산된다. 허용 범위만 넓히므로 기존 초안의 revision은 바꾸지 않는다.
+         */
+        post: operations["createSupportAllowance"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/wards/{wardId}/support-allowances/{allowanceId}/revoke": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                wardId: components["parameters"]["WardId"];
+                allowanceId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 팀 간 지원 허용 철회
+         * @description 기록은 이력으로 남고 상태가 REVOKED가 된다. 그 간호사가 허용 기간 안에 배치 팀 칸에 배치된 비공개 초안은
+         *     revision을 올리고 재검증 대상으로 표시하며, 다른 허용이 없으면 확정에서 CROSS_TEAM_NOT_ALLOWED로 거부된다.
+         *     공개본은 바꾸지 않는다. 이미 철회된 기록을 다시 철회하면 변경 없이 현재 기록을 반환한다.
+         */
+        post: operations["revokeSupportAllowance"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/wards/{wardId}/rosters": {
         parameters: {
             query?: never;
@@ -1750,6 +1804,51 @@ export interface components {
             maxConsecutiveWorkDays: number;
             policyRevision: number;
         };
+        SupportAllowanceInput: {
+            /** Format: uuid */
+            nurseId: string;
+            /**
+             * Format: uuid
+             * @description 배치 팀. 간호사의 소속 팀이 아니어야 한다.
+             */
+            teamId: string;
+            /** Format: date */
+            startDate: string;
+            /**
+             * Format: date
+             * @description 포함. 시작일부터 최대 366일.
+             */
+            endDate: string;
+            /** @description 비우거나 생략하면 모든 근무 유형. */
+            shiftTypeIds?: string[];
+        };
+        SupportAllowance: {
+            /** Format: uuid */
+            allowanceId: string;
+            /** Format: uuid */
+            nurseId: string;
+            /** Format: uuid */
+            teamId: string;
+            /** Format: date */
+            startDate: string;
+            /** Format: date */
+            endDate: string;
+            /** @description 빈 배열 = 모든 근무 유형. */
+            shiftTypeIds: string[];
+            /** @enum {string} */
+            status: "ACTIVE" | "REVOKED";
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            revokedAt?: string | null;
+        };
+        SupportAllowanceItems: {
+            items: components["schemas"]["SupportAllowance"][];
+        };
+        SupportAllowanceRevocation: {
+            allowance: components["schemas"]["SupportAllowance"];
+            flaggedDraftCount: number;
+        };
         RosterRestDay: {
             /** Format: uuid */
             nurseId: string;
@@ -1767,7 +1866,8 @@ export interface components {
         RuleDiagnostic: {
             /**
              * @description 연속근무 상한 위반은 CONSECUTIVE_WORK_LIMIT, 명시 휴식일 배치는 REST_DAY_ASSIGNMENT_CONFLICT,
-             *     명시 휴식일과 승인 연차의 겹침은 REST_DAY_CONFLICT이며 모두 HARD이다.
+             *     명시 휴식일과 승인 연차의 겹침은 REST_DAY_CONFLICT, 관리자 허용 범위 밖의 다른 팀 칸 배치는
+             *     CROSS_TEAM_NOT_ALLOWED이며 모두 HARD이다.
              */
             code: string;
             /** @enum {string} */
@@ -4166,6 +4266,116 @@ export interface operations {
             404: components["responses"]["NotFound"];
             /** @description STALE_POLICY_REVISION. 최신 정책을 조회한 뒤 다시 저장한다. */
             412: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+        };
+    };
+    listSupportAllowances: {
+        parameters: {
+            query?: {
+                includeRevoked?: boolean;
+            };
+            header?: never;
+            path: {
+                wardId: components["parameters"]["WardId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 허용 기록 목록 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupportAllowanceItems"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    createSupportAllowance: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                wardId: components["parameters"]["WardId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SupportAllowanceInput"];
+            };
+        };
+        responses: {
+            /** @description 생성된 허용 기록 */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupportAllowance"];
+                };
+            };
+            /**
+             * @description INVALID_SUPPORT_ALLOWANCE(종료일이 시작일보다 앞섬, 366일 초과, 배치 팀이 소속 팀과 같음),
+             *     SHIFT_TYPE_NOT_FOUND(병동의 활성 근무 유형이 아님), INVALID_REQUEST(필수값 누락, 근무 유형 20개 초과).
+             */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            /** @description WARD_NOT_FOUND, NURSE_NOT_FOUND, TEAM_NOT_FOUND(병동의 활성 팀이 아님) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+        };
+    };
+    revokeSupportAllowance: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                wardId: components["parameters"]["WardId"];
+                allowanceId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 철회된 기록과 재검증 표시한 초안 수 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupportAllowanceRevocation"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            /** @description WARD_NOT_FOUND, SUPPORT_ALLOWANCE_NOT_FOUND(이 병동의 기록이 아님) */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };
