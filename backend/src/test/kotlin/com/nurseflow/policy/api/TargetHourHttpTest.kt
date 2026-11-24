@@ -1,6 +1,7 @@
 package com.nurseflow.policy.api
 
 import com.nurseflow.support.ApiTestBase
+import com.nurseflow.support.FakeHolidayServer
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -104,12 +105,21 @@ class TargetHourHttpTest : ApiTestBase() {
         val holidays = refreshed.json!!.get("publicHolidays")
         // Four days off: Sep 24, 25 (two names), 26 (Saturday) and the substitute on Sep 28. Sep 29 is not a day off.
         assertEquals(listOf("2026-09-24", "2026-09-25", "2026-09-26", "2026-09-28"), holidays.toList().map { it.get("date").asString() })
-        assertEquals("가상 명절, 가상 기념일", holidays[1].get("name").asString())
+        // A regular holiday wins over a substitute one listed first on the same date.
+        assertEquals("PUBLIC_HOLIDAY", holidays[1].get("kind").asString())
+        assertEquals("대체공휴일(가상 기념일), 가상 명절", holidays[1].get("name").asString())
         assertEquals("SUBSTITUTE_HOLIDAY", holidays[3].get("kind").asString())
         assertFalse(refreshed.json!!.get("holidaySource").get("fetchedAt").isNull)
         // Weekdays Sep 24, 25 and 28 add rest days; Sep 26 is a Saturday and counts once.
         assertEquals(11, refreshed.json!!.get("target").get("restDays").asInt())
         assertEquals(3, refreshed.json!!.get("target").get("holidayDays").asInt())
+
+        // A second "fetch now" within minutes reuses the stored month; years far away are refused.
+        val calls = FakeHolidayServer.calls.get()
+        assertEquals(200, http.post("$path/refresh?month=2026-09", null, token).status)
+        assertEquals(calls, FakeHolidayServer.calls.get())
+        assertEquals("HOLIDAY_MONTH_OUT_OF_RANGE", http.post("$path/refresh?month=2020-01", null, token).code)
+        assertEquals(calls, FakeHolidayServer.calls.get())
 
         // The ward works the substitute holiday: its entry replaces the imported one for this ward only.
         val tag = mapOf("If-Match" to refreshed.header("ETag")!!)

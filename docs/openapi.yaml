@@ -2080,6 +2080,7 @@ paths:
       description: |
         해당 월의 국가 공휴일을 공휴일 API에서 바로 가져와 DB의 그 달을 통째로 바꾼다(모든 병동 공통).
         서버는 키가 있으면 매일 이번 달부터 12개월 뒤까지 자동으로 갱신하므로 임시공휴일 발표 직후 등에만 쓴다.
+        작년부터 내년까지의 달만 가져올 수 있고, 10분 안에 이미 가져온 달은 다시 호출하지 않고 저장된 값을 돌려준다(공용 호출 한도 보호).
         실패하면 저장된 값을 그대로 두고 503을 반환한다. 병동 항목과 정책 revision은 바꾸지 않는다.
       x-required-role: WARD_ADMIN
       responses:
@@ -2093,7 +2094,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/HolidayCalendar'
         '400':
-          description: INVALID_MONTH
+          description: INVALID_MONTH 또는 HOLIDAY_MONTH_OUT_OF_RANGE
           content:
             application/problem+json:
               schema:
@@ -2269,7 +2270,7 @@ paths:
         활성 편성 대상 간호사와, 이 근무표에 배정·부재·휴식일이 남은 그 밖의 간호사별로
         실제(인정) 시간, 환산시간, 목표, 잔여(환산 - 목표), 부족·초과를 계산한다. 조회 때 현재 정책으로 계산하며 저장하지 않는다.
         환산시간 = 배정 근무의 환산시간 + 승인 연차 일수 × leaveCreditMinutes + 반차 × halfDayCreditMinutes + SOF × sofCreditMinutes.
-        연차·반차는 목표일에만 더한다(주말·공휴일·병동 휴무일은 목표에서 이미 빠졌다). 연차·SOF와 같은 날의 반차는 더하지 않는다. OF는 0이다.
+        연차·SOF·반차는 목표일에만 더한다(주말·공휴일·병동 휴무일은 목표에서 이미 빠졌다). 한 날짜에는 연차, SOF, 반차 순으로 하나만 더한다. OF는 0이다.
         앞뒤 달 공개본에 저장된 연차가 이 달로 이어지면 이 달 날짜만 센다.
         자정을 넘는 근무는 끝나는 날짜의 월에 전부 귀속한다(결정 사항 14 잠정안, nightAttribution=END_DATE_MONTH).
         그래서 이 달 말일 Night는 다음 달로 넘어가고(carriedOutShifts), 공개된 전월 말일 Night는 이 달에 들어온다(carriedInShifts).

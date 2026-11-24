@@ -865,3 +865,14 @@ Claude와 Codex가 같은 진행 기록을 사용한다. PR 또는 정기 리뷰
 - web: npm run api:check, lint, typecheck, npm test -- --run, build 모두 성공. 8파일 252개 통과, 실패·건너뜀 0, JS gzip 94.51 kB. backend: JDK 21 .\gradlew.bat test --no-daemon BUILD SUCCESSFUL, XML 262개 중 257개 통과·5개 opt-in 건너뜀·실패/오류 0. git diff --cached --check 통과.
 - API/DB/환경의 추가 변경 없음(A8에 이미 포함된 계약·스키마를 통합). 배포 없음. 롤백은 이 병합 커밋을 첫 부모 기준 revert. 브라우저·실제 Kakao·기기 검사는 재실행하지 않았다. 기존 실제 Kakao 2계정 인수·독립 재리뷰 미완료를 유지한다.
 - 같은 공유 worktree에서 이 브랜치에 통합·검증 기록을 커밋·푸시하고 B4a로 이동한다. 사용자 nurseflow.mv.db 보존, dev/main에 직접 푸시·PR 병합·자동 병합 설정 없음. 최종 PR CI와 GitHub 충돌 상태는 푸시 후 별도 확인한다.
+
+## A13 월 목표시간·휴일 달력·시간 진단 구현 (2026-11-24, Claude)
+
+- 브랜치 `feat/target-hours`(최신 `dev` `548552b`에서 분기). 결정 사항 14 사용자 답변 반영: 자정을 넘는 근무는 끝나는 날짜의 월에 전부 귀속(잠정), 시연 기본값 하루 480분(30일·휴식 9일 = 168시간)이며 관리자가 병동별로 변경, 공휴일은 외부 API에서 가져와 DB에 저장해 사용.
+- API: `GET/PUT /wards/{wardId}/target-hour-policy`, `GET/PUT /wards/{wardId}/holiday-calendar?month=`, `POST /wards/{wardId}/holiday-calendar/refresh?month=`, `GET /rosters/{rosterId}/hour-diagnostics`. 모두 관리자 전용. 정책·달력 쓰기는 병동 공통 정책 ETag(If-Match)를 쓰고 초안 재검증 표시는 하지 않는다(진단은 조회 때 계산).
+- DB: `ward_target_hour_policies`, `ward_calendar_days`, `public_holidays`, `public_holiday_imports`. 오류 코드 `INVALID_TARGET_HOUR_POLICY`, `INVALID_HOLIDAY_CALENDAR`, `HOLIDAY_MONTH_OUT_OF_RANGE`, `HOLIDAY_SOURCE_NOT_CONFIGURED`, `HOLIDAY_SOURCE_UNAVAILABLE`.
+- 공휴일: 한국천문연구원 특일 정보(data.go.kr 15012690, `getRestDeInfo`). 환경 변수 `NURSEFLOW_HOLIDAY_API_KEY`(없으면 `NURSEFLOW_HOSPITAL_API_KEY`), 매일 03:30(Asia/Seoul) 이번 달~12개월 뒤 갱신(`NURSEFLOW_HOLIDAY_REFRESH_CRON`, `-`이면 끔), 관리자 즉시 갱신은 작년~내년·10분 재사용 제한. 조회·진단은 DB만 읽고, 실패하면 저장값 유지, 병동 항목이 같은 날짜의 공휴일보다 우선한다.
+- 검증: JDK 21 `./gradlew check`(LC_ALL=C.UTF-8) 289개 중 284개 통과·5개 opt-in 건너뜀·실패 0. web `npm run api:check`·`lint`·`typecheck`·`npm test -- --run`(394개 통과·3개 건너뜀)·`build` 성공. 기본 POSIX 로캘에서는 기존 병원 CSV 한글 파일명 테스트가 실패하므로 UTF-8 로캘로 실행했다.
+- 코드 리뷰(자체, 2회): 1차 6건(월 경계 연차, 주말 연차 이중 계산, 기본값 저장 시 revision 증가, 반차·SOF 중복, 진단 ETag, 필수값 오류 코드)과 2차 9건(일일 갱신 중단, 동시 갱신 키 충돌, 연차·SOF 중복, 휴일 SOF, 관리자 갱신 남용, 병동 이동 간호사 누락, 공휴일 종류 병합, 스키마 주석, 이 기록 누락)을 모두 반영했다. Codex 독립 리뷰는 아직 없다.
+- 미검증·제한: 실제 data.go.kr 호출(키 없음, 가짜 서버로만 검증), 월 중 입사·비활성 간호사의 목표 비례 계산(미지원, 전체 목표로 표시), 근무 칸이 시간을 따로 저장하지 않아 공개본도 근무 유형의 현재 환산시간으로 계산, 전월이 공개되지 않으면 전월 말일 Night를 세지 않음(`previousMonthPublished=false`). Android·웹 화면은 후속(B10).
+- 인계: A12 PR #56이 `openapi.yaml`·`work-status.md`·`ApiTestBase.kt`를 함께 바꾸므로 #56 병합 뒤 최신 `dev`로 갱신하고 PR을 연다.

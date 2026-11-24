@@ -309,7 +309,8 @@ CREATE TABLE IF NOT EXISTS ward_target_hour_policies (
 );
 
 -- A13: ward holiday calendar, one row per date. Weekends are not stored; holidays on a weekend count once.
--- Entered by the ward admin (no external holiday feed yet). Names are public holiday names, never personal data.
+-- Entered by the ward admin; an entry wins over the imported public_holidays row of the same date.
+-- Names are public holiday names, never personal data.
 CREATE TABLE IF NOT EXISTS ward_calendar_days (
     ward_id UUID NOT NULL REFERENCES wards(ward_id),
     calendar_date DATE NOT NULL,

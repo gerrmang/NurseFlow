@@ -96,8 +96,11 @@ class PublicHolidayClient(private val properties: HolidayProperties, private val
             CalendarDay(date, if (name?.contains("대체") == true) CalendarDayKind.SUBSTITUTE_HOLIDAY else CalendarDayKind.PUBLIC_HOLIDAY, name)
         }
         // Two names on one date (e.g. 어린이날 and 부처님오신날) are one holiday.
-        return days.groupBy { it.date }.map { (_, same) -> same.first().copy(name = same.mapNotNull { it.name }.distinct().joinToString(", ").take(50).ifEmpty { null }) }
-            .sortedBy { it.date }
+        // A regular holiday wins over a substitute one on the same date.
+        return days.groupBy { it.date }.map { (_, same) ->
+            val kind = if (same.any { it.kind == CalendarDayKind.PUBLIC_HOLIDAY }) CalendarDayKind.PUBLIC_HOLIDAY else CalendarDayKind.SUBSTITUTE_HOLIDAY
+            same.first().copy(kind = kind, name = same.mapNotNull { it.name }.distinct().joinToString(", ").take(50).ifEmpty { null })
+        }.sortedBy { it.date }
     }
 
     private fun reasonCode(body: String?): String? = body?.let { REASON_CODE.find(it)?.groupValues?.get(1) }

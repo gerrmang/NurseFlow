@@ -18,6 +18,7 @@ enum class ErrorCode(val status: HttpStatus, val safeMessage: String) {
     GENERATION_JOB_NOT_FOUND(HttpStatus.NOT_FOUND, "자동배치 작업을 찾을 수 없습니다."),
     GENERATION_NOT_CANCELLABLE(HttpStatus.CONFLICT, "이미 종료된 자동배치 작업입니다."),
     GENERATION_TOO_LARGE(HttpStatus.UNPROCESSABLE_CONTENT, "자동배치 한도는 2000칸입니다."),
+    HOLIDAY_MONTH_OUT_OF_RANGE(HttpStatus.BAD_REQUEST, "공휴일은 작년부터 내년까지만 가져올 수 있습니다."),
     HOLIDAY_SOURCE_NOT_CONFIGURED(HttpStatus.SERVICE_UNAVAILABLE, "공휴일 API 키가 설정되지 않았습니다. 공휴일을 직접 입력해 주세요."),
     HOLIDAY_SOURCE_UNAVAILABLE(HttpStatus.SERVICE_UNAVAILABLE, "공휴일 정보를 가져오지 못했습니다. 저장된 공휴일을 그대로 사용합니다. 잠시 후 다시 시도하거나 직접 입력해 주세요."),
     HOSPITAL_JOIN_MONTH_REQUIRED(HttpStatus.BAD_REQUEST, "가입하려면 병원 입사 년월을 입력해 주세요."),

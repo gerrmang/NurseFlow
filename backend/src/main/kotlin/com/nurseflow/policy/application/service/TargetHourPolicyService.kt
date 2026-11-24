@@ -92,7 +92,7 @@ class TargetHourPolicyService(
     fun refreshCalendar(wardId: UUID, month: String, actor: String): HolidayCalendarResult {
         wards.requireAdmin(wardId, actor)
         val yearMonth = parseMonth(month)
-        holidays.refresh(yearMonth)
+        holidays.refreshForAdmin(yearMonth)
         audit.record(wardId, actor, "PUBLIC_HOLIDAYS_REFRESHED", yearMonth.toString())
         return calendar(wardId, month, actor)
     }

@@ -122,7 +122,7 @@ class TargetHourCalculatorTest {
     }
 
     @Test
-    fun `leave on rest dates and a half-day on an SOF date add no credit`() {
+    fun `time off on rest dates or on an already credited date adds no credit`() {
         val nurse = HourNurse(UUID.randomUUID(), "가상 간호사", WorkPattern.GENERAL, true)
         val friday = LocalDate.of(2026, 11, 13).atStartOfDay(zone).toInstant()
         val calendar = listOf(CalendarDay(LocalDate.of(2026, 11, 16), CalendarDayKind.PUBLIC_HOLIDAY, null))
@@ -133,7 +133,11 @@ class TargetHourCalculatorTest {
             HourAbsence(nurse.nurseId, ApprovedAbsenceKind.APPROVED_HALF_DAY, friday.plusSeconds(13 * 86_400), friday.plusSeconds(13 * 86_400 + 14_400)),
             HourAbsence(nurse.nurseId, ApprovedAbsenceKind.APPROVED_HALF_DAY, friday.plusSeconds(14 * 86_400), friday.plusSeconds(14 * 86_400 + 14_400)),
         )
-        val rests = listOf(HourRestDay(nurse.nurseId, LocalDate.of(2026, 11, 26), RestDayKind.SOF))
+        val rests = listOf(
+            HourRestDay(nurse.nurseId, LocalDate.of(2026, 11, 26), RestDayKind.SOF),
+            HourRestDay(nurse.nurseId, LocalDate.of(2026, 11, 28), RestDayKind.SOF), // Saturday: outside the target
+            HourRestDay(nurse.nurseId, LocalDate.of(2026, 11, 13), RestDayKind.SOF), // already credited as leave
+        )
         val result = TargetHourCalculator.diagnose(november, zone, target, TargetHourPolicy(), listOf(nurse), emptyList(), absences, rests).single()
         assertEquals(2, result.leaveDays)
         assertEquals(1, result.halfDays)

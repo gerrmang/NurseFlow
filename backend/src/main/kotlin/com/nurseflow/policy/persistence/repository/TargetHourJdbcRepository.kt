@@ -83,25 +83,29 @@ class TargetHourJdbcRepository(private val jdbc: JdbcTemplate) {
             "DELETE FROM public_holidays WHERE holiday_date BETWEEN ? AND ?",
             Date.valueOf(month.atDay(1)), Date.valueOf(month.atEndOfMonth()),
         )
+        // MERGE rather than INSERT: a refresh in another server process cannot turn a same-month race into a key error.
         jdbc.batchUpdate(
-            "INSERT INTO public_holidays(holiday_date,kind,name) VALUES(?,?,?)",
+            "MERGE INTO public_holidays(holiday_date,kind,name) KEY(holiday_date) VALUES(?,?,?)",
             days.map { arrayOf<Any?>(Date.valueOf(it.date), it.kind.name, it.name) },
         )
-        jdbc.update("DELETE FROM public_holiday_imports WHERE holiday_month=?", month.toString())
         jdbc.update(
-            "INSERT INTO public_holiday_imports(holiday_month,fetched_at,holiday_count) VALUES(?,?,?)",
+            "MERGE INTO public_holiday_imports(holiday_month,fetched_at,holiday_count) KEY(holiday_month) VALUES(?,?,?)",
             month.toString(), now.toString(), days.size,
         )
     }
 
     fun wardNurses(wardId: UUID): List<WardNurseRow> = jdbc.query(
         "SELECT nurse_id,display_name,work_pattern FROM nurses WHERE ward_id=? ORDER BY display_name,nurse_id",
-        { rs, _ ->
-            WardNurseRow(
-                UUID.fromString(rs.getString("nurse_id")), rs.getString("display_name"),
-                WorkPattern.valueOf(rs.getString("work_pattern")),
-            )
-        }, wardId,
+        { rs, _ -> nurseRow(rs) }, wardId,
+    )
+
+    /** Nurses by id whatever their current ward: a roster keeps the hours of a nurse who moved away. */
+    fun nurse(nurseId: UUID): WardNurseRow? = jdbc.query(
+        "SELECT nurse_id,display_name,work_pattern FROM nurses WHERE nurse_id=?", { rs, _ -> nurseRow(rs) }, nurseId,
+    ).firstOrNull()
+
+    private fun nurseRow(rs: java.sql.ResultSet) = WardNurseRow(
+        UUID.fromString(rs.getString("nurse_id")), rs.getString("display_name"), WorkPattern.valueOf(rs.getString("work_pattern")),
     )
 
     /**

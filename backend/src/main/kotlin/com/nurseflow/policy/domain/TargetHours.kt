@@ -155,11 +155,12 @@ object TargetHourCalculator {
         val shiftCredit = counted.sumOf {
             if (dedicated && it.kind == ShiftKind.NIGHT) policy.nightDedicatedNightCreditMinutes ?: it.creditMinutes else it.creditMinutes
         }
-        val sofDates = restDays.filter { it.nurseId == nurse.nurseId && it.kind == RestDayKind.SOF && YearMonth.from(it.date) == month }
-            .map { it.date }.toSet()
-        // Leave on a weekend, holiday or ward rest day credits nothing: the target already leaves that date out.
+        // Time off on a weekend, holiday or ward rest day credits nothing: the target already leaves that date out.
+        // Each date earns at most one absence credit: leave first, then SOF, then a half-day.
         val leaveDates = absences.filter { it.nurseId == nurse.nurseId && it.kind == ApprovedAbsenceKind.APPROVED_LEAVE }
             .flatMap { leaveDatesInMonth(it, month, zone) }.filter { it !in target.restDates }.toSet()
+        val sofDates = restDays.filter { it.nurseId == nurse.nurseId && it.kind == RestDayKind.SOF && YearMonth.from(it.date) == month }
+            .map { it.date }.filter { it !in target.restDates && it !in leaveDates }.toSet()
         // A half-day on a date already credited as leave or SOF, or on a rest date, adds nothing.
         val halfDays = absences.filter { it.nurseId == nurse.nurseId && it.kind == ApprovedAbsenceKind.APPROVED_HALF_DAY }
             .map { it.startsAt.atZone(zone).toLocalDate() }

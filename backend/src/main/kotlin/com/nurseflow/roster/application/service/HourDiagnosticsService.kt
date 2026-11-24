@@ -68,7 +68,9 @@ class HourDiagnosticsService(
         val rosterable = rosters.activeNurses(roster.wardId).map { it.id }.toSet()
         val involved = rosterable + shifts.map { it.nurseId } + absences.map { it.nurseId } + restDays.map { it.nurseId }
         // Inactive or non-rosterable records appear only when this roster still holds time for them.
-        val nurses = hours.wardNurses(roster.wardId).filter { it.nurseId in involved }
+        val inWard = hours.wardNurses(roster.wardId).filter { it.nurseId in involved }
+        val movedAway = (involved - inWard.map { it.nurseId }.toSet()).mapNotNull(hours::nurse)
+        val nurses = (inWard + movedAway)
             .map { HourNurse(it.nurseId, it.displayName, it.workPattern, it.nurseId in rosterable) }
         return HourDiagnostics(
             roster.id, month, roster.status, roster.revision, policyRevision, policy, target, previous != null,
