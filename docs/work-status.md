@@ -890,4 +890,6 @@ Claude와 Codex가 같은 진행 기록을 사용한다. PR 또는 정기 리뷰
 - 미검증·제한: 실제 data.go.kr 호출(키 없음, 가짜 서버로만 검증), 월 중 입사·비활성 간호사의 목표 비례 계산(미지원, 전체 목표로 표시), 근무 칸이 시간을 따로 저장하지 않아 공개본도 근무 유형의 현재 환산시간으로 계산, 전월이 공개되지 않으면 전월 말일 Night를 세지 않음(`previousMonthPublished=false`). Android·웹 화면은 후속(B10).
 - 실제 공휴일 API 확인(2026-11-24): 사용자 Mac의 IntelliJ 실행 구성에 있는 `NURSEFLOW_HOLIDAY_API_KEY`로 `getRestDeInfo`를 2026-09·2026-10·2027-01·2027-02 네 번 호출해 모두 HTTP 200·resultCode 00을 받았다. 대체공휴일은 이름에 "대체"가 붙은 별도 항목으로 왔다. 키 값은 출력하지 않았다. 서버를 띄워 저장까지 확인하지는 않았다.
 - dev 통합: A12 PR #56 병합본(`74886b6`)을 병합했다. `openapi.yaml`은 dev 쪽에 A13 변경을 다시 적용했고, `ApiTestBase.kt`의 초기화 표 목록은 양쪽 표를 모두 포함하도록 합쳤다. `schema.gen.ts`는 다시 생성했다.
+- PR 전 3차 리뷰(dev 통합 후) 9건 중 8건 반영: 자정을 넘는 연차 이중 계산(하루의 절반 이상을 덮은 날짜만 셈), 공휴일 갱신 잠금을 저장 단계로 한정, 관리자 갱신 시도(실패 포함)를 원자적으로 10분 제한, 실제 호출 때만 감사 기록, 갱신 응답을 한 읽기 트랜잭션으로, 달력 `days`의 null 항목 400, 정책 본문 검사를 관리자 확인 뒤로, 고정 Night 전담 목표의 주말 휴가 환산. 남긴 1건: 달력 GET ETag가 월과 무관한 정책 revision이라 If-None-Match를 보내면 다른 달에 304가 날 수 있다(`Cache-Control: no-store`라 브라우저는 보내지 않음, 후속).
+- 최종 검증: JDK 21 `./gradlew check`(LC_ALL=C.UTF-8) 300개 중 295개 통과·5개 opt-in 건너뜀·실패 0. web api:check·lint·typecheck·테스트 394개 통과(3개 건너뜀)·build 성공.
 - 인계: A14 PR도 `openapi.yaml`·`work-status.md`를 바꾸므로 A13과 A14 중 먼저 준비된 PR부터 하나씩 병합한다.

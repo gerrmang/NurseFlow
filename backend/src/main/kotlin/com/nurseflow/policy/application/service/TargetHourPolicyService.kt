@@ -11,7 +11,9 @@ import com.nurseflow.policy.persistence.repository.ShiftTypeJdbcRepository
 import com.nurseflow.policy.persistence.repository.TargetHourJdbcRepository
 import com.nurseflow.ward.application.service.WardService
 import org.springframework.stereotype.Service
+import org.springframework.transaction.PlatformTransactionManager
 import org.springframework.transaction.annotation.Transactional
+import org.springframework.transaction.support.TransactionTemplate
 import java.time.Instant
 import java.time.YearMonth
 import java.util.UUID
@@ -40,7 +42,10 @@ class TargetHourPolicyService(
     private val wards: WardService,
     private val audit: AuditLog,
     private val holidays: PublicHolidayService,
+    transactions: PlatformTransactionManager,
 ) {
+    private val readOnly = TransactionTemplate(transactions).apply { isReadOnly = true }
+
     @Transactional(readOnly = true)
     fun get(wardId: UUID, actor: String): TargetHourPolicyResult {
         wards.requireAdmin(wardId, actor)
@@ -50,8 +55,10 @@ class TargetHourPolicyService(
     }
 
     @Transactional
-    fun replace(wardId: UUID, policy: TargetHourPolicy, ifMatch: String, actor: String): TargetHourPolicyResult {
+    /** [request] is read only after the admin check, so a non-admin gets 403/404 whatever the body holds. */
+    fun replace(wardId: UUID, request: () -> TargetHourPolicy, ifMatch: String, actor: String): TargetHourPolicyResult {
         wards.lockAsAdmin(wardId, actor)
+        val policy = request()
         validate(policy)
         checkRevision(wardId, ifMatch)
         if (policyOf(wardId) == policy) return TargetHourPolicyResult(policy, revisions.policyRevision(wardId))
@@ -92,9 +99,9 @@ class TargetHourPolicyService(
     fun refreshCalendar(wardId: UUID, month: String, actor: String): HolidayCalendarResult {
         wards.requireAdmin(wardId, actor)
         val yearMonth = parseMonth(month)
-        holidays.refreshForAdmin(yearMonth)
-        audit.record(wardId, actor, "PUBLIC_HOLIDAYS_REFRESHED", yearMonth.toString())
-        return calendar(wardId, month, actor)
+        if (holidays.refreshForAdmin(yearMonth)) audit.record(wardId, actor, "PUBLIC_HOLIDAYS_REFRESHED", yearMonth.toString())
+        // One read-only transaction, so the days, holidays and target come from one state.
+        return readOnly.execute { calendarResult(wardId, yearMonth, revisions.policyRevision(wardId)) }!!
     }
 
     /** The month's general target with the ward's current policy, its calendar and the imported holidays. */

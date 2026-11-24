@@ -37,7 +37,7 @@ class TargetHourPolicyController(private val service: TargetHourPolicyService) {
         @RequestHeader("If-Match") ifMatch: String,
         @RequestBody request: TargetHourPolicyRequest,
         @CurrentSubject actor: String,
-    ) = service.replace(wardId, request.toPolicy(), ifMatch, actor).toEntity()
+    ) = service.replace(wardId, request::toPolicy, ifMatch, actor).toEntity()
 
     @GetMapping("/api/v1/wards/{wardId}/holiday-calendar")
     fun calendar(@PathVariable wardId: UUID, @RequestParam month: String, @CurrentSubject actor: String) =

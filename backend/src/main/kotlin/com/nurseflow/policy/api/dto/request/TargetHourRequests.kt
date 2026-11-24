@@ -40,8 +40,12 @@ data class TargetHourPolicyRequest(
 }
 
 @InvalidRequestCode(ErrorCode.INVALID_HOLIDAY_CALENDAR)
-data class ReplaceHolidayCalendarRequest(@field:Size(max = 31) @field:Valid val days: List<HolidayCalendarDayInput>) {
-    fun toDays() = days.map { CalendarDay(it.date, CalendarDayKind.valueOf(it.kind), it.name) }
+data class ReplaceHolidayCalendarRequest(@field:Size(max = 31) @field:Valid val days: List<HolidayCalendarDayInput?>) {
+    /** A null element is refused like any other malformed entry, not left to fail later. */
+    fun toDays() = days.map {
+        val day = it ?: throw BusinessException(ErrorCode.INVALID_HOLIDAY_CALENDAR)
+        CalendarDay(day.date, CalendarDayKind.valueOf(day.kind), day.name)
+    }
 }
 
 data class HolidayCalendarDayInput(

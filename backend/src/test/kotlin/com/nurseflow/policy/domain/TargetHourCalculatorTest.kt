@@ -45,6 +45,25 @@ class TargetHourCalculatorTest {
     }
 
     @Test
+    fun `a leave over one night is one day and a fixed night-dedicated target credits weekend leave`() {
+        val general = HourNurse(UUID.randomUUID(), "가상 간호사 1", WorkPattern.GENERAL, true)
+        val dedicated = HourNurse(UUID.randomUUID(), "가상 간호사 2", WorkPattern.NIGHT_ONLY, true)
+        val nightStart = LocalDate.of(2026, 11, 10).atTime(22, 0).atZone(zone).toInstant()
+        val saturday = LocalDate.of(2026, 11, 14).atStartOfDay(zone).toInstant()
+        val absences = listOf(
+            HourAbsence(general.nurseId, ApprovedAbsenceKind.APPROVED_LEAVE, nightStart, nightStart.plusSeconds(9 * 3600)),
+            HourAbsence(dedicated.nurseId, ApprovedAbsenceKind.APPROVED_LEAVE, saturday, saturday.plusSeconds(86_400)),
+            HourAbsence(general.nurseId, ApprovedAbsenceKind.APPROVED_LEAVE, saturday, saturday.plusSeconds(86_400)),
+        )
+        val policy = TargetHourPolicy(nightDedicatedTargetMinutes = 9600)
+        val target = TargetHourCalculator.monthTarget(november, emptyList(), 480)
+        val result = TargetHourCalculator.diagnose(november, zone, target, policy, listOf(general, dedicated), emptyList(), absences, emptyList())
+            .associateBy { it.nurse.nurseId }
+        assertEquals(1, result.getValue(general.nurseId).leaveDays) // Nov 10 only; the Saturday is outside its target
+        assertEquals(1, result.getValue(dedicated.nurseId).leaveDays)
+    }
+
+    @Test
     fun `a ward entry replaces an imported holiday on the same date`() {
         val imported = listOf(
             CalendarDay(LocalDate.of(2026, 11, 9), CalendarDayKind.PUBLIC_HOLIDAY, null), // Monday

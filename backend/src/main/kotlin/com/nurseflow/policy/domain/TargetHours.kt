@@ -5,6 +5,7 @@ import com.nurseflow.roster.domain.model.RestDayKind
 import com.nurseflow.roster.domain.model.ShiftKind
 import com.nurseflow.roster.domain.model.WorkPattern
 import java.time.DayOfWeek
+import java.time.Duration
 import java.time.Instant
 import java.time.LocalDate
 import java.time.YearMonth
@@ -155,16 +156,18 @@ object TargetHourCalculator {
         val shiftCredit = counted.sumOf {
             if (dedicated && it.kind == ShiftKind.NIGHT) policy.nightDedicatedNightCreditMinutes ?: it.creditMinutes else it.creditMinutes
         }
+        // A fixed Night-dedicated target is not built from the calendar, so no date is outside it.
+        val restDates = if (dedicated && policy.nightDedicatedTargetMinutes != null) emptySet() else target.restDates
         // Time off on a weekend, holiday or ward rest day credits nothing: the target already leaves that date out.
         // Each date earns at most one absence credit: leave first, then SOF, then a half-day.
         val leaveDates = absences.filter { it.nurseId == nurse.nurseId && it.kind == ApprovedAbsenceKind.APPROVED_LEAVE }
-            .flatMap { leaveDatesInMonth(it, month, zone) }.filter { it !in target.restDates }.toSet()
+            .flatMap { leaveDatesInMonth(it, month, zone) }.filter { it !in restDates }.toSet()
         val sofDates = restDays.filter { it.nurseId == nurse.nurseId && it.kind == RestDayKind.SOF && YearMonth.from(it.date) == month }
-            .map { it.date }.filter { it !in target.restDates && it !in leaveDates }.toSet()
+            .map { it.date }.filter { it !in restDates && it !in leaveDates }.toSet()
         // A half-day on a date already credited as leave or SOF, or on a rest date, adds nothing.
         val halfDays = absences.filter { it.nurseId == nurse.nurseId && it.kind == ApprovedAbsenceKind.APPROVED_HALF_DAY }
             .map { it.startsAt.atZone(zone).toLocalDate() }
-            .filter { YearMonth.from(it) == month && it !in leaveDates && it !in sofDates && it !in target.restDates }
+            .filter { YearMonth.from(it) == month && it !in leaveDates && it !in sofDates && it !in restDates }
             .toSet().size
         val sofDays = sofDates.size
         val absenceCredit = leaveDates.size * policy.leaveCreditMinutes + halfDays * policy.halfDayCreditMinutes +
@@ -181,10 +184,20 @@ object TargetHourCalculator {
     }
 
     /** Ward-local dates of [month] that an approved leave interval overlaps. */
-    private fun leaveDatesInMonth(absence: HourAbsence, month: YearMonth, zone: ZoneId): List<LocalDate> =
-        (1..month.lengthOfMonth()).map { month.atDay(it) }.filter { date ->
+    /**
+     * Ward-local dates of an approved leave, then kept if in [month]. A date counts when the leave covers at least
+     * half of it, so a 22:00-07:00 leave over a Night is one day, not two; a leave covering no date that much counts
+     * once, on its start date.
+     */
+    private fun leaveDatesInMonth(absence: HourAbsence, month: YearMonth, zone: ZoneId): List<LocalDate> {
+        val first = absence.startsAt.atZone(zone).toLocalDate()
+        val last = absence.endsAt.minusNanos(1).atZone(zone).toLocalDate()
+        val covered = generateSequence(first) { it.plusDays(1) }.takeWhile { !it.isAfter(last) }.filter { date ->
             val start = date.atStartOfDay(zone).toInstant()
             val end = date.plusDays(1).atStartOfDay(zone).toInstant()
-            absence.startsAt < end && absence.endsAt > start
-        }
+            val overlap = Duration.between(maxOf(start, absence.startsAt), minOf(end, absence.endsAt))
+            overlap.multipliedBy(2) >= Duration.between(start, end)
+        }.toList().ifEmpty { listOf(first) }
+        return covered.filter { YearMonth.from(it) == month }
+    }
 }

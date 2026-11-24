@@ -13,6 +13,7 @@ import java.time.Duration
 import java.time.Instant
 import java.time.YearMonth
 import java.time.ZoneId
+import java.util.concurrent.ConcurrentHashMap
 
 data class HolidayRefresh(val month: YearMonth, val holidays: Int, val fetchedAt: Instant)
 
@@ -31,16 +32,20 @@ class PublicHolidayService(
 
     val configured: Boolean get() = properties.configured
 
+    /** Admin "fetch now" attempts by month, successful or not, so a failing source is throttled too. */
+    private val adminAttempts = ConcurrentHashMap<YearMonth, Instant>()
+    private val storeLock = Any()
+
     /**
-     * Serialized so two refreshes of one month never interleave their replace; a write failure is reported like a
-     * source failure, and the stored month stays as it was (the replace is one transaction).
+     * The network call runs outside any lock; only the replace is serialized, so two refreshes of one month never
+     * interleave and an admin never waits on the nightly job's slow calls. A write failure is reported like a source
+     * failure, and the stored month stays as it was (the replace is one transaction).
      */
-    @Synchronized
     fun refresh(month: YearMonth): HolidayRefresh {
         val days = client.fetch(month)
         val now = Instant.now()
         try {
-            tx.executeWithoutResult { repo.replacePublicHolidays(month, days, now) }
+            synchronized(storeLock) { tx.executeWithoutResult { repo.replacePublicHolidays(month, days, now) } }
         } catch (ex: DataAccessException) {
             log.warn("Holiday refresh could not be stored: {}", ex.javaClass.simpleName)
             throw BusinessException(ErrorCode.HOLIDAY_SOURCE_UNAVAILABLE)
@@ -50,15 +55,23 @@ class PublicHolidayService(
 
     /**
      * An admin's "fetch now": limited to last year through next year, and a month fetched in the last
-     * [MIN_ADMIN_INTERVAL] is not fetched again, so admins cannot use up the shared data.go.kr quota.
+     * [MIN_ADMIN_INTERVAL] (or attempted, even if it failed) is not fetched again, so admins cannot use up the
+     * shared data.go.kr quota. The attempt is claimed atomically, so simultaneous clicks make one call.
+     * Returns whether the source was called.
      */
-    fun refreshForAdmin(month: YearMonth) {
-        val now = YearMonth.now(ZoneId.of(properties.refreshZone))
-        if (month.year !in (now.year - 1)..(now.year + 1)) throw BusinessException(ErrorCode.HOLIDAY_MONTH_OUT_OF_RANGE)
+    fun refreshForAdmin(month: YearMonth): Boolean {
+        val today = YearMonth.now(ZoneId.of(properties.refreshZone))
+        if (month.year !in (today.year - 1)..(today.year + 1)) throw BusinessException(ErrorCode.HOLIDAY_MONTH_OUT_OF_RANGE)
         if (!properties.configured) throw BusinessException(ErrorCode.HOLIDAY_SOURCE_NOT_CONFIGURED)
-        val last = repo.publicHolidayFetchedAt(month)
-        if (last != null && last.isAfter(Instant.now().minus(MIN_ADMIN_INTERVAL))) return
+        val now = Instant.now()
+        val recent = now.minus(MIN_ADMIN_INTERVAL)
+        val stored = repo.publicHolidayFetchedAt(month)
+        if (stored != null && stored.isAfter(recent)) return false
+        var claimed = false
+        adminAttempts.compute(month) { _, last -> if (last != null && last.isAfter(recent)) last else now.also { claimed = true } }
+        if (!claimed) return false
         refresh(month)
+        return true
     }
 
     /** Current month and the next [HolidayProperties.monthsAhead] months. One failed month does not stop the rest. */

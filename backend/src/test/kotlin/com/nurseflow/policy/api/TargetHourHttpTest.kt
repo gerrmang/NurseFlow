@@ -38,6 +38,7 @@ class TargetHourHttpTest : ApiTestBase() {
         )
         assertEquals(403, http.get(path, memberToken).status)
         assertEquals(403, http.put(path, body, memberToken, tag).status)
+        assertEquals(403, http.put(path, body + ("dailyStandardMinutes" to "x"), memberToken, tag).status)
         assertEquals("INVALID_TARGET_HOUR_POLICY", http.put(path, body + ("dailyStandardMinutes" to 0), token, tag).code)
         assertEquals("INVALID_TARGET_HOUR_POLICY", http.put(path, body + ("dailyStandardMinutes" to 450.5), token, tag).code)
         assertEquals("INVALID_TARGET_HOUR_POLICY", http.put(path, body + ("leaveCreditMinutes" to "480"), token, tag).code)
@@ -75,6 +76,7 @@ class TargetHourHttpTest : ApiTestBase() {
         assertEquals("INVALID_HOLIDAY_CALENDAR",
             http.put(path, body(day("2026-11-09", "PUBLIC_HOLIDAY"), day("2026-11-09", "WARD_REST_DAY")), token, tag).code)
         assertEquals("INVALID_HOLIDAY_CALENDAR", http.put(path, body(day("2026-11-09", "HOLIDAY")), token, tag).code)
+        assertEquals("INVALID_HOLIDAY_CALENDAR", http.put(path, mapOf("days" to listOf(null)), token, tag).code)
         val saved = http.put(path, body(day("2026-11-07", "PUBLIC_HOLIDAY", "가상 공휴일"), day("2026-11-09", "SUBSTITUTE_HOLIDAY")), token, tag)
         assertEquals(200, saved.status, saved.body)
         assertEquals(10, saved.json!!.get("target").get("restDays").asInt())
