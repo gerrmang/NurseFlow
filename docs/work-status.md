@@ -1,5 +1,18 @@
 # 공유 작업 현황
 
+## A12 희망 오프 구현 (2026-11-24, Claude)
+
+- `origin/dev` `b101bb4`(A11 병합)에서 분기했다. 실행 환경의 푸시 제한 때문에 브랜치 이름은 `claude/project-thread-owc2gs`이며, 문서상 이름은 `feat/off-requests`다. 결정 15는 사용자 답변으로 정했다. 한도는 병동별 기본 4일이고 간호사 본인 제출에만 적용한다. 마감은 전달 15일이며 병동별로 1~28일 중에서 바꿀 수 있다. 마감 뒤에는 간호사 예외 요청을 관리자가 접수한다. 마감 시각은 사용자가 정하지 않아 병동 현지 자정으로 가정했다. 주말 목표는 A19로 미뤘다.
+- 신규 `offrequest` 패키지와 `off_requests` 테이블을 추가했다. 테이블에는 상태(SUBMITTED·CONFIRMED·REJECTED·WITHDRAWN), 입력 주체 `source`, 제출·판단 시각, `after_deadline`을 저장한다. `wards`에는 `max_off_requests_per_month`(기본 4)와 `off_request_deadline_day`(기본 15) 컬럼을 추가했다. API는 `GET/POST /wards/{wardId}/off-requests`, `POST .../{requestId}/confirm|reject|withdraw`, `GET/PUT .../off-requests/policy`다. 정책 변경은 병동 정책 ETag를 쓴다.
+- 확정분은 공통 validator의 `CONFIRMED_OFF_REQUEST` HARD 규칙으로 후보·수동·자동(고정 포함)·확정 4경로에서 막는다. 판정은 근무 시작일 기준이라, 전날 시작한 Night가 그날 끝나는 경우는 허용한다. 확정과 확정분 철회는 해당 월 초안의 revision을 올리고 재검증 대상으로 표시한다. 공개본은 유지한다. 미확정 요청은 선호로 처리한다. 자동배치는 요청한 간호사를 그날 후순위로 두고, 지키지 못한 날짜는 `OFF_REQUEST_NOT_HONORED` SOFT 진단으로 남긴다.
+- 확정 희망 오프는 A11의 OF·SOF가 아니므로 연속근무를 끊지 않는다. 대리 입력에는 Idempotency-Key가 없다. 대신 같은 날짜의 중복 제출은 409로 막힌다.
+- 검증 결과는 다음과 같다. 백엔드 `./gradlew check`는 288개 중 283개 통과, 5개 건너뜀, 실패 0이었다(`LANG=C.UTF-8`). 기본 로케일에서는 기존 `HospitalDatasetSearchHttpTest` 3개가 한글 파일명 경로 오류로 실패하는데, 이번 변경과 무관한 환경 문제다. 웹은 `api:gen`·`api:check`·`typecheck`·`lint`·`build`가 통과했고, vitest는 384개 통과·3개 건너뜀이었다. `git diff --check`도 통과했다. Android·실기기·실제 Kakao·GitHub CI는 실행하지 않았다.
+- 게시 전에 독립 코드 리뷰를 돌렸다(Claude `code-review`, Codex는 이 환경에서 쓸 수 없음). 지적된 사항은 모두 같은 브랜치에서 고쳤다.
+  - 중요: 간호사의 마감 뒤 미확정 예외 요청이 자동배치 선호에 반영되던 문제를 고쳤다.
+  - 경미: 간호사의 지난 날짜 신청을 400으로 거부한다. 월 한도는 간호사 본인 입력만 세고 관리자 대리 입력은 세지 않는다. 미반영 진단은 생성기가 직접 배정한 칸만 대상으로 하고 날짜별 건수를 표시한다. 기능 현황 문서도 갱신했다.
+  - 수정 후 다시 검증했다.
+- 롤백하려면 코드·OpenAPI·웹 생성 타입을 함께 되돌린다. 신규 테이블과 컬럼은 이전 코드에서 쓰지 않는다. 다음 단계는 PR 검토이며, B8a·B8b 화면이 이 계약을 사용한다.
+
 ## B6 PR #51 무본문 응답 리뷰 수정·dev 확인 (2026-11-24, Codex)
 
 - 같은 공유 worktree·`chore/demo-seed-script`, 시작 HEAD와 원격 PR head `82544f2` 일치, tracked 변경 없음 확인. 미추적 `nurseflow.mv.db`·`nurseflow.trace.db`를 보존했다. `git fetch origin` 후 최신 `origin/dev`는 `00f086c`이며 이미 HEAD의 조상이므로 추가 통합 커밋 없이 최신 dev 반영 상태다. backend·OpenAPI·웹 생성 타입은 dev와 동일하다.
@@ -875,4 +888,6 @@ Claude와 Codex가 같은 진행 기록을 사용한다. PR 또는 정기 리뷰
 - 검증: JDK 21 `./gradlew check`(LC_ALL=C.UTF-8) 289개 중 284개 통과·5개 opt-in 건너뜀·실패 0. web `npm run api:check`·`lint`·`typecheck`·`npm test -- --run`(394개 통과·3개 건너뜀)·`build` 성공. 기본 POSIX 로캘에서는 기존 병원 CSV 한글 파일명 테스트가 실패하므로 UTF-8 로캘로 실행했다.
 - 코드 리뷰(자체, 2회): 1차 6건(월 경계 연차, 주말 연차 이중 계산, 기본값 저장 시 revision 증가, 반차·SOF 중복, 진단 ETag, 필수값 오류 코드)과 2차 9건(일일 갱신 중단, 동시 갱신 키 충돌, 연차·SOF 중복, 휴일 SOF, 관리자 갱신 남용, 병동 이동 간호사 누락, 공휴일 종류 병합, 스키마 주석, 이 기록 누락)을 모두 반영했다. Codex 독립 리뷰는 아직 없다.
 - 미검증·제한: 실제 data.go.kr 호출(키 없음, 가짜 서버로만 검증), 월 중 입사·비활성 간호사의 목표 비례 계산(미지원, 전체 목표로 표시), 근무 칸이 시간을 따로 저장하지 않아 공개본도 근무 유형의 현재 환산시간으로 계산, 전월이 공개되지 않으면 전월 말일 Night를 세지 않음(`previousMonthPublished=false`). Android·웹 화면은 후속(B10).
-- 인계: A12 PR #56이 `openapi.yaml`·`work-status.md`·`ApiTestBase.kt`를 함께 바꾸므로 #56 병합 뒤 최신 `dev`로 갱신하고 PR을 연다.
+- 실제 공휴일 API 확인(2026-11-24): 사용자 Mac의 IntelliJ 실행 구성에 있는 `NURSEFLOW_HOLIDAY_API_KEY`로 `getRestDeInfo`를 2026-09·2026-10·2027-01·2027-02 네 번 호출해 모두 HTTP 200·resultCode 00을 받았다. 대체공휴일은 이름에 "대체"가 붙은 별도 항목으로 왔다. 키 값은 출력하지 않았다. 서버를 띄워 저장까지 확인하지는 않았다.
+- dev 통합: A12 PR #56 병합본(`74886b6`)을 병합했다. `openapi.yaml`은 dev 쪽에 A13 변경을 다시 적용했고, `ApiTestBase.kt`의 초기화 표 목록은 양쪽 표를 모두 포함하도록 합쳤다. `schema.gen.ts`는 다시 생성했다.
+- 인계: A14 PR도 `openapi.yaml`·`work-status.md`를 바꾸므로 A13과 A14 중 먼저 준비된 PR부터 하나씩 병합한다.

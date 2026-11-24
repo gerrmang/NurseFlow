@@ -17,6 +17,11 @@ ALTER TABLE wards ADD COLUMN IF NOT EXISTS created_at VARCHAR(40);
 ALTER TABLE wards ADD COLUMN IF NOT EXISTS demo_mode BOOLEAN DEFAULT FALSE NOT NULL;
 ALTER TABLE wards ADD COLUMN IF NOT EXISTS max_consecutive_work_days INT DEFAULT 5 NOT NULL
     CHECK (max_consecutive_work_days BETWEEN 1 AND 31);
+-- A12 (decision 15): per-nurse monthly preferred-day-off limit and the day of the previous month that closes requests.
+ALTER TABLE wards ADD COLUMN IF NOT EXISTS max_off_requests_per_month INT DEFAULT 4 NOT NULL
+    CHECK (max_off_requests_per_month BETWEEN 0 AND 31);
+ALTER TABLE wards ADD COLUMN IF NOT EXISTS off_request_deadline_day INT DEFAULT 15 NOT NULL
+    CHECK (off_request_deadline_day BETWEEN 1 AND 28);
 CREATE INDEX IF NOT EXISTS ix_wards_created_by ON wards(created_by);
 
 CREATE TABLE IF NOT EXISTS ward_memberships (
@@ -71,6 +76,24 @@ CREATE TABLE IF NOT EXISTS roster_rest_days (
     kind VARCHAR(3) NOT NULL CHECK (kind IN ('OF','SOF')),
     PRIMARY KEY (roster_id, nurse_id, rest_date)
 );
+
+-- A12: preferred days off. Ward-scoped (not per draft) so every draft and generation of the month reads them.
+-- Only CONFIRMED rows block assignment; SUBMITTED rows are preferences. Decided or withdrawn rows stay as history.
+CREATE TABLE IF NOT EXISTS off_requests (
+    request_id UUID PRIMARY KEY,
+    ward_id UUID NOT NULL REFERENCES wards(ward_id),
+    nurse_id UUID NOT NULL REFERENCES nurses(nurse_id),
+    off_date DATE NOT NULL,
+    status VARCHAR(10) NOT NULL CHECK (status IN ('SUBMITTED','CONFIRMED','REJECTED','WITHDRAWN')),
+    source VARCHAR(10) NOT NULL CHECK (source IN ('NURSE','ADMIN')),
+    submitted_by VARCHAR(255) NOT NULL,
+    submitted_at VARCHAR(40) NOT NULL,
+    decided_by VARCHAR(255),
+    decided_at VARCHAR(40),
+    -- Entered after the month's deadline: a nurse's exception request or an admin's exception entry.
+    after_deadline BOOLEAN NOT NULL DEFAULT FALSE
+);
+CREATE INDEX IF NOT EXISTS ix_off_requests_ward_date ON off_requests(ward_id, off_date);
 
 CREATE TABLE IF NOT EXISTS roster_slots (
     slot_id UUID PRIMARY KEY,
