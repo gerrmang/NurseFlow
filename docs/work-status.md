@@ -1,5 +1,14 @@
 # 공유 작업 현황
 
+## A12 희망 오프 구현 (2026-11-24, Claude)
+
+- `origin/dev` `b101bb4`(A11 병합)에서 분기했다. 실행 환경의 푸시 제한 때문에 브랜치 이름은 `claude/project-thread-owc2gs`이며, 문서상 이름은 `feat/off-requests`다. 결정 15는 사용자 답변으로 정했다. 한도는 병동별 기본 4일이고 간호사 본인 제출에만 적용한다. 마감은 전달 15일이며 병동별로 1~28일 중에서 바꿀 수 있다. 마감 뒤에는 간호사 예외 요청을 관리자가 접수한다. 마감 시각은 사용자가 정하지 않아 병동 현지 자정으로 가정했다. 주말 목표는 A19로 미뤘다.
+- 신규 `offrequest` 패키지와 `off_requests` 테이블을 추가했다. 테이블에는 상태(SUBMITTED·CONFIRMED·REJECTED·WITHDRAWN), 입력 주체 `source`, 제출·판단 시각, `after_deadline`을 저장한다. `wards`에는 `max_off_requests_per_month`(기본 4)와 `off_request_deadline_day`(기본 15) 컬럼을 추가했다. API는 `GET/POST /wards/{wardId}/off-requests`, `POST .../{requestId}/confirm|reject|withdraw`, `GET/PUT .../off-requests/policy`다. 정책 변경은 병동 정책 ETag를 쓴다.
+- 확정분은 공통 validator의 `CONFIRMED_OFF_REQUEST` HARD 규칙으로 후보·수동·자동(고정 포함)·확정 4경로에서 막는다. 판정은 근무 시작일 기준이라, 전날 시작한 Night가 그날 끝나는 경우는 허용한다. 확정과 확정분 철회는 해당 월 초안의 revision을 올리고 재검증 대상으로 표시한다. 공개본은 유지한다. 미확정 요청은 선호로 처리한다. 자동배치는 요청한 간호사를 그날 후순위로 두고, 지키지 못한 날짜는 `OFF_REQUEST_NOT_HONORED` SOFT 진단으로 남긴다.
+- 확정 희망 오프는 A11의 OF·SOF가 아니므로 연속근무를 끊지 않는다. 대리 입력에는 Idempotency-Key가 없다. 대신 같은 날짜의 중복 제출은 409로 막힌다.
+- 검증 결과는 다음과 같다. 백엔드 `./gradlew check`는 288개 중 283개 통과, 5개 건너뜀, 실패 0이었다(`LANG=C.UTF-8`). 기본 로케일에서는 기존 `HospitalDatasetSearchHttpTest` 3개가 한글 파일명 경로 오류로 실패하는데, 이번 변경과 무관한 환경 문제다. 웹은 `api:gen`·`api:check`·`typecheck`·`lint`·`build`가 통과했고, vitest는 384개 통과·3개 건너뜀이었다. `git diff --check`도 통과했다. Android·실기기·실제 Kakao·GitHub CI는 실행하지 않았다.
+- 롤백하려면 코드·OpenAPI·웹 생성 타입을 함께 되돌린다. 신규 테이블과 컬럼은 이전 코드에서 쓰지 않는다. 다음 단계는 PR 검토이며, B8a·B8b 화면이 이 계약을 사용한다.
+
 ## A11 연속근무 제한 구현 (2026-11-23, Codex)
 
 - PR 게시 전 재리뷰에서 소수 상한이 정수로 잘려 HTTP 200이 나오는 동작을 재현했다. JSON 정수만 받고 소수와 문자열은 400으로 거부하도록 수정했다. 잘못된 입력 후 기존 ETag 유지와 백엔드 전체 check 273개 통과·5개 건너뜀·실패 0을 확인했다. 웹 계약·타입·린트·테스트 384개·빌드 통과.

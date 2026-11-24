@@ -107,6 +107,13 @@ class RosterJdbcRepository(
         )
     }
 
+    /** Nurse and date of the ward's off requests with [status] in [month] (A12). */
+    fun offRequestDays(wardId: UUID, month: YearMonth, status: String): List<Pair<UUID, java.time.LocalDate>> = jdbc.query(
+        "SELECT nurse_id,off_date FROM off_requests WHERE ward_id=? AND status=? AND off_date BETWEEN ? AND ?",
+        { rs, _ -> uuid(rs, "nurse_id") to rs.getDate("off_date").toLocalDate() },
+        wardId, status, java.sql.Date.valueOf(month.atDay(1)), java.sql.Date.valueOf(month.atEndOfMonth()),
+    )
+
     fun wardNurseIds(wardId: UUID): Set<UUID> = jdbc.query(
         "SELECT nurse_id FROM nurses WHERE ward_id=?", { rs, _ -> uuid(rs, "nurse_id") }, wardId,
     ).toSet()
