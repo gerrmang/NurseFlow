@@ -37,6 +37,7 @@ class SupportAllowanceHttpTest : ApiTestBase() {
         assertEquals("INVALID_SUPPORT_ALLOWANCE", http.post(path, body + ("teamId" to home), token).code)
         assertEquals("INVALID_REQUEST", http.post(path, body - "teamId", token).code)
         assertEquals("INVALID_REQUEST", http.post(path, body + ("shiftTypeIds" to List(21) { UUID.randomUUID() }), token).code)
+        assertEquals("INVALID_REQUEST", http.post(path, body + ("shiftTypeIds" to listOf(null)), token).code)
         assertEquals("TEAM_NOT_FOUND", http.post(path, body + ("teamId" to otherTeam), token).code)
         assertEquals("NURSE_NOT_FOUND", http.post(path, body + ("nurseId" to otherNurse), token).code)
         assertEquals("SHIFT_TYPE_NOT_FOUND", http.post(path, body + ("shiftTypeIds" to listOf(UUID.randomUUID())), token).code)

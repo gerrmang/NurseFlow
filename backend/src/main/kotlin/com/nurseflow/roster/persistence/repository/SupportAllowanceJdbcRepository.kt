@@ -66,7 +66,8 @@ class SupportAllowanceJdbcRepository(
             """UPDATE rosters SET revision=revision+1,needs_revalidation=TRUE
                 WHERE ward_id=? AND status='DRAFT' AND roster_id IN (
                     SELECT s.roster_id FROM roster_slots s
-                    WHERE s.nurse_id=? AND s.team_id=? AND s.shift_date BETWEEN ? AND ? $shiftFilter)""",
+                    WHERE s.nurse_id=? AND s.team_id=? AND s.shift_date BETWEEN ? AND ? $shiftFilter
+                    AND NOT EXISTS (SELECT 1 FROM nurses n WHERE n.nurse_id=s.nurse_id AND n.team_id=s.team_id))""",
             allowance.wardId, allowance.nurseId, allowance.teamId,
             Date.valueOf(allowance.startDate), Date.valueOf(allowance.endDate), *shifts.toTypedArray(),
         )

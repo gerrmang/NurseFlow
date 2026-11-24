@@ -422,7 +422,8 @@ class RosterService(
         val deadline = System.nanoTime() + repo.timeLimitNanos(jobId)
         var timedOut = false
         var cancelled = false
-        // Own-team nurses first: an allowance lets support fill a slot, never take it from the team's own staff.
+        // Per slot, own-team nurses are tried first and support only when none of them can take it. Slots are still
+        // filled greedily in date order, so an earlier support placement can use up a nurse a later own-team slot needed.
         generationLoop@ for (slot in allSlots.filter { it !in preserved }.sortedWith(
             compareBy<DbSlot>({ it.date }, { it.startsAt }, { !it.seniorRequired }, { it.id.toString() }),
         )) {

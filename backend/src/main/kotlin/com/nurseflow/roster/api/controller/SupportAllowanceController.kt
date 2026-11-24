@@ -39,7 +39,7 @@ class SupportAllowanceController(private val service: SupportAllowanceService) {
         @CurrentSubject actor: String,
     ): ResponseEntity<SupportAllowanceResponse> {
         val grant = service.create(wardId, SupportAllowanceInput(
-            request.nurseId, request.teamId, request.startDate, request.endDate, request.shiftTypeIds,
+            request.nurseId, request.teamId, request.startDate, request.endDate, request.shiftTypes(),
         ), actor)
         return ResponseEntity.status(if (grant.created) HttpStatus.CREATED else HttpStatus.OK).body(grant.allowance.toResponse())
     }

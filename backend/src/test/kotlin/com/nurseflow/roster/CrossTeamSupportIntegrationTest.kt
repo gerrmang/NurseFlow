@@ -133,6 +133,15 @@ class CrossTeamSupportIntegrationTest @Autowired constructor(
         val published = service.publishedWard(wardId, "2026-12", admin)
         assertEquals(nurseB, published.slots.single { it.slotId == a10 }.assignment?.nurseId)
         assertEquals(3, allowances.list(wardId, includeRevoked = true, admin).size)
+
+        // A nurse who has since joined the team holds own-team slots: revoking an old allowance flags nothing.
+        val next = draft("2027-02", StaffingRequirement(LocalDate.parse("2027-02-03"), dayTypeId, 1, emptyList(), teamA))
+        val old = allowances.create(wardId, SupportAllowanceInput(nurseB, teamA, LocalDate.parse("2027-02-01"),
+            LocalDate.parse("2027-02-28"), emptyList()), admin).allowance
+        jdbc.update("UPDATE nurses SET team_id=? WHERE nurse_id=?", teamA, nurseB)
+        val joined = assign(service.getRoster(next.rosterId, admin), next.slots.single().slotId, nurseB)
+        assertEquals(0, allowances.revoke(wardId, old.id, admin).flaggedDrafts)
+        assertEquals(joined.revision, service.getRoster(next.rosterId, admin).revision)
         assertTrue(allowances.list(wardId, includeRevoked = false, admin).isEmpty())
     }
 
