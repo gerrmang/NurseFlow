@@ -1,5 +1,12 @@
 # 공유 작업 현황
 
+## B7b PR #59 게시 확인 (2026-11-24, Codex)
+
+- 최신 dev `74886b6c9831982acebc80b02f0805b39cf6347b`를 통합한 `deeb6bb6bd740b9e29f279c2e1dde4cfd537e9cc`를 `origin/feat/web-schedule-settings`에 푸시하고 로컬·원격 head 일치를 확인했다. [PR #59](https://github.com/gerrmang/NurseFlow/pull/59)를 `dev` 대상 일반 PR로 게시했으며 OPEN·isDraft=false·MERGEABLE을 확인했다. GitHub는 REVIEW_REQUIRED/BLOCKED이므로 독립 GitHub 승인이나 즉시 병합 가능 상태로 표현하지 않는다.
+- GitHub 연결 도구의 PR 생성이 integration 권한 403으로 실패해 기존 인증된 gh의 `--body-file web/B7b-pr-draft.md`로 게시했다. 승인 리뷰 요청·댓글·병합·자동 병합·수동 배포는 하지 않았다. 기존 Vercel 자동 Preview는 성공으로 표시됐으며 별도 수동 배포를 수행한 것은 아니다.
+- 게시 head의 [Verify 45406128424](https://github.com/gerrmang/NurseFlow/actions/runs/45406128424)는 조회 시 in_progress, Backend tests·Android debug build·Web checks·Demo seed checks가 시작됐다. 이 시점 기록을 CI 통과로 해석하지 않는다. 게시 기록 문서 커밋 이후 최종 head의 검사 상태도 별도로 확인한다.
+- 통합 후 로컬 검증은 아래 절의 웹 447개·백엔드 283개·B7b 실제 서버 1개 통과 결과다. 이번 변경은 게시 기록뿐이라 앱/서버 검사를 반복하지 않았다. `git diff --check` 통과. 같은 공유 worktree·B7b 브랜치에 이 게시 기록을 커밋·푸시하고 최종 원격 CI·dev 포함 여부를 확인한다. 사용자 DB·trace 보존·커밋 제외, PR 병합·자동 병합·수동 배포 없음.
+
 ## B7b 최신 dev 통합·PR 게시 준비 (2026-11-24, Codex)
 
 - 사용자 요청으로 B7b 변경 18파일만 `bb6cef2`에 커밋하고 최신 `origin/dev` `74886b6`(A11 #54·B6 #51·A12 #56)을 현재 `feat/web-schedule-settings`에 통합했다. B7b와 dev가 추가한 작업 현황 한 곳의 충돌만 발생했고 양쪽 기록을 전부 보존했다. B6 시연 모드와 B7b 링크가 공존하며 서버·OpenAPI·웹 생성 타입은 dev와 동일하다. 같은 공유 worktree를 유지하고 사용자 DB·trace는 커밋하지 않았다.

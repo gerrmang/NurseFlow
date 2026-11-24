@@ -1,5 +1,7 @@
 # B7b 웹 관리자 근무 설정 검증
 
+- 게시: [PR #59](https://github.com/gerrmang/NurseFlow/pull/59), 대상 `dev`, 일반 PR. 구현·통합 head `deeb6bb`, 원격 SHA 일치 확인. GitHub Verify와 최종 게시 기록은 `docs/work-status.md` 최신 절을 확인한다. 아래 '게시 없음' 표현은 당시 시점 기록이다.
+
 ## 최신 dev 통합 검증 (2026-11-24 22:40 KST)
 
 - B7b 구현·P3 수정을 `bb6cef2`에 보존한 뒤 최신 `origin/dev` `74886b6`(A11 #54·B6 #51·A12 #56)을 같은 브랜치에 통합했다. 충돌은 `docs/work-status.md` 한 곳이며 양쪽 이력을 모두 보존했다. B6 시연 모드 화면과 B7b 메뉴 연결을 함께 유지했다. backend·OpenAPI·웹 생성 타입은 dev와 동일하다.
