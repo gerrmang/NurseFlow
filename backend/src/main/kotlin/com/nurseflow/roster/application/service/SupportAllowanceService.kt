@@ -22,6 +22,9 @@ data class SupportAllowanceInput(
     val shiftTypeIds: List<UUID>,
 )
 
+/** [created] is false when an active allowance with the same scope already existed and is returned instead. */
+data class SupportAllowanceGrant(val allowance: SupportAllowance, val created: Boolean)
+
 /** Revoking an allowance flags the drafts that used it; published rosters are never changed. */
 data class SupportAllowanceRevocation(val allowance: SupportAllowance, val flaggedDrafts: Int)
 
@@ -43,7 +46,7 @@ class SupportAllowanceService(
     }
 
     @Transactional
-    fun create(wardId: UUID, input: SupportAllowanceInput, actor: String): SupportAllowance {
+    fun create(wardId: UUID, input: SupportAllowanceInput, actor: String): SupportAllowanceGrant {
         wards.lockAsAdmin(wardId, actor)
         if (input.endDate < input.startDate || ChronoUnit.DAYS.between(input.startDate, input.endDate) >= MAX_DAYS ||
             input.shiftTypeIds.size > MAX_SHIFT_TYPES) {
@@ -62,9 +65,11 @@ class SupportAllowanceService(
             UUID.randomUUID(), wardId, input.nurseId, input.teamId, input.startDate, input.endDate,
             shiftTypeIds, Instant.now(), actor,
         )
+        // Idempotent by scope: a retry after a lost response must not leave a twin that outlives a later revocation.
+        allowances.findActiveSame(allowance)?.let { return SupportAllowanceGrant(it, created = false) }
         allowances.insert(allowance)
         audit.record(wardId, actor, "SUPPORT_ALLOWANCE_CREATED", allowance.id.toString())
-        return allowance
+        return SupportAllowanceGrant(allowance, created = true)
     }
 
     /** Idempotent: revoking a revoked allowance returns it unchanged and flags nothing. */

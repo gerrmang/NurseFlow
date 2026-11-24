@@ -885,6 +885,7 @@ export interface paths {
          *     근무 유형 목록이다. 근무 유형 목록이 비어 있으면 그 기간의 모든 근무 유형을 허용한다. 날짜는 근무 칸의 근무일이며
          *     자정을 넘는 Night는 시작한 날로 본다. 허용은 팀 조건만 완화하고 휴가·반차·휴식·중복·연속근무 등 다른 필수 규칙은 그대로 적용한다.
          *     허용된 지원 배치는 실제 배치 팀의 충원에 계산된다. 허용 범위만 넓히므로 기존 초안의 revision은 바꾸지 않는다.
+         *     같은 간호사·배치 팀·기간·근무 유형의 활성 기록이 이미 있으면 새로 만들지 않고 그 기록을 200으로 반환한다(재시도 안전).
          */
         post: operations["createSupportAllowance"];
         delete?: never;
@@ -4317,6 +4318,15 @@ export interface operations {
             };
         };
         responses: {
+            /** @description 같은 범위의 기존 활성 기록 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupportAllowance"];
+                };
+            };
             /** @description 생성된 허용 기록 */
             201: {
                 headers: {

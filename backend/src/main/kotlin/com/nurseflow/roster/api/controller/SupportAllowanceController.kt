@@ -37,11 +37,12 @@ class SupportAllowanceController(private val service: SupportAllowanceService) {
         @PathVariable wardId: UUID,
         @Valid @RequestBody request: CreateSupportAllowanceRequest,
         @CurrentSubject actor: String,
-    ): ResponseEntity<SupportAllowanceResponse> = ResponseEntity.status(HttpStatus.CREATED).body(
-        service.create(wardId, SupportAllowanceInput(
+    ): ResponseEntity<SupportAllowanceResponse> {
+        val grant = service.create(wardId, SupportAllowanceInput(
             request.nurseId, request.teamId, request.startDate, request.endDate, request.shiftTypeIds,
-        ), actor).toResponse(),
-    )
+        ), actor)
+        return ResponseEntity.status(if (grant.created) HttpStatus.CREATED else HttpStatus.OK).body(grant.allowance.toResponse())
+    }
 
     @PostMapping("/{allowanceId}/revoke")
     fun revoke(

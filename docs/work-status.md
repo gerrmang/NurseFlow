@@ -1,5 +1,17 @@
 # 공유 작업 현황
 
+## A14 팀 간 지원 구현 (2026-11-24, Claude)
+
+- 브랜치 `feat/cross-team-support`(최신 dev `548552b`에서 분기). A12 PR #56과 `RosterService`·`schema.sql`·`openapi.yaml`·`ApiTestBase`를 함께 바꾸므로, 규칙 PR은 하나씩 병합한다는 순서에 따라 **#56 병합 뒤 최신 dev에 맞춰 PR을 연다.** 그 전에는 브랜치에만 둔다.
+- 사용자 결정(2026-11-24): 허용 범위는 간호사·배치 팀·시작~종료일(포함, 최대 366일)·근무 유형(비우면 전체). 철회는 기록을 남겨 REVOKED로 바꾸고, 그 간호사가 허용 기간·근무 유형 안에서 배치 팀 칸에 배치된 DRAFT를 revision 증가·재검증 표시한다. 공개본은 바꾸지 않는다. `requirements.md`·`feature-breakdown.md`에 반영했다.
+- 서버: `cross_team_support_allowances` 테이블, `GET/POST /wards/{wardId}/support-allowances`, `POST .../{allowanceId}/revoke`(관리자 전용, 병동 잠금, 감사 기록). 같은 범위의 활성 기록이 있으면 새로 만들지 않고 200으로 그 기록을 반환한다. 철회는 멱등이다. 허용 생성은 범위만 넓히므로 초안 revision을 바꾸지 않는다. 병동 정책 revision도 올리지 않는다(다른 정책 화면 ETag 영향 회피).
+- 규칙: `CrossTeamSupportRule`이 후보·수동·자동(고정 포함)·확정 4경로에서 팀 조건을 판단한다. 기존 `TEAM_MISMATCH` 진단은 `CROSS_TEAM_NOT_ALLOWED`로 대체했다. 허용은 팀 조건만 완화하고 시간 중복·휴가·휴식·연속근무 등은 그대로 적용한다. 날짜는 칸의 근무일(Night는 시작일). 지원 배치는 칸의 팀, 즉 배치 팀 충원에 계산된다. 자동배치는 같은 팀 간호사를 먼저 고르고 지원은 남은 칸에만 쓴다.
+- 테스트: 규칙 단위(경계일·근무 유형·다른 팀·철회), 통합(허용 전 거부→허용 안 통과·범위 밖 날짜/근무 거부→동시간 중복 거부→배치 팀 충원→철회 시 초안 표시·고정 자동배치 FAILED·확정 거부→재허용 후 공개→공개 뒤 철회는 공개본 유지, 자동배치 같은 팀 우선·허용 범위 밖 미충원), HTTP(권한·검증·중복 생성·타 병동·멱등 철회·감사).
+- 검증: backend 전체 `LC_ALL=C.UTF-8 ./gradlew test` 284개 중 279개 통과·opt-in 5개 건너뜀·실패 0(리뷰 반영 후 재실행). 로캘 미지정 첫 실행은 병원 CSV 한글 파일명 테스트 3개만 `InvalidPathException`으로 실패했고 UTF-8 로캘에서 통과해 환경 문제로 판단했다. web `npm run api:check`·`npm run typecheck` 통과. Android·웹 화면은 B 트랙 범위라 변경·실행하지 않았다.
+- 코드 리뷰(자체, medium): 같은 범위 중복 생성, 철회 시 근무 유형 무시한 과다 표시, created_at 문자열 정렬을 반영했다. 비활성 간호사 대상 허용 생성 허용과 팀 삭제 시 허용 기록 유지는 판정에 영향이 없어(배치 시 규칙이 차단, 비활성 팀 칸 없음) 이번 범위에서 제외했다.
+- API/DB: 신규 테이블·엔드포인트·오류 코드 `INVALID_SUPPORT_ALLOWANCE`·`SUPPORT_ALLOWANCE_NOT_FOUND`. 진단 코드 이름 변경(`TEAM_MISMATCH`→`CROSS_TEAM_NOT_ALLOWED`)은 클라이언트에서 참조하지 않음을 검색으로 확인했다. 롤백은 이 브랜치 커밋 revert이며 새 테이블은 남아도 무해하다.
+- 공유 인계: 같은 브랜치에서 #56 병합 확인 → `origin/dev` 병합·충돌 해결(예상: `ApiTestBase` 정리 목록, `schema.sql` 끝부분, `openapi.yaml`, `schema.gen.ts`, 이 파일) → 전체 테스트 재실행 → dev 대상 PR.
+
 ## B6 PR #51 무본문 응답 리뷰 수정·dev 확인 (2026-11-24, Codex)
 
 - 같은 공유 worktree·`chore/demo-seed-script`, 시작 HEAD와 원격 PR head `82544f2` 일치, tracked 변경 없음 확인. 미추적 `nurseflow.mv.db`·`nurseflow.trace.db`를 보존했다. `git fetch origin` 후 최신 `origin/dev`는 `00f086c`이며 이미 HEAD의 조상이므로 추가 통합 커밋 없이 최신 dev 반영 상태다. backend·OpenAPI·웹 생성 타입은 dev와 동일하다.

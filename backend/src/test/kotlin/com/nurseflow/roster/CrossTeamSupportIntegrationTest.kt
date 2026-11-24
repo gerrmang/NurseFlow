@@ -82,7 +82,7 @@ class CrossTeamSupportIntegrationTest @Autowired constructor(
         assertEquals("RULE_VIOLATION", manual.errorCode.name)
         assertTrue(manual.ruleViolations.filterIsInstance<RuleDiagnostic>().any { it.code == "CROSS_TEAM_NOT_ALLOWED" })
 
-        val granted = allowances.create(wardId, SupportAllowanceInput(nurseB, teamA, d10, d10, listOf(dayTypeId)), admin)
+        val granted = allowances.create(wardId, SupportAllowanceInput(nurseB, teamA, d10, d10, listOf(dayTypeId)), admin).allowance
         roster = service.getRoster(roster.rosterId, admin)
         assertFalse(roster.needsRevalidation, "a grant only widens what is allowed")
         assertTrue(codes(roster, a10, nurseB).isEmpty())
@@ -98,6 +98,15 @@ class CrossTeamSupportIntegrationTest @Autowired constructor(
         assertEquals(teamA, placed.teamId)
         assertEquals(nurseB, placed.assignment?.nurseId)
         assertEquals(2, roster.staffing.assigned)
+
+        // Same scope again is the existing record, not a twin that would outlive its revocation.
+        val again = allowances.create(wardId, SupportAllowanceInput(nurseB, teamA, d10, d10, listOf(dayTypeId)), admin)
+        assertFalse(again.created)
+        assertEquals(granted.id, again.allowance.id)
+        // An allowance for a shift type the draft does not use for this nurse flags nothing.
+        val nightOnly = allowances.create(wardId, SupportAllowanceInput(nurseB, teamA, d10, d10, listOf(nightTypeId)), admin)
+        assertEquals(0, allowances.revoke(wardId, nightOnly.allowance.id, admin).flaggedDrafts)
+        assertEquals(roster.revision, service.getRoster(roster.rosterId, admin).revision)
 
         val revoked = allowances.revoke(wardId, granted.id, admin)
         assertTrue(revoked.allowance.revoked)
@@ -117,13 +126,13 @@ class CrossTeamSupportIntegrationTest @Autowired constructor(
         assertTrue(confirm.ruleViolations.filterIsInstance<RuleDiagnostic>().any { it.code == "CROSS_TEAM_NOT_ALLOWED" })
 
         // A new grant makes the stored assignment valid again; publishing keeps it even after a later revocation.
-        val regranted = allowances.create(wardId, SupportAllowanceInput(nurseB, teamA, d10, d10, emptyList()), admin)
+        val regranted = allowances.create(wardId, SupportAllowanceInput(nurseB, teamA, d10, d10, emptyList()), admin).allowance
         roster = service.getRoster(roster.rosterId, admin)
         service.confirm(roster.rosterId, tag(roster), UUID.randomUUID(), ConfirmRosterRequest(2), admin)
         assertEquals(0, allowances.revoke(wardId, regranted.id, admin).flaggedDrafts)
         val published = service.publishedWard(wardId, "2026-12", admin)
         assertEquals(nurseB, published.slots.single { it.slotId == a10 }.assignment?.nurseId)
-        assertEquals(2, allowances.list(wardId, includeRevoked = true, admin).size)
+        assertEquals(3, allowances.list(wardId, includeRevoked = true, admin).size)
         assertTrue(allowances.list(wardId, includeRevoked = false, admin).isEmpty())
     }
 

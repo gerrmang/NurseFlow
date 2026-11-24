@@ -30,12 +30,12 @@ class SupportAllowanceJdbcRepository(
         )
     }
 
+    /** Ordered in memory: created_at is an ISO text whose fractional digits vary, so text order is not time order. */
     fun list(wardId: UUID, includeRevoked: Boolean): List<SupportAllowance> = jdbc.query(
         """SELECT * FROM cross_team_support_allowances WHERE ward_id=?
-            ${if (includeRevoked) "" else "AND revoked_at IS NULL"}
-            ORDER BY start_date,end_date,created_at,allowance_id""",
+            ${if (includeRevoked) "" else "AND revoked_at IS NULL"}""",
         { rs, _ -> map(rs) }, wardId,
-    )
+    ).sortedWith(compareBy({ it.startDate }, { it.endDate }, { it.createdAt }, { it.id.toString() }))
 
     fun find(wardId: UUID, id: UUID): SupportAllowance? = jdbc.query(
         "SELECT * FROM cross_team_support_allowances WHERE ward_id=? AND allowance_id=?",
@@ -59,14 +59,25 @@ class SupportAllowanceJdbcRepository(
      * the drafts a revocation can invalidate. Another allowance may still cover a flagged slot; confirmation
      * re-checks every assignment either way. Returns the number of drafts flagged.
      */
-    fun markAffectedDrafts(allowance: SupportAllowance): Int = jdbc.update(
-        """UPDATE rosters SET revision=revision+1,needs_revalidation=TRUE
-            WHERE ward_id=? AND status='DRAFT' AND roster_id IN (
-                SELECT s.roster_id FROM roster_slots s
-                WHERE s.nurse_id=? AND s.team_id=? AND s.shift_date BETWEEN ? AND ?)""",
-        allowance.wardId, allowance.nurseId, allowance.teamId,
-        Date.valueOf(allowance.startDate), Date.valueOf(allowance.endDate),
-    )
+    fun markAffectedDrafts(allowance: SupportAllowance): Int {
+        val shifts = allowance.shiftTypeIds.toList()
+        val shiftFilter = if (shifts.isEmpty()) "" else "AND s.shift_type_id IN (${shifts.joinToString(",") { "?" }})"
+        return jdbc.update(
+            """UPDATE rosters SET revision=revision+1,needs_revalidation=TRUE
+                WHERE ward_id=? AND status='DRAFT' AND roster_id IN (
+                    SELECT s.roster_id FROM roster_slots s
+                    WHERE s.nurse_id=? AND s.team_id=? AND s.shift_date BETWEEN ? AND ? $shiftFilter)""",
+            allowance.wardId, allowance.nurseId, allowance.teamId,
+            Date.valueOf(allowance.startDate), Date.valueOf(allowance.endDate), *shifts.toTypedArray(),
+        )
+    }
+
+    /** An unrevoked allowance with exactly this scope, so a retried or repeated grant does not add a second row. */
+    fun findActiveSame(candidate: SupportAllowance): SupportAllowance? =
+        list(candidate.wardId, includeRevoked = false).firstOrNull {
+            it.nurseId == candidate.nurseId && it.teamId == candidate.teamId && it.startDate == candidate.startDate &&
+                it.endDate == candidate.endDate && it.shiftTypeIds == candidate.shiftTypeIds
+        }
 
     private fun map(rs: ResultSet) = SupportAllowance(
         id = uuid(rs, "allowance_id"),
