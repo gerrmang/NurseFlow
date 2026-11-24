@@ -358,3 +358,21 @@ CREATE TABLE IF NOT EXISTS public_holiday_imports (
     fetched_at VARCHAR(40) NOT NULL,
     holiday_count INT NOT NULL
 );
+
+-- A14: admin-granted cross-team support. start/end are inclusive work dates; shift_type_ids is a JSON array of
+-- the ward's shift type ids ('[]' = every shift type). Revocation keeps the row: revoked_at set = permits nothing.
+CREATE TABLE IF NOT EXISTS cross_team_support_allowances (
+    allowance_id UUID PRIMARY KEY,
+    ward_id UUID NOT NULL REFERENCES wards(ward_id),
+    nurse_id UUID NOT NULL REFERENCES nurses(nurse_id),
+    team_id UUID NOT NULL REFERENCES ward_teams(team_id),
+    start_date DATE NOT NULL,
+    end_date DATE NOT NULL,
+    shift_type_ids VARCHAR(4000) NOT NULL DEFAULT '[]',
+    created_at VARCHAR(40) NOT NULL,
+    created_by VARCHAR(255) NOT NULL,
+    revoked_at VARCHAR(40),
+    revoked_by VARCHAR(255),
+    CHECK (start_date <= end_date)
+);
+CREATE INDEX IF NOT EXISTS ix_support_allowances_ward ON cross_team_support_allowances(ward_id, start_date, end_date);
