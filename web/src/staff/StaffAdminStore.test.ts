@@ -10,12 +10,46 @@ function gate<T>() {
 function setup() {
   const api = {
     teams: vi.fn().mockResolvedValue([TEAM_A]), staff: vi.fn().mockResolvedValue([NURSE_A]), members: vi.fn().mockResolvedValue([ADMIN, MEMBER]), policy: vi.fn().mockResolvedValue(POLICY),
+    eligibility: vi.fn().mockResolvedValue({ demoMode: false, policyRevision: 0, items: [] }),
     createTeam: vi.fn(), updateTeam: vi.fn(), deleteTeam: vi.fn(), createStaff: vi.fn(), updateStaff: vi.fn(), assignTeam: vi.fn(), order: vi.fn(), setProfile: vi.fn(), confirmProfile: vi.fn(), settings: vi.fn(), adjustments: vi.fn(), membership: vi.fn(),
   }
   const wards = vi.fn().mockResolvedValue({ items: [ADMIN_WARD] })
   const store = new StaffAdminStore(api, wards, WARD_1.wardId)
   return { api, wards, store }
 }
+
+it('keeps fresh lists and writes available during mode outages, then recovers the mode', async () => {
+  const { store, api } = setup()
+  api.eligibility.mockRejectedValue(new ApiError(503, 'UNAVAILABLE'))
+  expect(await store.reload()).toBe(true)
+  expect(store.getSnapshot().data?.eligibility).toBeNull()
+  expect(store.getSnapshot().data?.staff).toEqual([NURSE_A])
+  expect(store.getSnapshot().stale).toBe(false)
+  const operation = vi.fn().mockResolvedValue(undefined)
+  expect(await store.run('팀 저장', operation)).toBe(true)
+  expect(operation).toHaveBeenCalledOnce()
+  expect(store.getSnapshot().stale).toBe(false)
+  api.eligibility.mockResolvedValue({ demoMode: true, policyRevision: 1, items: [] })
+  await store.reload()
+  expect(store.getSnapshot().data?.eligibility?.demoMode).toBe(true)
+})
+
+it.each([new ApiError(403, 'WARD_ADMIN_REQUIRED'), new ApiError(404, 'WARD_NOT_FOUND')])('still discards lists on mode access errors: %s', async (error) => {
+  const { store, api } = setup()
+  await store.reload()
+  api.eligibility.mockRejectedValue(error)
+  expect(await store.reload()).toBe(false)
+  expect(store.getSnapshot().forbidden).toBe(true)
+  expect(store.getSnapshot().data).toBeNull()
+})
+
+it.each([new ApiError(401, 'UNAUTHORIZED'), new ApiError(0, 'SESSION_EXPIRED'), new ApiError(0, 'ABORTED')])('does not swallow mode authentication or cancellation errors: %s', async (error) => {
+  const { store, api } = setup()
+  api.eligibility.mockRejectedValue(error)
+  expect(await store.reload()).toBe(false)
+  expect(store.getSnapshot().stale).toBe(true)
+  expect(store.getSnapshot().data).toBeNull()
+})
 
 it('checks admin membership before any sensitive lists are loaded', async () => {
   const { store, wards, api } = setup()

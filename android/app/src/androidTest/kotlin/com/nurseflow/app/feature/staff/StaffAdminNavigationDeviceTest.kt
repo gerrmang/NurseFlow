@@ -60,6 +60,7 @@ class StaffAdminNavigationDeviceTest {
                         "/api/v1/wards/w1/staff?includeInactive=true" -> json(ApiJson.json.encodeToString(Items(staff)))
                         "/api/v1/wards/w1/members" -> json(ApiJson.json.encodeToString(Items(listOf(AdminMember("u1", "가상 관리자", listOf("WARD_ADMIN"), true)))))
                         "/api/v1/wards/w1/career-policy" -> json(ApiJson.json.encodeToString(AdminCareerPolicy(listOf(12,36,72,120), listOf("간호사"), true)))
+                        "/api/v1/wards/w1/roster-eligibility" -> json(ApiJson.json.encodeToString(AdminEligibility(true, 1)))
                         else -> MockResponse().setResponseCode(404)
                     }
                 }

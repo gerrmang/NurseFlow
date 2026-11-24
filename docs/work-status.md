@@ -1,5 +1,101 @@
 # 공유 작업 현황
 
+## B6 PR #51 무본문 응답 리뷰 수정·dev 확인 (2026-11-24, Codex)
+
+- 같은 공유 worktree·`chore/demo-seed-script`, 시작 HEAD와 원격 PR head `82544f2` 일치, tracked 변경 없음 확인. 미추적 `nurseflow.mv.db`·`nurseflow.trace.db`를 보존했다. `git fetch origin` 후 최신 `origin/dev`는 `00f086c`이며 이미 HEAD의 조상이므로 추가 통합 커밋 없이 최신 dev 반영 상태다. backend·OpenAPI·웹 생성 타입은 dev와 동일하다.
+- 미해결 P3 `discussion_r4669526377`: Android 모드 조회를 `Response<AdminEligibility>`로 받아 성공 응답의 null body를 모드 미확인으로 처리한다. 비성공 응답은 HttpException을 기존 apiCall로 전달해 401·403·WARD_NOT_FOUND·USER_NOT_FOUND 처리를 보존한다. SerializationException·통신 오류 분리 및 CancellationException 재전파도 유지한다. 모든 eligibility 호출·대역을 검색해 단위/기기 fixture를 함께 맞췄다. 서버 API 계약·규칙은 바꾸지 않았다.
+- 실제 Retrofit+MockWebServer로 204·205·빈 200 첫 진입, 204 새로고침·205 저장 후 재조회·정상 모드 복구를 추가했다. 무본문 회귀 2개는 수정 전 모두 실패(exit 1), 수정 후 통과했다. 실제 HTTP 401·403·404의 목록 폐기 및 503의 목록 유지도 추가 검증했다. ViewModel 33개 통과, 기존 취소·인증 회귀 포함. 수정 diff 자체 재검토 완료, 독립 재리뷰는 별도다.
+- JDK 21, `GRADLE_USER_HOME=C:\Users\jjang\.gradle`, Android `:app:testDebugUnitTest :app:assembleDebug :app:assembleDebugAndroidTest :app:lintDebug --offline --no-daemon`: BUILD SUCCESSFUL(1분 15초). XML 197개 중 196개 통과·실서버 opt-in 1개 건너뜀·실패/오류 0. `git diff --check` 통과. 웹·backend·시드 통합·기기 UI·실제 Kakao는 Android 응답 처리 수정 범위라 로컬 재실행하지 않았으며 최종 PR CI는 푸시 후 확인한다.
+- API/DB/환경·의존성 변경 없음. Android 빌드 영향, 수동 배포 없음. 롤백은 이번 수정 커밋 revert와 이전 Android 빌드 복원. GitHub dev rules 조회에서 승인 1건 필요·필수 check 목록은 빈 배열·strict=true를 확인했다. 현재 PR은 MERGEABLE이나 REVIEW_REQUIRED/BLOCKED이며 독립 승인 완료나 즉시 병합 가능으로 표현하지 않는다.
+- 공유 인계: 같은 브랜치에 이번 수정·회귀·PR 초안·이 기록만 커밋·푸시하고 PR 설명과 해당 스레드를 갱신한다. 최종 head CI·미해결 대화·dev 포함 여부를 재확인한다. 사용자 DB 제외, dev/main 직접 푸시·PR 병합·자동 병합 설정 없음.
+- 게시 확인: 수정 커밋 `6909ea0` 푸시·원격 head 일치 확인. 연결 도구의 PR 수정/스레드 해결은 integration 권한 403으로 실패해 기존 인증된 gh로 PR 설명 반영과 해당 스레드 해결을 완료했다. 최신 dev 재조회도 `00f086c` 포함 상태이며 GitHub는 MERGEABLE·REVIEW_REQUIRED/BLOCKED다. 구현 head Verify `45332824330`이 시작됐으며 이 게시 기록 커밋을 포함한 최종 CI는 별도 확인한다. 다음 공유 인계는 동일 브랜치의 수정 diff 독립 재리뷰·필요 승인 1건이며 병합은 수행하지 않았다.
+
+## B6 PR #51 게시·최신 dev 충돌 정리 (2026-11-23, Codex)
+
+- JSON 파싱 수정 `c40d090`을 기존 PR 브랜치에 푸시했고 원격 SHA 일치를 확인했다. 연결 GitHub 도구는 PR 설명 수정·스레드 해결에 403을 반환해 기존 gh 인증으로 PR 초안 파일을 본문에 반영하고 P3 스레드를 해결 표시했다. 재조회에서 미해결 스레드 0건을 확인했으며 독립 승인과 구분한다.
+- 푸시 후 PR이 최신 dev와 CONFLICTING/DIRTY여서 Verify가 시작되지 않음을 확인했다. `origin/dev` `00f086c`(A9 #53·A10 #52)를 같은 B6 브랜치로 통합하고 `docs/work-status.md` 한 곳의 충돌만 양쪽 기록을 모두 보존해 해결했다. backend·OpenAPI·웹 생성 타입은 `origin/dev`와 동일하며 B6 추가 서버 수정 없음.
+- 통합 검증: JDK 21 backend `test bootJar --offline --no-daemon` BUILD SUCCESSFUL(1분 22초), XML 272개 중 267개 통과·opt-in 5개 건너뜀·실패/오류 0. web `npm run api:check`·`npm run typecheck` exit 0. 새 JAR의 `node scripts/demo/local.mjs --jar backend/build/libs/nurseflow-backend-0.1.0-SNAPSHOT.jar --verify` exit 0(새 메모리 H2·가상 2계정·초대 가입·권한 분리·기본 모드 편성·응답 유실 복구·시드 재조회). Node API/runtime 검사 7개 통과·실패/건너뜀 0. 검증용 자식 Java·가상 공급자 종료, 사용자 DB 보존. Android 코드는 통합 중 변경되지 않아 직전 전체 193개 통과 결과를 유지하며 중복 실행하지 않았다.
+- 공유 인계: 같은 worktree·`chore/demo-seed-script`에서 이 통합·검증 기록을 커밋·푸시하고 PR 설명을 최신 파일로 갱신한다. `nurseflow.mv.db`·`nurseflow.trace.db`는 미추적 상태 그대로다. 최종 head Verify와 독립 재리뷰는 별도 확인 대상이며 dev/main 직접 푸시·PR 병합·자동 병합·수동 배포 없음.
+
+## B6 PR #51 JSON 파싱 실패 리뷰 수정 (2026-11-23, Codex)
+
+- 같은 공유 worktree·`chore/demo-seed-script`, 시작 HEAD와 원격 PR head `e27e919` 일치를 확인했다. 새 미해결 P3 `discussion_r4660963516` 대응으로 Android `/roster-eligibility` 조회에서만 `SerializationException`을 미확인(null)으로 처리한다. 성공한 관리 목록과 편집을 유지하며 기존 ‘시연 모드 확인 불가’ 표시를 사용한다. 취소·401·403·WARD_NOT_FOUND·USER_NOT_FOUND는 기존 처리를 유지한다.
+- 실제 `ApiFactory.staffAdminApi`의 Retrofit/kotlinx.serialization 변환기와 MockWebServer로 HTTP 200의 `{}`·깨진 JSON·잘못된 타입을 검증했다. 다른 관리 API는 가상 응답이며 실서버 통합으로 표현하지 않는다. 첫 진입·시연 모드에서 실패한 새로고침·저장 후 재조회·정상 일반 모드 복구를 검사했고 취소 회귀를 추가했다. 기존 인증·권한·병동 없음 회귀도 유지했다. 같은 패턴을 검색해 웹 모드 조회는 디코딩 실패를 이미 분리함을 확인했다.
+- 대상 ViewModel 30개 통과. 파싱 예외 처리만 제거한 변이에서 새 JSON 회귀 2개 모두 목록/편집 유지 단언에 실패(exit 1)했으며 finally로 수정 코드를 복원했다. 변이 실행 중 Kotlin daemon 초기 종료 안내가 있었지만 컴파일이 이어져 검사가 실제 실행됐다.
+- 최종 JDK 21 `:app:testDebugUnitTest :app:assembleDebug :app:assembleDebugAndroidTest :app:lintDebug --offline --no-daemon`: BUILD SUCCESSFUL(1분 19초). 단위 XML 194개 중 193개 통과·실서버 opt-in 1개 건너뜀·실패/오류 0. Lint 오류 0·경고 27·Information 4. 최초 샌드박스 실행은 사용자 Gradle 캐시 미설정·배포본 다운로드 연결 권한 오류로 시작하지 못했고, 기존 사용자 캐시와 JDK 21을 지정해 권한 확장 후 검증했다.
+- 웹·backend 전체 회귀·시드 실서버 통합·기기 UI·실제 Kakao 검사는 Android 디코딩 예외 처리 수정 범위라 재실행하지 않았다. API/DB/환경·서버 규칙 변경 없음. Android 빌드에 영향, 수동 배포 없음. 롤백은 이번 커밋 revert와 이전 Android 빌드 복원이다. 수정 diff 자체 검토 완료, 독립 재리뷰·최종 head CI는 별도다.
+- 공유 인계: 같은 `C:\Users\jjang\IdeaProjects\NurseFlow`·`chore/demo-seed-script`에 수정·회귀 검사·PR 초안·이 현황만 커밋하고 PR #51에 반영한다. 사용자 `nurseflow.mv.db`·`nurseflow.trace.db`는 보존·커밋 제외한다. PR 병합·자동 병합·수동 배포 없음. 게시 결과는 후속 기록으로 구분한다.
+
+## B6 PR #51 리뷰 수정 (2026-11-22, Codex)
+
+- 같은 공유 worktree·`chore/demo-seed-script`, HEAD `51008be`와 PR 원격 head 일치를 확인하고 리뷰 `6003072000`의 P3·P5를 반영했다. Android·웹에서 `/roster-eligibility`만 일시 실패하면 모드 값을 미확인(null)으로 두고 ‘시연 모드 확인 불가’를 표시한다. 성공한 팀·간호사·구성원·경력 정책 목록과 편집은 유지하며 이전 모드를 최신 값이나 일반 모드로 표시하지 않는다. 인증·권한·취소 오류의 기존 처리는 유지하고 목록 자체 조회 실패는 계속 편집을 차단한다.
+- 첫 진입 503·새로고침 실패·저장 후 재조회·모드 복구·권한 상실·인증 오류 회귀를 Android ViewModel과 웹 Store/화면에서 검증했다. 같은 패턴 검색으로 두 클라이언트의 목록/모드 병합 경로와 배너 소비를 함께 수정했다. P5는 실행 안내를 현재 Android·웹 관리자 화면 지원과 로컬 가상 계정의 실제 Kakao 로그인 불가 범위로 나눴다.
+- JDK 21 Android `:app:testDebugUnitTest :app:assembleDebug :app:assembleDebugAndroidTest :app:lintDebug --offline --no-daemon`: BUILD SUCCESSFUL(1분 45초), XML 191개 중 190개 통과·실서버 opt-in 1개 건너뜀·실패/오류 0. Lint 오류 0·경고 27. 최초 샌드박스 실행은 Gradle 캐시 잠금 접근 거부로 시작하지 못해 권한 확장 후 완료했다.
+- Windows web `npm run api:check`, `npm run lint`, `npm run typecheck`, `npm test -- --run`, `npm run build` 성공. 394개 통과·실서버 opt-in 3개 건너뜀·실패 0. 최초 화면 회귀 2개는 빈 팀 이름의 기존 필수 검증을 누락해 실패했고, 이름 입력 후 활성화를 검사하도록 테스트만 정정해 전체 재실행 통과했다. Node `--test scripts/demo/api.test.mjs scripts/demo/runtime.test.mjs` 7개 통과·실패/건너뜀 0, `node --check scripts/demo/local.mjs`·`git diff --check` 통과.
+- 기기 UI·새 실서버/시드 통합·실제 Kakao·backend 전체 회귀는 클라이언트 장애 처리와 실행 문구 변경 범위라 재실행하지 않았다. API/DB/환경·서버 근무 규칙 변경 없음. Android·웹 빌드 영향, 수동 배포 없음. 롤백은 이번 수정 커밋 revert와 이전 클라이언트 빌드 복원이다. 수정 diff 자체 검토 완료, 독립 재리뷰·최종 head CI는 별도다.
+- 공유 인계: 같은 `C:\Users\jjang\IdeaProjects\NurseFlow`, `chore/demo-seed-script`에 이번 수정·회귀 검사·PR 초안·이 현황을 커밋·푸시하고 PR #51 설명을 최신 검증으로 갱신한다. 사용자 `nurseflow.mv.db`·`nurseflow.trace.db`는 보존하며 커밋에서 제외한다. 리뷰 스레드 해결·독립 승인·PR 병합·자동 병합·수동 배포 없음. 다음 단계는 수정 diff 재리뷰와 최종 head CI 확인이다.
+- 게시 상태: 로컬 수정 커밋 생성 후 `git push origin chore/demo-seed-script`는 자동 승인 검토가 외부 GitHub 게시에 대한 명시적 사용자 승인 부족으로 거부했다. 우회하지 않았으며 원격 푸시·PR 설명 갱신은 미실행이다. 검증된 변경은 같은 브랜치의 로컬 커밋으로 인계하고 사용자 푸시 승인 후 게시한다. 위 문장의 푸시·PR 갱신은 계획이며 완료 기록이 아니다.
+- 후속 게시: 사용자 ‘ㅇㅇ푸시’ 승인으로 수정 커밋 `798f3ce`를 `origin/chore/demo-seed-script`에 푸시했다(원격 `51008be → 798f3ce`). PR 설명 갱신은 별도 외부 변경에 대한 승인 부족으로 자동 검토가 거부해 실행하지 않았으며 우회하지 않았다. PR 초안 파일에는 최신 결과가 포함돼 있다. 제품 코드는 검증 뒤 변경하지 않아 검사를 반복하지 않는다. 게시 기록만 같은 브랜치에 추가하고, 독립 재리뷰·최종 head CI 결과 확인으로 인계한다.
+
+## B6 실제 Kakao 웹 로그인 1계정 검증 (2026-11-20, Codex)
+
+- 사용자의 실제 로그인 검증 요청에 따라 현재 코드 HEAD `4d8590e`의 웹과 backend bootJar를 실행했다. backend는 dev `139b609` 이후 변경 없음. WSL JDK 21·새 `jdbc:h2:mem:b6_real_kakao`·8080, Windows Vite·localhost:5173, 실제 Kakao HTTPS issuer/JWKS/authorize/token 주소로 구성했다. 사용자가 기존에 준비한 Kakao 환경 파일은 source로만 읽고 키·Secret·토큰·인가 코드·쿠키·계정 식별자를 출력·기록하지 않았다. 사용자 파일 DB를 사용하지 않았다.
+- ChatGPT in-app browser에서 **실제 Kakao 계정 1개의 로그인→앱 내 병동 복귀→새로고침 세션 복원→앱 로그아웃→실제 Kakao 인가 코드 재로그인→내 병동 복귀**를 직접 확인했다. 기존 Kakao 로그인 상태로 SSO 왕복했으며 비밀번호 자동 입력·가상 공급자·토큰 주입은 사용하지 않았다. 재로그인 중 `/auth/kakao/callback` 뒤 앱 복귀를 관찰했다. 서버 프로세스의 전용 메모리 DB·실제 issuer를 함께 확인했다.
+- 같은 실제 계정으로 병원 검색(10개 후보)→검증용 가상 병동 생성→관리자 등록 안내→팀/구성원 화면의 보호 API 조회·서버 일반 모드 표시·새 팀 입력 표시 확인. 증거 화면에는 계정 식별자가 없으며 무시되는 `backend/build/b6-real-kakao-proof.jpg`에만 보존했다. 검증 후 앱 로그아웃·로그인 화면을 확인하고 이번 Java/Vite 서버만 종료해 메모리 DB를 폐기했다. 기존 사용자 DB·로컬 설정·다른 프로세스는 보존했다.
+- 한계: **두 실제 계정 간 전환·초대 가입, 이번 Android SDK 실로그인·물리 기기·운영은 미실행**. 기존 가상 2계정 검증·Android 계측 5개와 이번 실제 웹 1계정 결과를 혼합하지 않는다. 상세 환경·관찰·미검증은 `scripts/demo/real-kakao-verification.md` 참조. Windows 네이티브 Whale 제어는 창 소유자 오류가 반복돼 브라우저 전용 도구로 전환했다.
+- 제품·API·DB·배포 설정 파일 변경 없음. 검증 결과 문서·README·계정 기록·PR 설명·이 현황만 같은 `chore/demo-seed-script`에 커밋·푸시하고 PR #51에 실제 결과를 반영한다. 독립 승인·PR 병합·자동 병합·수동 배포는 하지 않는다. 아래 ‘실제 로그인 미검증’ 절들은 당시 이력이며 현재 웹 1계정 검증은 이 절을 따른다.
+
+## B6 인수 범위 마무리·일반 PR 전환 (2026-11-20, Codex)
+
+- 사용자의 마무리 요청에 따라 B6 원문 완료 증명인 **새 H2 DB에서 공개 API로 시드 실행 후 조회**를 기준으로 인수 상태를 정리했다. 구현·복구·종료 상태, 가상 관리자/간호사 2계정의 운용·가입·권한, Android/웹 관리자 화면 시연 모드 표시는 구현·검증했다. 실제 Kakao 로그인을 B6의 필수 선행으로 확대해 Draft에 남겼던 판정을 정정한다. 실제 Kakao 로그인 자체는 실행하지 않았으며 B3/B12의 실제 인증·교차 클라이언트 시연 미검증 항목으로 명시한다. 실제 계정이 준비됐거나 로그인 검증을 통과했다고 주장하지 않는다.
+- `scripts/demo/accounts.md`에 B6 자동화의 가상 2계정과 메모리 수명·폐기, 실제 시연의 관리자/간호사 2역할·소유자 직접 관리·로그인·검증 전 계정 이용 가능 확인·비밀값 비출력 절차를 구분했다. README·PR 설명에서 Draft 대기 문구를 제거하고 이 인수 기준과 미검증 항목을 함께 명시한다. 공통 기획 문서는 변경하지 않는다.
+- 최신 구현/게시 기록 head `f2b4c16`의 [Verify 44738992638](https://github.com/gerrmang/NurseFlow/actions/runs/44738992638)는 completed/success이고 Demo seed checks·Backend tests·Android debug build·Web checks 모두 success 확인. PR #51은 OPEN·MERGEABLE이며 조회 시 리뷰·리뷰 스레드 0건이다. 이는 독립 승인이나 브랜치 보호 설정 확인을 뜻하지 않는다.
+- 이번 변경은 문서 마무리뿐이며 앱/서버/테스트 코드는 바꾸지 않았다. 기존 로컬 11개·Android 단위 188개/opt-in 1개·기기 5개·웹 387개/opt-in 3개 결과와 원격 CI를 근거로 하고 테스트를 불필요하게 반복하지 않는다. git diff 공백 검사를 확인하고 문서 커밋을 같은 `chore/demo-seed-script`에 푸시한다. 최종 문서 head의 CI도 별도로 확인한다.
+- 공유 인계: 같은 `C:\Users\jjang\IdeaProjects\NurseFlow`, `chore/demo-seed-script`, [PR #51](https://github.com/gerrmang/NurseFlow/pull/51)을 Ready for review로 전환하고 PR 설명을 최신 파일로 갱신한다. 사용자 DB·trace·로컬 문서 보존 브랜치는 유지한다. 별도 병합 승인·독립 리뷰는 수행하지 않았으며 dev/main 병합·자동 병합·수동 배포는 하지 않는다. 아래 Draft 절들은 당시 게시 이력이다.
+
+## B6 Draft PR #51 게시 (2026-11-20, Codex)
+
+- B6 보완을 `856ce5f9b9a081e1ddc6bf6239286c770fbc72fd`에 커밋·푸시하고 [PR #51](https://github.com/gerrmang/NurseFlow/pull/51)을 dev 대상 Draft로 게시했다. 연결 도구의 PR 생성 권한 403 후 기존 인증된 gh의 `--body-file scripts/demo/pr-draft.md`로 게시했다. 사용자 요청의 구현·검증·PR 준비 작업을 수행했으며 실제 Kakao 계정 운용 선택·로그인 검증 대기 사유를 PR 첫 부분에 명시했다.
+- Android/웹 표시·가상 2계정 API·기기·단위·CLI 검증 결과는 아래 보완 절을 따른다. 게시 후 제품 코드는 바꾸지 않았다. 사용자 DB·trace·로컬 문서 보존 브랜치를 포함하지 않았고 검증용 Java/JWKS·이번 에뮬레이터는 종료했다. 앱/서버 테스트를 게시 기록 때문에 다시 실행하지 않으며 문서 diff 공백만 검사한다.
+- 현재 계정 운용 선택 질문은 사용자 답변 대기다. 실제 Kakao 두 계정 로그인 없이 전체 인수를 통과했다고 주장하지 않고 Draft를 유지한다. 최종 head의 GitHub CI·독립 리뷰는 별도 확인하며 병합·자동 병합·수동 배포는 하지 않는다. 같은 공유 worktree·`chore/demo-seed-script`에서 PR 리뷰 대응으로 인계한다.
+
+## B6 Android·웹 시연 모드 표시와 2계정 검증 보완 (2026-11-20, Codex)
+
+- 사용자 요청으로 남은 표시·계정 검증을 같은 `chore/demo-seed-script`에서 보완했다. Android·웹의 관리자 팀/구성원 화면이 기존 A7 `/roster-eligibility`를 조회해 가상 데이터 포함 시연 모드·일반 모드를 표시한다. 조회 중/실패/오래된 상태는 일반 모드로 추정하지 않으며 갱신 실패 중 편집을 차단한다. 권한 상실 시 기존 세션/병동 소유 상태 처리로 데이터를 폐기한다. 서버/계약/권한을 변경하지 않았다. 사용자가 남은 B6 작업 전체를 요청해 이번 PR에 Android·웹의 작은 표시 보완을 함께 포함한다.
+- 가상 관리자·간호사 **2개 신원**으로 가입 전 404→초대 수락·본인 입사 연월→관리자 API 403 및 기본 모드의 가입 간호사 편성·관리자 간호사 기록 제외를 실제 Spring+새 메모리 H2로 검증했다. 기존 A/B팀 시드 병동과 별도 가입 검증 병동을 사용한다. `scripts/demo/accounts.md`에 자동 계정 수·메모리 수명·폐기·비출력 정책과 실제 Kakao 2계정 준비안을 작성했다. 실제 Kakao 운용 방식 선택을 사용자에게 요청했으며 답변 전 결정 21을 임의로 해결 처리하지 않는다.
+- 검증: Node 테스트 11개 통과·실패/건너뜀 0(42초), 새 `local.mjs --verify` exit 0로 기존 시드 복구/모드/시간 보존과 새 2계정 가입 검증 성공. CI에 Demo seed checks를 추가해 같은 검사를 PR마다 실행하도록 구성했다. 실제 CI 성공 여부는 게시 후 별도 확인한다.
+- Android JDK 21 `:app:testDebugUnitTest :app:assembleDebug :app:assembleDebugAndroidTest :app:lintDebug --offline --no-daemon` BUILD SUCCESSFUL. 단위 XML 189개 중 188개 통과·실서버 opt-in 1개 건너뜀·실패/오류 0. 신규 상태 회귀 2개, API·Compose 배너 및 기기 fixture 보완. 읽기 전용 headless Pixel_10 Android 17에서 두 StaffAdmin 기기 클래스를 지정한 최종 `connectedDebugAndroidTest` **5/5 통과·실패/건너뜀 0, BUILD SUCCESSFUL(52초)**. 앞선 PowerShell 인수 분리 오류와 초기 프로세스 종료(0개 시작) 후 정확한 러너 직접 계측 4개 및 최종 Gradle 5개로 확인했다. 기존 AVD 데이터는 초기화하지 않았다.
+- 웹 api:check·lint·typecheck·전체 test·build 성공. 387개 통과·실서버 opt-in 3개 건너뜀·실패 0. 화면의 켜짐→꺼짐 재조회·조회 실패 시 일반 모드 오표시 차단, 비정상 demoMode 응답 거부 회귀 포함. git diff --check 통과. 실제 Kakao·물리 기기·운영·macOS/Linux·전체 화면 크기 및 독립 리뷰는 미검증이다. 서버 미변경이므로 로컬 backend 전체 회귀는 생략하고 PR CI에서 별도로 확인한다.
+- API·DB·배포 환경/의존성 계약 변경 없음. Android·웹 관리 화면과 CI 작업에 영향, 수동 배포 없음. 롤백은 이 보완 커밋 revert와 이전 클라이언트 빌드 복원이다. 현재 코드/가상 계정 검증 완료와 실제 Kakao 2계정 시연 완료를 구분한다. 실제 계정 운용·로그인 확인 전에는 B6 전체 인수 완료로 표시하지 않는다.
+- 공유 인계: 같은 `C:\Users\jjang\IdeaProjects\NurseFlow`, `chore/demo-seed-script`에 코드·검사·사용법·계정 기록·PR 초안·이 현황을 함께 커밋·푸시하고 dev 대상 Draft PR로 검토 가능하게 게시한다. 기존 DB·trace와 로컬 문서 보존 브랜치는 유지한다. 최종 CI·계정 운용 방식 확인 및 수정 diff 독립 리뷰를 남기며 병합·자동 병합·배포는 하지 않는다.
+
+## B6 P3 종료 코드 수정·인수 상태 정정 (2026-11-20, Codex)
+
+- 사용자 수정 요청으로 같은 `chore/demo-seed-script`에서 일반 실행의 마지막 시드 검증 결과를 `process.exitCode`에 반영했다. 실패 후 q/EOF는 1, r로 복구·검증까지 성공하면 0, 최초 성공 뒤 재실패하면 1이다. 오류를 알린 뒤 메모리 DB를 유지하는 재시도 흐름은 보존했다. 같은 오류 처리 패턴을 검색했으며 최상위 catch는 이미 exitCode=1, API/runtime catch는 호출자에게 실패를 전달한다.
+- `scripts/demo/local.test.mjs`에 실제 CLI+Spring+별도 메모리 H2의 검색 503 주입 회귀 4개 추가. JDK 21, `NURSEFLOW_B6_TEST_JAR` opt-in으로 `node --test scripts/demo/api.test.mjs scripts/demo/runtime.test.mjs scripts/demo/local.test.mjs`: **11개 통과·실패/오류/건너뜀 0**, 43초. 새 회귀 단독 실행도 4개 통과했다. 수정 전 q/EOF exit 0 재현은 아래 자체 검토 절에 있다.
+- 수정 후 `node scripts/demo/local.mjs --jar backend/build/libs/nurseflow-backend-0.1.0-SNAPSHOT.jar --verify` exit 0: 기존 4종 생성 응답 유실 복구·시드 데이터 쓰기 0건·시연 모드 제외/복구·412·비소속 404·근무 설정 보존 통과. mjs 구문·`git diff --check` 통과. 검증용 Java/JWKS는 모두 종료하고 해당 포트 해제를 확인했다. 서버/클라이언트 전체 회귀·기기·실제 Kakao·운영·macOS/Linux는 스크립트 종료 상태 수정 범위라 재실행하지 않았다.
+- README·PR 초안에서 Android/웹 시연 모드 표시를 임의로 범위 밖이라 적었던 표현을 제거하고 결정 9·21의 **미완료 인수 조건**으로 명시했다. 가상 관리자 1명·검증용 비소속 1명은 실제 Kakao 계정 운용 결정이 아니다. B6의 `scripts/demo/**` 경계를 유지하며 클라이언트 UI·실제 계정 시연까지 완료했다고 주장하지 않는다. 해당 구현·운용 결정 및 검증 기록 연결은 아직 남아 있다.
+- API·DB·환경변수 계약·의존성 및 배포 영향 없음. 되돌리기는 이번 종료 코드 수정 revert, 서버/DB 롤백 없음. 수정 diff 자체 재검토 완료, 독립 재리뷰·GitHub CI는 미확인이다. 아래 자체 검토의 P3 미수정 판정은 당시 기록이며 이 수정으로 대응했다.
+- 공유 인계: 같은 `C:\Users\jjang\IdeaProjects\NurseFlow`, `chore/demo-seed-script`에서 수정·회귀 검사·README·PR 초안·자체 검토 및 이 현황 기록을 함께 커밋·푸시한다. 원격 SHA 일치를 확인하고 다음은 수정 diff 독립 재리뷰다. 기존 DB·trace와 로컬 문서 보존 브랜치는 보존하며 PR 게시·병합·배포 없음.
+
+## B6 문서·구현 자체 검토 (2026-11-20 16:50 KST, Codex)
+
+- 검토 기준: 같은 공유 worktree `C:\Users\jjang\IdeaProjects\NurseFlow`, `chore/demo-seed-script`, HEAD `977eaecc19779dfcea4df277fbe7813f201ca829`. 검토 전 상태 기록 외 tracked diff 없음(SHA-256 `e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855`, 빈 diff). AGENTS·Git 흐름·공유 인계·리뷰 절차, breakdown B6/선행/결정 9·21, 제품 범위·정책·테스트 및 소비 API와 변경 12파일을 대조했다. 현재 브랜치명·dev 시작점·소유 경로·서버 API/권한 사용·가상 데이터 분리는 기준에 맞는다. 최초 잘못된 브랜치명은 푸시 전에 정정됐다.
+- **P3(런타임) 1건, 미수정:** `scripts/demo/local.mjs:73-76`의 일반 실행 catch가 실패를 출력만 하고 종료 상태에 반영하지 않는다. 저장소 수정 없이 별도 Node 프로세스의 fetch에 병원 검색 HTTP 503을 주입했다. 생성 성공 문구 없음·HTTP 503 출력인데 q 종료와 stdin EOF 각각 exit 0 재현. 일반 `run.ps1`은 이 종료 코드를 성공으로 판단한다. 실패 후 재조회/복구는 유지하되 마지막 시드 검증 결과를 종료 코드에 반영하고, 실패→종료/실패→r 복구 회귀 검사를 추가해야 한다.
+- 완료 판정 정정: API 시드 구현·새 H2 조회 검증은 끝났지만 B6 전체 인수 완료로 단정하지 않는다. breakdown 결정 9와 OpenAPI는 클라이언트 시연 모드 표시를 요구하는데 현재는 터미널 표시만 있고 Android/웹 배너·설정 UI가 없다. 결정 21의 실제 Kakao 시연 계정 수/관리도 미정이다. README에서 후속으로 적은 사실만으로 해당 인수 조건이 충족되거나 범위 변경이 합의된 것은 아니다. 실제 계정·클라이언트 시연 완료와 구분한다.
+- 재검증: `node --test scripts/demo/api.test.mjs scripts/demo/runtime.test.mjs` 7개 통과·실패/건너뜀 0. JDK 21 `scripts/demo/run.ps1 -Verify -Offline` bootJar BUILD SUCCESSFUL·최종 확장 통합 검증 exit 0(4종 응답 유실 복구·쓰기 0건·시연 모드 제외/복구·412·비소속 404·근무 설정 보존). 원격 dev `139b609`와 작업 브랜치 `977eaec` 일치 확인. GitHub PR·해당 브랜치 workflow run 조회 결과 각각 0건이며 CI 성공·독립 승인으로 표현하지 않는다.
+- 리뷰 절차에 따라 제품 코드 수정·커밋·푸시·PR 게시·병합 없음. 이 검토 기록만 같은 작업 현황에 추가한다. 검증용 서버는 종료됐고 사용자 DB·trace·기존 로컬 문서 보존 브랜치는 보존했다. 다음 인계는 위 P3 수정과 회귀 검사, 시연 모드 UI/실제 계정 인수 범위 정리 후 재리뷰다.
+
+## B6 공개 API 가상 데이터 시드 구현·검증 (2026-11-20, Codex)
+
+- 같은 공유 worktree에서 최신 dev `139b609` 기반 `chore/demo-seed-script`로 작업한다. 최초 브랜치명을 breakdown에 명시된 이름으로 정정했다. 소유 범위 `scripts/demo/**`에 Node.js 시드·가상 JWKS/Java 런타임·PowerShell 한 명령 진입점·CP949 가상 병원 fixture·사용법·검사를 추가했다. backend·OpenAPI·클라이언트·breakdown은 수정하지 않았다.
+- `scripts/demo/run.ps1`이 bootJar 빌드 후 루프백·별도 메모리 H2로 기존 Spring 서버를 실행한다. 가상 병원/병동, A/B팀, 팀별 단계 1~5 간호사 총 10명, 가상 경력 확인·단계 조정·선임·팀 내 순서, D/E/N 시간·휴게·인정·환산을 공개 API로 생성하고 `demoMode=true`와 서버 편성 판정을 재조회한다. 서버 규칙·인증 검증 우회 없음. 터미널에 가상 데이터·시연 모드 표시, 완료 후 r 재실행 쓰기 0건, 실패 뒤에도 r로 조회·복구 가능하다.
+- 검증: JDK 21·Node v24.15.0, `scripts/demo/run.ps1 -Verify -Offline` bootJar BUILD SUCCESSFUL 및 초기 통합 시나리오 성공. 최종 확장 검증 `node scripts/demo/local.mjs --jar backend/build/libs/nurseflow-backend-0.1.0-SNAPSHOT.jar --verify` exit 0: 병동·팀·간호사·근무 유형 성공 응답 유실 4종의 중복 없는 복구, 팀/경력/선임/순서/근무 시간·편성 대상 전체 조회, 재실행 쓰기 0건, 오래된 ETag 412, 비소속 계정 404, 시연 모드 해제 시 10명 전원 제외·복구, 기존 Day 인정시간 변경값 덮어쓰기 거부 확인.
+- `node --test scripts/demo/api.test.mjs scripts/demo/runtime.test.mjs`: 7개 통과·실패/건너뜀 0. API 외부 주소/경로 차단, 결과 유실 비재전송·오류 비밀값 비노출, HTTP 오류·리다이렉트·제한시간·비정상 JSON, 점유 포트 보존·잘못된 실행 인수 검사. 모든 mjs 구문·텍스트 공백 검사 및 `git diff --check` 통과. 최종 일반 진입점의 최초 생성→r 동일 병동 재조회→q exit 0·포트 해제, 시작 중 취소→Java 종료·포트 해제도 실제 프로세스로 별도 확인했다.
+- 중간 실패: 샌드박스 Gradle 캐시 잠금 접근 거부 후 권한 확장으로 빌드 완료. 비소속 병동 응답을 403으로 기대하던 검사를 현행 서버 계약 404로 정정했다. 덮어쓰기 방지 검사에 사용한 인정시간 451분은 서버 상한 450분을 넘어 422였으며, 유효한 449분으로 정정 후 최종 통합 검증 통과. 제품 서버 코드는 바꾸지 않았다.
+- 미검증/후속: 실제 Kakao·Android/웹 UI·물리 기기·운영·macOS/Linux·전체 backend/클라이언트 회귀·독립 리뷰·GitHub CI는 실행하지 않았다. 이번 범위는 가상 공급자+실제 서버의 API 데이터 준비다. Android/웹 시연 모드 배너·설정 UI, 실제 계정 수/관리(결정 21), 초안/수요/자동배치/공개·통합 E2E는 후속이다.
+- API·DB 스키마·환경변수 계약·의존성 추가 변경 및 배포 없음. 설정은 전용 자식 프로세스에만 적용한다. 되돌리기는 시연 종료 후 B6 변경 제거/revert다. 검증용 Java/JWKS 서버는 종료했으며 기존 DB·trace와 로컬 문서 보존 브랜치 `codex/docs-preserve-handoff-records`의 `9a01332`는 그대로 뒀다.
+- 공유 인계: `C:\Users\jjang\IdeaProjects\NurseFlow`, `chore/demo-seed-script`에서 사용자 요청으로 B6 코드·사용법·PR 초안과 이 현황 기록을 함께 커밋·푸시한다. 게시 전 staged diff·공백·대상 파일을 확인하고 푸시 후 원격 SHA를 확인한다. 기존 로컬 문서 보존 브랜치와 DB·trace는 포함하지 않는다. PR 게시·병합·배포는 하지 않으며 다음 단계는 B6 diff 리뷰 및 후속 UI 범위 분리 확인이다. 별도 worktree를 만들지 않는다.
 ## A11 연속근무 제한 구현 (2026-11-23, Codex)
 
 - PR 게시 전 재리뷰에서 소수 상한이 정수로 잘려 HTTP 200이 나오는 동작을 재현했다. JSON 정수만 받고 소수와 문자열은 400으로 거부하도록 수정했다. 잘못된 입력 후 기존 ETag 유지와 백엔드 전체 check 273개 통과·5개 건너뜀·실패 0을 확인했다. 웹 계약·타입·린트·테스트 384개·빌드 통과.
