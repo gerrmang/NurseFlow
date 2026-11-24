@@ -60,15 +60,16 @@ class OffRequestService(
         } else {
             ownNurse(wardId, actor).also { if (nurseId != null && nurseId != it) throw BusinessException(ErrorCode.WARD_ADMIN_REQUIRED) }
         }
+        val zone = requests.wardZone(wardId) ?: throw BusinessException(ErrorCode.WARD_NOT_FOUND)
+        if (!admin && date.isBefore(LocalDate.now(zone))) {
+            throw BusinessException(ErrorCode.INVALID_REQUEST, safeDetail = "지난 날짜에는 희망 오프를 신청할 수 없습니다.")
+        }
         if (roster.findNurse(target, wardId)?.active != true) throw BusinessException(ErrorCode.NURSE_NOT_FOUND)
         if (requests.holdsDate(target, date)) throw BusinessException(ErrorCode.OFF_REQUEST_DUPLICATE)
         val month = YearMonth.from(date)
         val policy = policy(wardId)
         val now = Instant.now()
-        val zone = requests.wardZone(wardId) ?: throw BusinessException(ErrorCode.WARD_NOT_FOUND)
-        if (!admin && date.isBefore(LocalDate.now(zone))) {
-            throw BusinessException(ErrorCode.INVALID_REQUEST, safeDetail = "지난 날짜에는 희망 오프를 신청할 수 없습니다.")
-        }
+        // Late exception requests still count: they are the nurse's own entries, kept until an admin decides them.
         if (!admin && requests.openNurseEntries(target, month) >= policy.monthlyLimit) {
             throw BusinessException(ErrorCode.OFF_REQUEST_LIMIT_REACHED, safeDetail = "희망 오프는 한 달에 ${policy.monthlyLimit}일까지 신청할 수 있습니다.")
         }
@@ -76,7 +77,7 @@ class OffRequestService(
             id = UUID.randomUUID(), wardId = wardId, nurseId = target, date = date,
             status = OffRequestStatus.SUBMITTED, source = if (admin) OffRequestSource.ADMIN else OffRequestSource.NURSE,
             submittedBy = actor, submittedAt = now, decidedBy = null, decidedAt = null,
-            afterDeadline = !now.isBefore(deadline(wardId, month, policy)),
+            afterDeadline = !now.isBefore(policy.deadline(month, zone)),
         )
         requests.insert(request)
         return request
