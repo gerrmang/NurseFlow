@@ -293,3 +293,44 @@ ALTER TABLE roster_slots ADD COLUMN IF NOT EXISTS team_id UUID;
 ALTER TABLE roster_slots ADD COLUMN IF NOT EXISTS senior_required BOOLEAN DEFAULT FALSE NOT NULL;
 
 ALTER TABLE nurses ADD COLUMN IF NOT EXISTS work_pattern VARCHAR(32) DEFAULT 'GENERAL' NOT NULL;
+
+-- A13: monthly target hours. Absent row = demo defaults (8h a day, leave/SOF 8h, half-day 4h). Values are ward
+-- settings, never legal limits. NULL Night-dedicated values follow the general target and each shift type's credit.
+CREATE TABLE IF NOT EXISTS ward_target_hour_policies (
+    ward_id UUID PRIMARY KEY REFERENCES wards(ward_id),
+    daily_standard_minutes INT NOT NULL CHECK (daily_standard_minutes BETWEEN 1 AND 1440),
+    leave_credit_minutes INT NOT NULL CHECK (leave_credit_minutes BETWEEN 0 AND 1440),
+    half_day_credit_minutes INT NOT NULL CHECK (half_day_credit_minutes BETWEEN 0 AND 1440),
+    sof_credit_minutes INT NOT NULL CHECK (sof_credit_minutes BETWEEN 0 AND 1440),
+    night_dedicated_target_minutes INT CHECK (night_dedicated_target_minutes BETWEEN 0 AND 44640),
+    night_dedicated_night_credit_minutes INT CHECK (night_dedicated_night_credit_minutes BETWEEN 0 AND 1440),
+    updated_by VARCHAR(255) NOT NULL,
+    updated_at VARCHAR(40) NOT NULL
+);
+
+-- A13: ward holiday calendar, one row per date. Weekends are not stored; holidays on a weekend count once.
+-- Entered by the ward admin (no external holiday feed yet). Names are public holiday names, never personal data.
+CREATE TABLE IF NOT EXISTS ward_calendar_days (
+    ward_id UUID NOT NULL REFERENCES wards(ward_id),
+    calendar_date DATE NOT NULL,
+    kind VARCHAR(20) NOT NULL CHECK (kind IN ('PUBLIC_HOLIDAY','SUBSTITUTE_HOLIDAY','WARD_REST_DAY','WARD_WORKDAY')),
+    name VARCHAR(50),
+    updated_by VARCHAR(255) NOT NULL,
+    updated_at VARCHAR(40) NOT NULL,
+    PRIMARY KEY (ward_id, calendar_date)
+);
+
+-- A13: national public holidays imported from 한국천문연구원 특일 정보 (data.go.kr 15012690). Shared by every ward;
+-- a ward entry on the same date in ward_calendar_days wins. Each fetched month is replaced as a whole, so a holiday
+-- withdrawn by the source disappears; a failed fetch keeps the stored month.
+CREATE TABLE IF NOT EXISTS public_holidays (
+    holiday_date DATE PRIMARY KEY,
+    kind VARCHAR(20) NOT NULL CHECK (kind IN ('PUBLIC_HOLIDAY','SUBSTITUTE_HOLIDAY')),
+    name VARCHAR(50)
+);
+
+CREATE TABLE IF NOT EXISTS public_holiday_imports (
+    holiday_month VARCHAR(7) PRIMARY KEY,
+    fetched_at VARCHAR(40) NOT NULL,
+    holiday_count INT NOT NULL
+);

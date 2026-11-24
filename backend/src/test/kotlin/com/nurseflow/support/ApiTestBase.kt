@@ -27,7 +27,7 @@ abstract class ApiTestBase {
     @BeforeEach
     fun resetDatabase() {
         http = HttpTestClient(port, mapper)
-        listOf("hospitals", "hospital_dataset_imports", "staff_adjustments", "audit_events", "auth_web_login_attempts", "ward_invitations", "ward_career_policies", "auth_refresh_tokens", "mutation_replays", "generation_jobs", "approved_absences",
+        listOf("ward_calendar_days", "ward_target_hour_policies", "public_holidays", "public_holiday_imports", "hospitals", "hospital_dataset_imports", "staff_adjustments", "audit_events", "auth_web_login_attempts", "ward_invitations", "ward_career_policies", "auth_refresh_tokens", "mutation_replays", "generation_jobs", "approved_absences",
             "roster_slots", "rosters", "shift_types", "nurses", "ward_teams", "ward_policy_revisions", "ward_memberships", "users", "wards",
         ).forEach { table -> runCatching { jdbc.update("DELETE FROM $table") } }
     }
@@ -68,6 +68,8 @@ abstract class ApiTestBase {
             registry.add("nurseflow.auth.kakao.token-uri") { FakeOidcProvider.tokenUri }
             registry.add("nurseflow.auth.kakao.authorize-uri") { FakeOidcProvider.AUTHORIZE_URI }
             registry.add("nurseflow.hospital.hira.base-uri") { FakeHiraServer.baseUri }
+            registry.add("nurseflow.holiday.base-uri") { FakeHolidayServer.baseUri }
+            registry.add("nurseflow.holiday.service-key") { FakeHolidayServer.SERVICE_KEY }
             registry.add("spring.datasource.url") { "jdbc:h2:mem:api_tests;DB_CLOSE_DELAY=-1" }
         }
     }
