@@ -5,6 +5,7 @@ import com.nurseflow.roster.application.model.*
 import com.nurseflow.roster.application.generation.GenerationCoordinator
 import com.nurseflow.roster.application.service.RosterService
 import com.nurseflow.roster.application.service.RosterEligibilityService
+import com.nurseflow.offrequest.application.service.OffRequestService
 import com.nurseflow.policy.application.model.ShiftTypeCommand
 import com.nurseflow.policy.application.service.ShiftTypeService
 import com.nurseflow.roster.domain.model.ShiftKind
@@ -37,6 +38,7 @@ class RosterServiceIntegrationTest @Autowired constructor(
     private val shiftTypes: ShiftTypeService,
     private val eligibility: RosterEligibilityService,
     private val staff: StaffService,
+    private val offRequests: OffRequestService,
 ) {
     private lateinit var wardId: UUID
     private lateinit var nurseId: UUID
@@ -205,7 +207,7 @@ class RosterServiceIntegrationTest @Autowired constructor(
     @BeforeEach
     fun setup() {
         listOf("mutation_replays", "generation_jobs", "approved_absences", "roster_slots", "rosters",
-            "shift_types", "staff_adjustments", "nurses", "ward_memberships", "audit_events", "ward_policy_revisions", "ward_teams", "wards")
+            "shift_types", "staff_adjustments", "off_requests", "nurses", "ward_memberships", "audit_events", "ward_policy_revisions", "ward_teams", "wards")
             .forEach { jdbc.update("DELETE FROM $it") }
         wardId = UUID.randomUUID()
         nurseId = UUID.randomUUID()
@@ -507,6 +509,95 @@ class RosterServiceIntegrationTest @Autowired constructor(
         assertEquals(first, replayed)
         assertEquals("DAY" to "DAY", replayed.slots.single().let { it.shiftCode to it.shiftKind })
         assertEquals(draft.revision + 1, service.getRoster(draft.rosterId, admin).revision)
+    }
+
+    @Test
+    fun `confirmed off request blocks candidate manual automatic and confirm but keeps the published roster`() {
+        val date = LocalDate.parse("2026-11-02")
+        val published = assign(newRoster("2026-11", date, dayTypeId), nurseId)
+        service.confirm(published.rosterId, tag(published), UUID.randomUUID(), ConfirmRosterRequest(), admin)
+        val publishedBefore = service.publishedWard(wardId, "2026-11", admin)
+        val draft = newRoster("2026-11", date, dayTypeId)
+        val request = offRequests.submit(wardId, nurseId, date, admin)
+        // An undecided request is only a preference: the draft is not invalidated and manual assignment still works.
+        assertEquals(draft.revision, service.getRoster(draft.rosterId, admin).revision)
+        assertTrue(service.validate(draft.rosterId, tag(draft), ValidateAssignmentRequest(draft.slots.single().slotId, nurseId), admin).allowed)
+
+        offRequests.confirm(wardId, request.id, admin)
+        val invalidated = service.getRoster(draft.rosterId, admin)
+        assertEquals(draft.revision + 1, invalidated.revision)
+        assertTrue(invalidated.needsRevalidation)
+        assertEquals(publishedBefore, service.publishedWard(wardId, "2026-11", admin))
+        val slot = invalidated.slots.single().slotId
+        val candidate = service.validate(invalidated.rosterId, tag(invalidated), ValidateAssignmentRequest(slot, nurseId), admin)
+        assertTrue(candidate.hardViolations.any { it.code == "CONFIRMED_OFF_REQUEST" })
+        val manual = assertThrows(BusinessException::class.java) { assign(invalidated, nurseId) }
+        assertTrue(manual.ruleViolations.filterIsInstance<RuleDiagnostic>().any { it.code == "CONFIRMED_OFF_REQUEST" })
+        val automatic = waitForGeneration(generation.start(
+            invalidated.rosterId, tag(invalidated), UUID.randomUUID(), StartGenerationRequest(false), admin,
+        ))
+        assertEquals("PARTIAL", automatic.status)
+        val afterGeneration = service.getRoster(invalidated.rosterId, admin)
+        assertEquals(null, afterGeneration.slots.single().assignment)
+        // An assignment stored before the confirmation, kept as a locked one, fails generation and publication.
+        jdbc.update("UPDATE roster_slots SET nurse_id=?,locked=TRUE WHERE slot_id=?", nurseId, slot)
+        val locked = waitForGeneration(generation.start(
+            invalidated.rosterId, tag(afterGeneration), UUID.randomUUID(), StartGenerationRequest(true), admin,
+        ))
+        assertEquals("FAILED", locked.status)
+        assertTrue(locked.diagnostics.any { it.code == "CONFIRMED_OFF_REQUEST" })
+        val rejected = assertThrows(BusinessException::class.java) {
+            service.confirm(afterGeneration.rosterId, tag(afterGeneration), UUID.randomUUID(), ConfirmRosterRequest(), admin)
+        }
+        assertTrue(rejected.ruleViolations.filterIsInstance<RuleDiagnostic>().any { it.code == "CONFIRMED_OFF_REQUEST" })
+        assertEquals(publishedBefore, service.publishedWard(wardId, "2026-11", admin))
+
+        offRequests.withdraw(wardId, request.id, admin)
+        val reopened = service.getRoster(draft.rosterId, admin)
+        assertEquals(afterGeneration.revision + 1, reopened.revision)
+        service.confirm(reopened.rosterId, tag(reopened), UUID.randomUUID(), ConfirmRosterRequest(), admin)
+        assertEquals("PUBLISHED", service.getRoster(reopened.rosterId, admin).status)
+    }
+
+    @Test
+    fun `generation tries to keep submitted off requests free and reports the ones it could not keep`() {
+        val date = LocalDate.parse("2026-11-02")
+        val other = UUID.randomUUID()
+        jdbc.update("INSERT INTO nurses(nurse_id,ward_id,subject,display_name,qualifications,active) VALUES(?,?,?,?,?,TRUE)",
+            other, wardId, "test-nurse-2", "간호사 2", "[]")
+        jdbc.update("INSERT INTO ward_memberships(ward_id,subject,role,can_view_ward_calendar) VALUES(?,'test-nurse-2','WARD_MEMBER',TRUE)", wardId)
+        // Whichever nurse the default order would pick first is the one with the request.
+        val first = listOf(nurseId, other).minBy { it.toString() }
+        val second = listOf(nurseId, other).single { it != first }
+        // A nurse's own exception request after the deadline is not a preference until an admin confirms it.
+        jdbc.update("""INSERT INTO off_requests(request_id,ward_id,nurse_id,off_date,status,source,submitted_by,submitted_at,after_deadline)
+            VALUES(?,?,?,?,'SUBMITTED','NURSE','test-nurse',?,TRUE)""", UUID.randomUUID(), wardId, first, date, Instant.now().toString())
+        val late = newRoster("2026-11", date, dayTypeId)
+        waitForGeneration(generation.start(late.rosterId, tag(late), UUID.randomUUID(), StartGenerationRequest(false), admin))
+        assertEquals(first, service.getRoster(late.rosterId, admin).slots.single().assignment?.nurseId)
+        jdbc.update("DELETE FROM off_requests")
+        jdbc.update("DELETE FROM generation_jobs WHERE roster_id=?", late.rosterId)
+        jdbc.update("DELETE FROM roster_slots WHERE roster_id=?", late.rosterId)
+        jdbc.update("DELETE FROM rosters WHERE roster_id=?", late.rosterId)
+        offRequests.submit(wardId, first, date, admin)
+
+        val single = newRoster("2026-11", date, dayTypeId)
+        val kept = waitForGeneration(generation.start(single.rosterId, tag(single), UUID.randomUUID(), StartGenerationRequest(false), admin))
+        assertEquals("COMPLETED", kept.status)
+        assertEquals(second, service.getRoster(single.rosterId, admin).slots.single().assignment?.nurseId)
+        assertTrue(kept.diagnostics.none { it.code == "OFF_REQUEST_NOT_HONORED" })
+
+        val both = service.getRoster(single.rosterId, admin).let {
+            service.unassign(it.rosterId, it.slots.single().slotId, tag(it), admin)
+            service.getRoster(it.rosterId, admin)
+        }
+        service.replaceRequirements(both.rosterId, tag(both), ReplaceRequirementsRequest(listOf(
+            StaffingRequirement(date, dayTypeId, 2, emptyList()),
+        )), admin)
+        val twoSlots = service.getRoster(both.rosterId, admin)
+        val unmet = waitForGeneration(generation.start(twoSlots.rosterId, tag(twoSlots), UUID.randomUUID(), StartGenerationRequest(false), admin))
+        assertEquals("COMPLETED", unmet.status)
+        assertEquals(1, unmet.diagnostics.count { it.code == "OFF_REQUEST_NOT_HONORED" && it.severity == "SOFT" && it.affectedDate == date })
     }
 
     private fun newRoster(month: String, date: LocalDate, shiftTypeId: UUID): RosterView =
