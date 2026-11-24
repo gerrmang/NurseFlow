@@ -1,6 +1,17 @@
 import { createStaffAdminApi } from './staffAdminApi'
 import { NURSE_A, TEAM_A } from '../test/staffFixtures'
 
+it('requires an explicit boolean mode instead of treating a malformed response as normal mode', async () => {
+  const fetch = vi.fn()
+  const api = createStaffAdminApi(fetch, 'ward')
+  for (const value of [null, {}, { demoMode: 'false', policyRevision: 0 }, { demoMode: false, policyRevision: -1 }]) {
+    fetch.mockResolvedValueOnce(Response.json(value))
+    await expect(api.eligibility()).rejects.toMatchObject({ code: 'INVALID_RESPONSE' })
+  }
+  fetch.mockResolvedValueOnce(Response.json({ demoMode: true, policyRevision: 2, items: [] }))
+  await expect(api.eligibility()).resolves.toMatchObject({ demoMode: true })
+})
+
 it('encodes ward and entity IDs and preserves the full replacement settings', async () => {
   const fetch = vi.fn().mockImplementation(async () => new Response(JSON.stringify(NURSE_A), { status: 200 }))
   const api = createStaffAdminApi(fetch, 'ward/a')

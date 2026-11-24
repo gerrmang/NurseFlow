@@ -5,9 +5,12 @@ import com.nurseflow.roster.application.model.*
 import com.nurseflow.roster.application.generation.GenerationCoordinator
 import com.nurseflow.roster.application.service.RosterService
 import com.nurseflow.roster.application.service.RosterEligibilityService
+import com.nurseflow.offrequest.application.service.OffRequestService
 import com.nurseflow.policy.application.model.ShiftTypeCommand
 import com.nurseflow.policy.application.service.ShiftTypeService
 import com.nurseflow.roster.domain.model.ShiftKind
+import com.nurseflow.roster.domain.model.RestDayKind
+import com.nurseflow.roster.domain.model.RosterRestDay
 import com.nurseflow.staff.application.service.StaffService
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
@@ -35,6 +38,7 @@ class RosterServiceIntegrationTest @Autowired constructor(
     private val shiftTypes: ShiftTypeService,
     private val eligibility: RosterEligibilityService,
     private val staff: StaffService,
+    private val offRequests: OffRequestService,
 ) {
     private lateinit var wardId: UUID
     private lateinit var nurseId: UUID
@@ -203,7 +207,7 @@ class RosterServiceIntegrationTest @Autowired constructor(
     @BeforeEach
     fun setup() {
         listOf("mutation_replays", "generation_jobs", "approved_absences", "roster_slots", "rosters",
-            "shift_types", "staff_adjustments", "nurses", "ward_memberships", "audit_events", "ward_policy_revisions", "ward_teams", "wards")
+            "shift_types", "staff_adjustments", "off_requests", "nurses", "ward_memberships", "audit_events", "ward_policy_revisions", "ward_teams", "wards")
             .forEach { jdbc.update("DELETE FROM $it") }
         wardId = UUID.randomUUID()
         nurseId = UUID.randomUUID()
@@ -237,6 +241,75 @@ class RosterServiceIntegrationTest @Autowired constructor(
         assertTrue(conflict.ruleViolations.filterIsInstance<RuleDiagnostic>().any { it.code == "REST_AFTER_NIGHT" })
         assertEquals("DRAFT", service.getRoster(november.rosterId, admin).status)
         assertThrows(BusinessException::class.java) { service.publishedWard(wardId, "2026-11", admin) }
+    }
+
+    @Test
+    fun `candidate manual automatic and confirm apply a common work limit across published months`() {
+        val october = newRoster("2026-10", (27..31).map { LocalDate.of(2026, 10, it) }, nightTypeId)
+        val job = generation.start(october.rosterId, tag(october), UUID.randomUUID(), StartGenerationRequest(false), admin)
+        val generated = waitForGeneration(job)
+        assertEquals("COMPLETED", generated.status)
+        val assigned = service.getRoster(october.rosterId, admin)
+        assertEquals(5, assigned.staffing.assigned)
+        service.confirm(october.rosterId, tag(assigned), UUID.randomUUID(), ConfirmRosterRequest(), admin)
+
+        val draft = newRoster("2026-11", LocalDate.parse("2026-11-03"), nightTypeId)
+        val slot = draft.slots.single().slotId
+        // Blank days and approved annual leave both preserve the preceding work count.
+        assertTrue(service.validate(draft.rosterId, tag(draft), ValidateAssignmentRequest(slot, nurseId), admin)
+            .hardViolations.any { it.code == "CONSECUTIVE_WORK_LIMIT" })
+        service.addAbsence(
+            draft.rosterId, tag(draft), UUID.randomUUID(), ApprovedAbsenceInput(
+                nurseId, "APPROVED_LEAVE", Instant.parse("2026-11-01T15:00:00Z"), Instant.parse("2026-11-02T15:00:00Z"),
+            ), admin,
+        )
+        val november = service.getRoster(draft.rosterId, admin)
+        assertTrue(service.validate(november.rosterId, tag(november), ValidateAssignmentRequest(slot, nurseId), admin)
+            .hardViolations.any { it.code == "CONSECUTIVE_WORK_LIMIT" })
+        val manual = assertThrows(BusinessException::class.java) { assign(november, nurseId) }
+        assertTrue(manual.ruleViolations.filterIsInstance<RuleDiagnostic>().any { it.code == "CONSECUTIVE_WORK_LIMIT" })
+        val automatic = waitForGeneration(generation.start(
+            november.rosterId, tag(november), UUID.randomUUID(), StartGenerationRequest(false), admin,
+        ))
+        assertEquals("PARTIAL", automatic.status)
+        assertEquals(0, automatic.staffing!!.assigned)
+
+        val afterGeneration = service.getRoster(november.rosterId, admin)
+        jdbc.update("UPDATE roster_slots SET nurse_id=?,locked=TRUE WHERE slot_id=?", nurseId, slot)
+        val invalid = assertThrows(BusinessException::class.java) {
+            service.confirm(november.rosterId, tag(afterGeneration), UUID.randomUUID(), ConfirmRosterRequest(), admin)
+        }
+        assertTrue(invalid.ruleViolations.filterIsInstance<RuleDiagnostic>().any { it.code == "CONSECUTIVE_WORK_LIMIT" })
+        val locked = waitForGeneration(generation.start(
+            november.rosterId, tag(afterGeneration), UUID.randomUUID(), StartGenerationRequest(true), admin,
+        ))
+        assertEquals("FAILED", locked.status)
+        assertTrue(locked.diagnostics.any { it.code == "CONSECUTIVE_WORK_LIMIT" })
+
+        // An OF on Nov 1 resets the run even though the Oct 31 night ends on its morning.
+        val rest = RosterRestDay(nurseId, LocalDate.parse("2026-11-01"), RestDayKind.OF)
+        service.replaceRestDays(november.rosterId, tag(afterGeneration), listOf(rest), admin)
+        val withRest = service.getRoster(november.rosterId, admin)
+        service.confirm(november.rosterId, tag(withRest), UUID.randomUUID(), ConfirmRosterRequest(), admin)
+        val replacement = service.createRoster(wardId, CreateRosterRequest("2026-11"), admin, UUID.randomUUID())
+        assertEquals(listOf(rest), service.listRestDays(replacement.rosterId, admin).items)
+    }
+
+    @Test
+    fun `publishing a month without assignments for a nurse cannot join disjoint unsafe runs`() {
+        val oct = newRoster("2026-10", (28..31).map { LocalDate.of(2026, 10, it) }, nightTypeId)
+        val dec = newRoster("2026-12", (1..2).map { LocalDate.of(2026, 12, it) }, nightTypeId)
+        for (roster in listOf(oct, dec)) {
+            val filled = roster.slots.fold(roster) { current, slot ->
+                service.assign(current.rosterId, slot.slotId, tag(current), UUID.randomUUID(), AssignNurseRequest(nurseId), admin)
+            }
+            service.confirm(filled.rosterId, tag(filled), UUID.randomUUID(), ConfirmRosterRequest(), admin)
+        }
+        val gap = newRoster("2026-11", LocalDate.parse("2026-11-15"), nightTypeId)
+        val rejected = assertThrows(BusinessException::class.java) {
+            service.confirm(gap.rosterId, tag(gap), UUID.randomUUID(), ConfirmRosterRequest(1), admin)
+        }
+        assertTrue(rejected.ruleViolations.filterIsInstance<RuleDiagnostic>().any { it.code == "CONSECUTIVE_WORK_LIMIT" })
     }
 
     @Test
@@ -438,12 +511,113 @@ class RosterServiceIntegrationTest @Autowired constructor(
         assertEquals(draft.revision + 1, service.getRoster(draft.rosterId, admin).revision)
     }
 
-    private fun newRoster(month: String, date: LocalDate, shiftTypeId: UUID): RosterView {
-        val draft = service.createRoster(wardId, CreateRosterRequest(month), admin, UUID.randomUUID())
-        service.replaceRequirements(draft.rosterId, tag(draft), ReplaceRequirementsRequest(listOf(
-            StaffingRequirement(date, shiftTypeId, 1, emptyList()),
+    @Test
+    fun `confirmed off request blocks candidate manual automatic and confirm but keeps the published roster`() {
+        val date = LocalDate.parse("2026-11-02")
+        val published = assign(newRoster("2026-11", date, dayTypeId), nurseId)
+        service.confirm(published.rosterId, tag(published), UUID.randomUUID(), ConfirmRosterRequest(), admin)
+        val publishedBefore = service.publishedWard(wardId, "2026-11", admin)
+        val draft = newRoster("2026-11", date, dayTypeId)
+        val request = offRequests.submit(wardId, nurseId, date, admin)
+        // An undecided request is only a preference: the draft is not invalidated and manual assignment still works.
+        assertEquals(draft.revision, service.getRoster(draft.rosterId, admin).revision)
+        assertTrue(service.validate(draft.rosterId, tag(draft), ValidateAssignmentRequest(draft.slots.single().slotId, nurseId), admin).allowed)
+
+        offRequests.confirm(wardId, request.id, admin)
+        val invalidated = service.getRoster(draft.rosterId, admin)
+        assertEquals(draft.revision + 1, invalidated.revision)
+        assertTrue(invalidated.needsRevalidation)
+        assertEquals(publishedBefore, service.publishedWard(wardId, "2026-11", admin))
+        val slot = invalidated.slots.single().slotId
+        val candidate = service.validate(invalidated.rosterId, tag(invalidated), ValidateAssignmentRequest(slot, nurseId), admin)
+        assertTrue(candidate.hardViolations.any { it.code == "CONFIRMED_OFF_REQUEST" })
+        val manual = assertThrows(BusinessException::class.java) { assign(invalidated, nurseId) }
+        assertTrue(manual.ruleViolations.filterIsInstance<RuleDiagnostic>().any { it.code == "CONFIRMED_OFF_REQUEST" })
+        val automatic = waitForGeneration(generation.start(
+            invalidated.rosterId, tag(invalidated), UUID.randomUUID(), StartGenerationRequest(false), admin,
+        ))
+        assertEquals("PARTIAL", automatic.status)
+        val afterGeneration = service.getRoster(invalidated.rosterId, admin)
+        assertEquals(null, afterGeneration.slots.single().assignment)
+        // An assignment stored before the confirmation, kept as a locked one, fails generation and publication.
+        jdbc.update("UPDATE roster_slots SET nurse_id=?,locked=TRUE WHERE slot_id=?", nurseId, slot)
+        val locked = waitForGeneration(generation.start(
+            invalidated.rosterId, tag(afterGeneration), UUID.randomUUID(), StartGenerationRequest(true), admin,
+        ))
+        assertEquals("FAILED", locked.status)
+        assertTrue(locked.diagnostics.any { it.code == "CONFIRMED_OFF_REQUEST" })
+        val rejected = assertThrows(BusinessException::class.java) {
+            service.confirm(afterGeneration.rosterId, tag(afterGeneration), UUID.randomUUID(), ConfirmRosterRequest(), admin)
+        }
+        assertTrue(rejected.ruleViolations.filterIsInstance<RuleDiagnostic>().any { it.code == "CONFIRMED_OFF_REQUEST" })
+        assertEquals(publishedBefore, service.publishedWard(wardId, "2026-11", admin))
+
+        offRequests.withdraw(wardId, request.id, admin)
+        val reopened = service.getRoster(draft.rosterId, admin)
+        assertEquals(afterGeneration.revision + 1, reopened.revision)
+        service.confirm(reopened.rosterId, tag(reopened), UUID.randomUUID(), ConfirmRosterRequest(), admin)
+        assertEquals("PUBLISHED", service.getRoster(reopened.rosterId, admin).status)
+    }
+
+    @Test
+    fun `generation tries to keep submitted off requests free and reports the ones it could not keep`() {
+        val date = LocalDate.parse("2026-11-02")
+        val other = UUID.randomUUID()
+        jdbc.update("INSERT INTO nurses(nurse_id,ward_id,subject,display_name,qualifications,active) VALUES(?,?,?,?,?,TRUE)",
+            other, wardId, "test-nurse-2", "간호사 2", "[]")
+        jdbc.update("INSERT INTO ward_memberships(ward_id,subject,role,can_view_ward_calendar) VALUES(?,'test-nurse-2','WARD_MEMBER',TRUE)", wardId)
+        // Whichever nurse the default order would pick first is the one with the request.
+        val first = listOf(nurseId, other).minBy { it.toString() }
+        val second = listOf(nurseId, other).single { it != first }
+        // A nurse's own exception request after the deadline is not a preference until an admin confirms it.
+        jdbc.update("""INSERT INTO off_requests(request_id,ward_id,nurse_id,off_date,status,source,submitted_by,submitted_at,after_deadline)
+            VALUES(?,?,?,?,'SUBMITTED','NURSE','test-nurse',?,TRUE)""", UUID.randomUUID(), wardId, first, date, Instant.now().toString())
+        val late = newRoster("2026-11", date, dayTypeId)
+        waitForGeneration(generation.start(late.rosterId, tag(late), UUID.randomUUID(), StartGenerationRequest(false), admin))
+        assertEquals(first, service.getRoster(late.rosterId, admin).slots.single().assignment?.nurseId)
+        jdbc.update("DELETE FROM off_requests")
+        jdbc.update("DELETE FROM generation_jobs WHERE roster_id=?", late.rosterId)
+        jdbc.update("DELETE FROM roster_slots WHERE roster_id=?", late.rosterId)
+        jdbc.update("DELETE FROM rosters WHERE roster_id=?", late.rosterId)
+        offRequests.submit(wardId, first, date, admin)
+
+        val single = newRoster("2026-11", date, dayTypeId)
+        val kept = waitForGeneration(generation.start(single.rosterId, tag(single), UUID.randomUUID(), StartGenerationRequest(false), admin))
+        assertEquals("COMPLETED", kept.status)
+        assertEquals(second, service.getRoster(single.rosterId, admin).slots.single().assignment?.nurseId)
+        assertTrue(kept.diagnostics.none { it.code == "OFF_REQUEST_NOT_HONORED" })
+
+        val both = service.getRoster(single.rosterId, admin).let {
+            service.unassign(it.rosterId, it.slots.single().slotId, tag(it), admin)
+            service.getRoster(it.rosterId, admin)
+        }
+        service.replaceRequirements(both.rosterId, tag(both), ReplaceRequirementsRequest(listOf(
+            StaffingRequirement(date, dayTypeId, 2, emptyList()),
         )), admin)
+        val twoSlots = service.getRoster(both.rosterId, admin)
+        val unmet = waitForGeneration(generation.start(twoSlots.rosterId, tag(twoSlots), UUID.randomUUID(), StartGenerationRequest(false), admin))
+        assertEquals("COMPLETED", unmet.status)
+        assertEquals(1, unmet.diagnostics.count { it.code == "OFF_REQUEST_NOT_HONORED" && it.severity == "SOFT" && it.affectedDate == date })
+    }
+
+    private fun newRoster(month: String, date: LocalDate, shiftTypeId: UUID): RosterView =
+        newRoster(month, listOf(date), shiftTypeId)
+
+    private fun newRoster(month: String, dates: List<LocalDate>, shiftTypeId: UUID): RosterView {
+        val draft = service.createRoster(wardId, CreateRosterRequest(month), admin, UUID.randomUUID())
+        service.replaceRequirements(draft.rosterId, tag(draft), ReplaceRequirementsRequest(dates.map {
+            StaffingRequirement(it, shiftTypeId, 1, emptyList())
+        }), admin)
         return service.getRoster(draft.rosterId, admin)
+    }
+
+    private fun waitForGeneration(job: GenerationJob): GenerationJob {
+        repeat(100) {
+            val current = service.getGenerationJob(job.jobId, admin)
+            if (current.status !in setOf("QUEUED", "RUNNING")) return current
+            Thread.sleep(50)
+        }
+        throw AssertionError("Generation job did not finish")
     }
 
     private fun assign(roster: RosterView, nurse: UUID): RosterView = service.assign(

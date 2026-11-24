@@ -28,6 +28,7 @@ class StaffAdminScreenUiTest {
             "staff" -> Items(nurses())
             "members" -> Items(listOf(AdminMember("u1", "가상 관리자", listOf("WARD_ADMIN"), true)))
             "policy" -> AdminCareerPolicy(listOf(12, 36, 72, 120), listOf("간호사"), true)
+            "eligibility" -> retrofit2.Response.success(AdminEligibility(true, 1))
             "adjustments" -> Items<AdminAdjustment>(emptyList())
             "order" -> { saved = (args!![2] as AdminTeamOrder).nurseIds; names = saved!!; Items(nurses()) }
             "membership" -> {
@@ -51,6 +52,10 @@ class StaffAdminScreenUiTest {
         rule.onNodeWithText("가상 A팀 경력순 저장").performScrollTo().performClick()
         rule.runOnIdle { assertEquals(listOf("n2", "n1", "n3"), saved) }
         rule.onNodeWithText("1. 가상 n2").assertExists()
+    }
+    @Test fun serverDemoModeIsClearlyLabeled() {
+        show()
+        rule.onNodeWithTag("staff-demo-mode").assertTextContains("시연 모드 · 계정이 연결되지 않은 가상 간호사도", substring = true)
     }
     @Test fun longPressDragChangesOrderBeforeExplicitSave() {
         show()

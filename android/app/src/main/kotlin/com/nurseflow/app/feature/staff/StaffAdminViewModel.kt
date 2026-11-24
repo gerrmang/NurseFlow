@@ -4,8 +4,9 @@ import androidx.lifecycle.ViewModel
 import com.nurseflow.app.core.network.*
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
+import kotlinx.serialization.SerializationException
 
-data class StaffAdminData(val teams: List<AdminTeam>, val staff: List<AdminStaff>, val members: List<AdminMember>, val policy: AdminCareerPolicy)
+data class StaffAdminData(val teams: List<AdminTeam>, val staff: List<AdminStaff>, val members: List<AdminMember>, val policy: AdminCareerPolicy, val eligibility: AdminEligibility?)
 data class StaffAdminState(
     val data: StaffAdminData? = null, val loading: Boolean = false, val busy: Boolean = false,
     val stale: Boolean = true, val uncertain: Boolean = false, val forbidden: Boolean = false,
@@ -81,7 +82,22 @@ class StaffAdminViewModel(
                 val staff = async { apiCall { api.staff(wardId) }.items }
                 val members = async { apiCall { api.members(wardId) }.items }
                 val policy = async { apiCall { api.policy(wardId) } }
-                StaffAdminData(teams.await(), staff.await(), members.await(), policy.await())
+                val eligibility = async {
+                    try {
+                        apiCall {
+                            val response = api.eligibility(wardId)
+                            if (!response.isSuccessful) throw retrofit2.HttpException(response)
+                            response.body()
+                        }
+                    }
+                    catch (e: CancellationException) { throw e }
+                    catch (e: ApiException) {
+                        if (e.status == 401 || e.status == 403 || e.code == "WARD_NOT_FOUND" || e.code == "USER_NOT_FOUND") throw e
+                        null
+                    }
+                    catch (e: SerializationException) { null }
+                }
+                StaffAdminData(teams.await(), staff.await(), members.await(), policy.await(), eligibility.await())
             }
             if (!valid() || mine != ticket) return false
             if (!checkAdmin()) return false

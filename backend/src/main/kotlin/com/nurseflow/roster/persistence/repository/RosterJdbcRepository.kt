@@ -1,5 +1,7 @@
 package com.nurseflow.roster.persistence.repository
 
+import com.nurseflow.roster.domain.model.RestDayKind
+import com.nurseflow.roster.domain.model.RosterRestDay
 import com.nurseflow.roster.domain.model.ShiftKind
 import com.nurseflow.roster.domain.model.WorkPattern
 import com.nurseflow.roster.persistence.entity.DbAbsence
@@ -16,6 +18,7 @@ import tools.jackson.databind.json.JsonMapper
 import java.sql.ResultSet
 import java.time.Instant
 import java.time.ZoneId
+import java.time.YearMonth
 import java.util.UUID
 
 @Repository
@@ -70,6 +73,61 @@ class RosterJdbcRepository(
     fun increment(id: UUID) {
         jdbc.update("UPDATE rosters SET revision=revision+1 WHERE roster_id=?", id)
     }
+
+    fun markDraftForRevalidation(id: UUID) {
+        jdbc.update("UPDATE rosters SET revision=revision+1,needs_revalidation=TRUE WHERE roster_id=?", id)
+    }
+
+    fun restDays(rosterId: UUID): List<RosterRestDay> = jdbc.query(
+        "SELECT nurse_id, rest_date, kind FROM roster_rest_days WHERE roster_id=? ORDER BY rest_date,nurse_id",
+        { rs, _ -> mapRestDay(rs) }, rosterId,
+    )
+
+    fun adjacentPublishedRestDays(wardId: UUID, month: String): List<RosterRestDay> = jdbc.query(
+        """SELECT d.nurse_id,d.rest_date,d.kind FROM roster_rest_days d
+            JOIN rosters r ON r.roster_id=d.roster_id
+            WHERE r.ward_id=? AND r.active=TRUE AND r.status='PUBLISHED' AND r.roster_month<>?""",
+        { rs, _ -> mapRestDay(rs) }, wardId, month,
+    )
+
+    fun copyRestDays(source: UUID, target: UUID) {
+        jdbc.update(
+            """INSERT INTO roster_rest_days(roster_id,nurse_id,rest_date,kind)
+                SELECT ?,nurse_id,rest_date,kind FROM roster_rest_days WHERE roster_id=?""",
+            target, source,
+        )
+    }
+
+    fun replaceRestDays(rosterId: UUID, items: List<RosterRestDay>) {
+        jdbc.update("DELETE FROM roster_rest_days WHERE roster_id=?", rosterId)
+        if (items.isEmpty()) return
+        jdbc.batchUpdate(
+            "INSERT INTO roster_rest_days(roster_id,nurse_id,rest_date,kind) VALUES(?,?,?,?)",
+            items.map { arrayOf<Any>(rosterId, it.nurseId, java.sql.Date.valueOf(it.date), it.kind.name) },
+        )
+    }
+
+    /**
+     * Nurse and date of the ward's off requests with [status] in [month] (A12). A nurse's undecided exception
+     * request filed after the deadline has no effect until an admin confirms it, so [onTimeOnly] leaves those out;
+     * an admin's own late entry is the admin taking the exception in, so it stays.
+     */
+    fun offRequestDays(
+        wardId: UUID, month: YearMonth, status: String, onTimeOnly: Boolean = false,
+    ): List<Pair<UUID, java.time.LocalDate>> = jdbc.query(
+        "SELECT nurse_id,off_date FROM off_requests WHERE ward_id=? AND status=? AND off_date BETWEEN ? AND ?" +
+            if (onTimeOnly) " AND NOT (after_deadline=TRUE AND source='NURSE')" else "",
+        { rs, _ -> uuid(rs, "nurse_id") to rs.getDate("off_date").toLocalDate() },
+        wardId, status, java.sql.Date.valueOf(month.atDay(1)), java.sql.Date.valueOf(month.atEndOfMonth()),
+    )
+
+    fun wardNurseIds(wardId: UUID): Set<UUID> = jdbc.query(
+        "SELECT nurse_id FROM nurses WHERE ward_id=?", { rs, _ -> uuid(rs, "nurse_id") }, wardId,
+    ).toSet()
+
+    private fun mapRestDay(rs: ResultSet) = RosterRestDay(
+        uuid(rs, "nurse_id"), rs.getDate("rest_date").toLocalDate(), RestDayKind.valueOf(rs.getString("kind")),
+    )
 
     fun lockRoster(id: UUID) {
         jdbc.query("SELECT roster_id FROM rosters WHERE roster_id=? FOR UPDATE", { rs, _ -> rs.getString(1) }, id)
@@ -198,7 +256,15 @@ class RosterJdbcRepository(
         jdbc.update("UPDATE wards SET demo_mode=? WHERE ward_id=?", enabled, wardId)
     }
 
-    fun invalidateDraftsForEligibility(wardId: UUID) {
+    fun maxConsecutiveWorkDays(wardId: UUID): Int? = jdbc.query(
+        "SELECT max_consecutive_work_days FROM wards WHERE ward_id=?", { rs, _ -> rs.getInt(1) }, wardId,
+    ).firstOrNull()
+
+    fun setMaxConsecutiveWorkDays(wardId: UUID, limitDays: Int) {
+        jdbc.update("UPDATE wards SET max_consecutive_work_days=? WHERE ward_id=?", limitDays, wardId)
+    }
+
+    fun invalidateWardDrafts(wardId: UUID) {
         jdbc.update("UPDATE rosters SET revision=revision+1,needs_revalidation=TRUE WHERE ward_id=? AND status='DRAFT'", wardId)
     }
 
@@ -282,10 +348,13 @@ class RosterJdbcRepository(
         { rs, _ -> mapAbsence(rs) }, wardId, month,
     )
 
-    fun adjacentPublishedRosterIds(wardId: UUID, month: String): List<UUID> = jdbc.query(
-        "SELECT roster_id FROM rosters WHERE ward_id=? AND active=TRUE AND status='PUBLISHED' AND roster_month<>?",
-        { rs, _ -> uuid(rs, "roster_id") }, wardId, month,
+    fun adjacentPublishedMonths(wardId: UUID, month: String): List<Pair<YearMonth, UUID>> = jdbc.query(
+        "SELECT roster_month,roster_id FROM rosters WHERE ward_id=? AND active=TRUE AND status='PUBLISHED' AND roster_month<>?",
+        { rs, _ -> YearMonth.parse(rs.getString("roster_month")) to uuid(rs, "roster_id") }, wardId, month,
     )
+
+    fun adjacentPublishedRosterIds(wardId: UUID, month: String): List<UUID> =
+        adjacentPublishedMonths(wardId, month).map { it.second }
 
     // ── Generation Jobs ──
 
