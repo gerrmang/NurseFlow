@@ -166,10 +166,11 @@ class TargetHourHttpTest : ApiTestBase() {
         (1..9).forEach { slot(november, night, LocalDate.of(2026, 11, it), LocalTime.of(23, 0), 8, dedicated) }
         slot(november, night, LocalDate.of(2026, 11, 30), LocalTime.of(23, 0), 8, dedicated)
 
-        // Approved leave stored on the published October roster runs into Monday Nov 2 (Nov 1 is a Sunday).
+        // A long leave stored on the published September roster runs through Monday Nov 2 (Nov 1 is a Sunday).
+        val september = roster(ward, "2026-09", "PUBLISHED")
         jdbc.update(
             "INSERT INTO approved_absences(absence_id,roster_id,nurse_id,kind,starts_at,ends_at) VALUES(?,?,?,'APPROVED_LEAVE',?,?)",
-            UUID.randomUUID(), october, idle, LocalDate.of(2026, 10, 30).atStartOfDay(zone).toInstant().toString(),
+            UUID.randomUUID(), september, idle, LocalDate.of(2026, 9, 30).atStartOfDay(zone).toInstant().toString(),
             LocalDate.of(2026, 11, 3).atStartOfDay(zone).toInstant().toString(),
         )
         val path = "/api/v1/rosters/$november/hour-diagnostics"

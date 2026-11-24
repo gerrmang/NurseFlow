@@ -1172,7 +1172,7 @@ export interface paths {
          *     환산시간 = 배정 근무의 환산시간 + 승인 연차 일수 × leaveCreditMinutes + 반차 × halfDayCreditMinutes + SOF × sofCreditMinutes.
          *     연차·SOF·반차는 목표일에만 더한다(주말·공휴일·병동 휴무일은 목표에서 이미 빠졌다). 한 날짜에는 연차, SOF, 반차 순으로 하나만 더한다. OF는 0이다.
          *     연차는 하루의 절반 이상을 덮은 날짜만 센다(22:00~07:00 Night 연차는 1일). 고정 Night 전담 목표에는 주말·공휴일 휴가도 더한다.
-         *     앞뒤 달 공개본에 저장된 연차가 이 달로 이어지면 이 달 날짜만 센다.
+         *     다른 달 공개본에 저장된 연차도 이 달과 겹치면(기간 길이와 무관) 이 달 날짜만 센다.
          *     자정을 넘는 근무는 끝나는 날짜의 월에 전부 귀속한다(결정 사항 14 잠정안, nightAttribution=END_DATE_MONTH).
          *     그래서 이 달 말일 Night는 다음 달로 넘어가고(carriedOutShifts), 공개된 전월 말일 Night는 이 달에 들어온다(carriedInShifts).
          *     전월 공개본이 없으면 previousMonthPublished=false이며 넘어오는 근무를 세지 않는다.

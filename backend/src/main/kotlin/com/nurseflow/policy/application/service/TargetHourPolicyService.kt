@@ -110,11 +110,15 @@ class TargetHourPolicyService(
 
     fun policyOf(wardId: UUID): TargetHourPolicy = repo.policy(wardId) ?: TargetHourPolicy()
 
+    /**
+     * Each list is read once and the target is computed from exactly those lists, so the response never shows
+     * entries and a target from different states (READ_COMMITTED gives no snapshot across statements).
+     */
     private fun calendarResult(wardId: UUID, month: YearMonth, revision: Int): HolidayCalendarResult {
-        return HolidayCalendarResult(
-            repo.calendar(wardId, month), repo.publicHolidays(month), holidays.configured,
-            repo.publicHolidayFetchedAt(month), monthTarget(wardId, month), revision,
-        )
+        val days = repo.calendar(wardId, month)
+        val imported = repo.publicHolidays(month)
+        val target = TargetHourCalculator.monthTarget(month, days, policyOf(wardId).dailyStandardMinutes, imported)
+        return HolidayCalendarResult(days, imported, holidays.configured, repo.publicHolidayFetchedAt(month), target, revision)
     }
 
     private fun validate(policy: TargetHourPolicy) {

@@ -3,6 +3,7 @@ package com.nurseflow.roster.application.service
 import com.nurseflow.common.error.BusinessException
 import com.nurseflow.common.error.ErrorCode
 import com.nurseflow.policy.application.service.TargetHourPolicyService
+import com.nurseflow.policy.domain.HourAbsence
 import com.nurseflow.policy.domain.HourNurse
 import com.nurseflow.policy.domain.MonthTarget
 import com.nurseflow.policy.domain.NurseHours
@@ -10,6 +11,7 @@ import com.nurseflow.policy.domain.TargetHourCalculator
 import com.nurseflow.policy.domain.TargetHourPolicy
 import com.nurseflow.policy.persistence.repository.ShiftTypeJdbcRepository
 import com.nurseflow.policy.persistence.repository.TargetHourJdbcRepository
+import com.nurseflow.roster.domain.model.ApprovedAbsenceKind
 import com.nurseflow.roster.persistence.repository.RosterJdbcRepository
 import com.nurseflow.ward.application.service.WardService
 import org.springframework.stereotype.Service
@@ -57,13 +59,14 @@ class HourDiagnosticsService(
         val carried = previous?.let { prev -> hours.assignedShifts(prev.id).filter { TargetHourCalculator.attributedMonth(it, roster.zone) == month } }
             .orEmpty()
         val shifts = hours.assignedShifts(rosterId) + carried
-        // Leave stored on a published neighbouring month can run into this month; the calculator clips it to the month.
-        val neighbours = listOf(month.minusMonths(1), month.plusMonths(1))
-            .mapNotNull { rosters.activePublished(roster.wardId, it.toString()) }.filter { it.id != rosterId }
+        // Leave stored on any other active published roster can run into this month, however long it is: select by
+        // overlap with the month, like the placement rules (adjacentPublishedAbsences). The calculator clips it.
         val monthStart = month.atDay(1).atStartOfDay(roster.zone).toInstant()
         val monthEnd = month.plusMonths(1).atDay(1).atStartOfDay(roster.zone).toInstant()
-        val absences = hours.absences(rosterId) +
-            neighbours.flatMap { hours.absences(it.id) }.filter { it.startsAt < monthEnd && it.endsAt > monthStart }
+        val otherPublished = rosters.adjacentPublishedAbsences(roster.wardId, roster.month)
+            .filter { it.startsAt < monthEnd && it.endsAt > monthStart }
+            .map { HourAbsence(it.nurseId, ApprovedAbsenceKind.valueOf(it.kind), it.startsAt, it.endsAt) }
+        val absences = hours.absences(rosterId) + otherPublished
         val restDays = hours.restDays(rosterId)
         val rosterable = rosters.activeNurses(roster.wardId).map { it.id }.toSet()
         val involved = rosterable + shifts.map { it.nurseId } + absences.map { it.nurseId } + restDays.map { it.nurseId }
