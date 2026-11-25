@@ -1,5 +1,14 @@
 # 공유 작업 현황
 
+## B7b PR #59 A13 최신 dev 통합 (2026-11-25, Codex)
+
+- 사용자 요청으로 기존 `feat/web-schedule-settings`의 `b2f5448`에 최신 `origin/dev` `3e30752`(A13 #58)을 통합했다. 충돌 없음. B7b 동작 코드 변경 없이 backend·OpenAPI·웹 생성 타입은 dev와 동일하다. A13 관리 화면은 이번 통합에 추가하지 않는다. 사용자 DB·trace 보존, 새 브랜치/worktree 없음.
+- 웹 api:check·typecheck·lint·build exit 0, Vitest **447개 통과·opt-in 4개 건너뜀·실패 0**(총 451개/25파일), JS gzip 114.84 kB. A13 통합 JAR·가상 웹 OIDC·새 메모리 H2 `b7b_a13_merge_e2e`에서 B7b 실서버 인수 **1개 통과·실패/건너뜀 0**(3.40초). `git diff --cached --check` 통과.
+- backend·OpenAPI·생성 타입은 B7a 통합에서 검증한 dev와 동일함을 diff로 확인했다. 직전 같은 통합 서버의 전체 검사 304개 통과·opt-in 5개 건너뜀·실패/오류 0을 재사용하고 중복 실행하지 않았다. Android 로컬 전체·브라우저·실제 Kakao·기기·운영은 이번 웹 통합에서 반복하지 않았으며 원격 CI에서 Android 빌드를 확인한다.
+- B7a PR #60은 `dc14cd667b2755b86aa08f55706e01154ca42f67`로 통합·푸시·PR 본문 갱신 완료. 해당 head의 Verify Backend tests·Android debug build·Web checks·Demo seed checks 모두 SUCCESS를 gh로 확인했다. OPEN·MERGEABLE·REVIEW_REQUIRED/BLOCKED이므로 병합하지 않았다.
+- B7b 추가 API/DB/환경·서버 규칙 변경 없음(A13 계약/스키마 통합), 웹 빌드 영향·수동 배포 없음. 롤백은 통합 커밋 첫 부모 기준 revert 및 이전 웹 빌드 복원. 기존 독립 리뷰와 실제 인증/기기 검증 제한은 유지한다.
+- 공유 인계: 같은 B7b 브랜치에 통합·검증·PR 초안을 커밋·푸시해 기존 PR #59를 갱신한 뒤 최종 원격 head·dev 포함·CI를 확인한다. 이후 원래 B7a 브랜치로 복귀한다. 병합·자동 병합·수동 배포 없음. 검증용 Java/공급자는 이번 명령행·포트를 확인한 뒤 종료하고 사용자 DB·trace는 커밋 제외한다.
+
 ## B7b PR #59 A14 포함 최신 dev 재통합 (2026-11-24, Codex)
 
 - 사용자 요청으로 같은 공유 worktree·`feat/web-schedule-settings`, 시작 head `9e728551f5d4da98b18fe7505f68b8c93fe64e6c`에서 `git fetch origin` 후 최신 dev `db5e4120d04f9cd259bdb4ad509088ebf1598cd6`(A14 #57)을 통합했다. 시작 tracked 변경 없음, 사용자 DB·trace 보존. 충돌은 `docs/work-status.md` 한 곳이며 B7b와 A14 기록을 모두 보존했다. B7b 동작 코드는 바꾸지 않았고 backend·OpenAPI·웹 생성 타입은 dev와 동일하다.
@@ -951,3 +960,21 @@ Claude와 Codex가 같은 진행 기록을 사용한다. PR 또는 정기 리뷰
 - web: npm run api:check, lint, typecheck, npm test -- --run, build 모두 성공. 8파일 252개 통과, 실패·건너뜀 0, JS gzip 94.51 kB. backend: JDK 21 .\gradlew.bat test --no-daemon BUILD SUCCESSFUL, XML 262개 중 257개 통과·5개 opt-in 건너뜀·실패/오류 0. git diff --cached --check 통과.
 - API/DB/환경의 추가 변경 없음(A8에 이미 포함된 계약·스키마를 통합). 배포 없음. 롤백은 이 병합 커밋을 첫 부모 기준 revert. 브라우저·실제 Kakao·기기 검사는 재실행하지 않았다. 기존 실제 Kakao 2계정 인수·독립 재리뷰 미완료를 유지한다.
 - 같은 공유 worktree에서 이 브랜치에 통합·검증 기록을 커밋·푸시하고 B4a로 이동한다. 사용자 nurseflow.mv.db 보존, dev/main에 직접 푸시·PR 병합·자동 병합 설정 없음. 최종 PR CI와 GitHub 충돌 상태는 푸시 후 별도 확인한다.
+
+## A13 월 목표시간·휴일 달력·시간 진단 구현 (2026-11-24, Claude)
+
+- 브랜치 `feat/target-hours`(최신 `dev` `548552b`에서 분기). 결정 사항 14 사용자 답변 반영: 자정을 넘는 근무는 끝나는 날짜의 월에 전부 귀속(잠정), 시연 기본값 하루 480분(30일·휴식 9일 = 168시간)이며 관리자가 병동별로 변경, 공휴일은 외부 API에서 가져와 DB에 저장해 사용.
+- API: `GET/PUT /wards/{wardId}/target-hour-policy`, `GET/PUT /wards/{wardId}/holiday-calendar?month=`, `POST /wards/{wardId}/holiday-calendar/refresh?month=`, `GET /rosters/{rosterId}/hour-diagnostics`. 모두 관리자 전용. 정책·달력 쓰기는 병동 공통 정책 ETag(If-Match)를 쓰고 초안 재검증 표시는 하지 않는다(진단은 조회 때 계산).
+- DB: `ward_target_hour_policies`, `ward_calendar_days`, `public_holidays`, `public_holiday_imports`. 오류 코드 `INVALID_TARGET_HOUR_POLICY`, `INVALID_HOLIDAY_CALENDAR`, `HOLIDAY_MONTH_OUT_OF_RANGE`, `HOLIDAY_SOURCE_NOT_CONFIGURED`, `HOLIDAY_SOURCE_UNAVAILABLE`.
+- 공휴일: 한국천문연구원 특일 정보(data.go.kr 15012690, `getRestDeInfo`). 환경 변수 `NURSEFLOW_HOLIDAY_API_KEY`(없으면 `NURSEFLOW_HOSPITAL_API_KEY`), 매일 03:30(Asia/Seoul) 이번 달~12개월 뒤 갱신(`NURSEFLOW_HOLIDAY_REFRESH_CRON`, `-`이면 끔), 관리자 즉시 갱신은 작년~내년·10분 재사용 제한. 조회·진단은 DB만 읽고, 실패하면 저장값 유지, 병동 항목이 같은 날짜의 공휴일보다 우선한다.
+- 검증: JDK 21 `./gradlew check`(LC_ALL=C.UTF-8) 289개 중 284개 통과·5개 opt-in 건너뜀·실패 0. web `npm run api:check`·`lint`·`typecheck`·`npm test -- --run`(394개 통과·3개 건너뜀)·`build` 성공. 기본 POSIX 로캘에서는 기존 병원 CSV 한글 파일명 테스트가 실패하므로 UTF-8 로캘로 실행했다.
+- 코드 리뷰(자체, 2회): 1차 6건(월 경계 연차, 주말 연차 이중 계산, 기본값 저장 시 revision 증가, 반차·SOF 중복, 진단 ETag, 필수값 오류 코드)과 2차 9건(일일 갱신 중단, 동시 갱신 키 충돌, 연차·SOF 중복, 휴일 SOF, 관리자 갱신 남용, 병동 이동 간호사 누락, 공휴일 종류 병합, 스키마 주석, 이 기록 누락)을 모두 반영했다. Codex 독립 리뷰는 아직 없다.
+- 미검증·제한: 실제 data.go.kr 호출(키 없음, 가짜 서버로만 검증), 월 중 입사·비활성 간호사의 목표 비례 계산(미지원, 전체 목표로 표시), 근무 칸이 시간을 따로 저장하지 않아 공개본도 근무 유형의 현재 환산시간으로 계산, 전월이 공개되지 않으면 전월 말일 Night를 세지 않음(`previousMonthPublished=false`). Android·웹 화면은 후속(B10).
+- 실제 공휴일 API 확인(2026-11-24): 사용자 Mac의 IntelliJ 실행 구성에 있는 `NURSEFLOW_HOLIDAY_API_KEY`로 `getRestDeInfo`를 2026-09·2026-10·2027-01·2027-02 네 번 호출해 모두 HTTP 200·resultCode 00을 받았다. 대체공휴일은 이름에 "대체"가 붙은 별도 항목으로 왔다. 키 값은 출력하지 않았다. 서버를 띄워 저장까지 확인하지는 않았다.
+- dev 통합: A12 PR #56 병합본(`74886b6`)을 병합했다. `openapi.yaml`은 dev 쪽에 A13 변경을 다시 적용했고, `ApiTestBase.kt`의 초기화 표 목록은 양쪽 표를 모두 포함하도록 합쳤다. `schema.gen.ts`는 다시 생성했다.
+- PR 전 3차 리뷰(dev 통합 후) 9건 중 8건 반영: 자정을 넘는 연차 이중 계산(하루의 절반 이상을 덮은 날짜만 셈), 공휴일 갱신 잠금을 저장 단계로 한정, 관리자 갱신 시도(실패 포함)를 원자적으로 10분 제한, 실제 호출 때만 감사 기록, 갱신 응답을 한 읽기 트랜잭션으로, 달력 `days`의 null 항목 400, 정책 본문 검사를 관리자 확인 뒤로, 고정 Night 전담 목표의 주말 휴가 환산. 남긴 1건: 달력 GET ETag가 월과 무관한 정책 revision이라 If-None-Match를 보내면 다른 달에 304가 날 수 있다(`Cache-Control: no-store`라 브라우저는 보내지 않음, 후속).
+- 최종 검증: JDK 21 `./gradlew check`(LC_ALL=C.UTF-8) 300개 중 295개 통과·5개 opt-in 건너뜀·실패 0. web api:check·lint·typecheck·테스트 394개 통과(3개 건너뜀)·build 성공.
+- PR #58 리뷰(hyen11, P2 2건) 반영: 달력 응답의 목록과 월 목표를 같은 조회 결과로 계산, 다른 달 공개본의 장기 연차를 저장 월이 아닌 대상 월과의 겹침으로 조회(9월 공개본의 9/30~11/3 연차 회귀 테스트).
+- A14 통합(2026-11-24): A14 PR #57 병합본(`db5e412`)을 병합했다. `schema.sql`은 A13 표 뒤에 A14 `cross_team_support_allowances`를 두었고, `ApiTestBase.kt` 초기화 목록은 양쪽 표를 모두 포함한다. `openapi.yaml`은 dev 쪽에 A13 변경(472줄 추가, 삭제 없음)을 다시 적용했고 `schema.gen.ts`는 다시 생성했다. 동작 변경은 없다. 검증: `./gradlew check`(LC_ALL=C.UTF-8) 306개 중 301개 통과·5개 opt-in 건너뜀·실패 0, web api:check·lint·typecheck·테스트 394개 통과(3개 건너뜀)·build 성공.
+- PR #58 재검토(hyen11, P2 1건·P3 1건) 반영: 공휴일 응답은 `totalCount`가 0으로 명시된 경우만 빈 달로 저장하고, `body`·`totalCount` 누락이나 항목 수 불일치는 `HOLIDAY_SOURCE_UNAVAILABLE`로 처리해 저장값을 유지한다. 연차 날짜는 대상 월의 날짜만 확인한다(3일 이상 연차는 가운데 날짜를 온전히 덮으므로 시작일 대체 규칙은 2일 이하 연차에만 적용). 테스트 3개 추가. 검증: `./gradlew check`(LC_ALL=C.UTF-8) 309개 중 304개 통과·5개 opt-in 건너뜀·실패 0.
+- 인계: A14가 먼저 병합되었으므로 PR #58은 최신 dev 기준으로 병합 가능하다.
