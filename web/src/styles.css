@@ -86,3 +86,6 @@ button[aria-pressed="true"] { outline: 2px solid var(--primary); outline-offset:
 .order-list .actions { margin-top: 4px; }
 textarea { font: inherit; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); color: var(--text); min-height: 90px; resize: vertical; max-width: 100%; }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.off-page { max-width: 960px; }
+.off-page h2 { font-size: 1.1rem; }
+.off-page time { overflow-wrap: anywhere; }
