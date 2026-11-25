@@ -1,5 +1,14 @@
 # 공유 작업 현황
 
+## B8a Draft PR #62 게시 확인 (2026-11-25, Codex)
+
+- 사용자 요청으로 B8a 변경 17파일을 `d889ddb84ea29f4ee1e87855a152e2a3984c00cb`에 커밋하고 `origin/feat/android-off-requests`로 푸시했다. 로컬/원격 head 일치, 최신 dev `3e30752` 포함을 확인했다. 사용자 `nurseflow.mv.db`·`nurseflow.trace.db`는 미추적 상태로 보존·커밋 제외했다.
+- [PR #62](https://github.com/gerrmang/NurseFlow/pull/62)를 `dev` 대상 **Draft**로 게시했다. GitHub 연결 도구의 생성은 integration 권한 403(`Resource not accessible by integration`)으로 실패해 기존 인증된 `gh pr create --body-file android/B8a-pr-draft.md`를 사용했다. 조회 결과 OPEN·isDraft=true·MERGEABLE·REVIEW_REQUIRED/BLOCKED다. 독립 승인이나 즉시 병합 가능 상태를 뜻하지 않는다.
+- 전체 변경과 앞선 P3 수정의 자체 재검토에서 추가 조치 사항 없음. 게시 직전 로컬 Android 전체 단위/실제 Spring/APK/Lint 성공 결과는 아래 기록을 따른다. 기기 Compose 7개·실제 Activity/서버 두 계정 1개는 실행하지 못해 Draft 사유로 PR 본문에 명시했다. 실제 Kakao·물리 기기·운영·독립 리뷰는 미검증이다.
+- 초기 원격 확인에서 Vercel·Vercel Preview Comments는 SUCCESS였으나 `gh run list --branch feat/android-off-requests`는 빈 목록을 반환했다. Verify 통과로 표현하지 않는다. 게시 기록 커밋을 포함한 최종 head의 CI는 푸시 뒤 별도 확인한다.
+- 검증용 가상 공급자·메모리 서버는 명령행/부모 관계를 확인해 이번 프로세스만 종료했고 18090/18091 listen 없음 확인. 제품 코드는 최종 검증 뒤 변경하지 않았다. 이번 기록은 문서만 추가해 로컬 검사를 반복하지 않고 diff 공백을 확인한다.
+- 공유 인계: 같은 공유 worktree·`feat/android-off-requests`와 PR #62. 다음은 연결 가능한 기기의 화면/실서버 인수, 독립 수정 재리뷰·GitHub 승인 및 원격 CI 확인이다. API/DB/환경/의존성 추가 변경·수동 배포 없음, 롤백은 기능 커밋 revert와 이전 Android 빌드 복원. 병합·자동 병합·리뷰 요청/댓글·수동 배포 없음.
+
 ## B8a PR 게시 전 최종 재검토 (2026-11-25, Codex)
 
 - 사용자 요청으로 같은 `feat/android-off-requests`의 B8a 17파일과 P3 수정 부분을 자체 재검토했다. 서버 A12·세션 identity/refresh·권한·상태 전이·마감/한도·ETag·응답 유실/취소/늦은 응답·고정 안내/요일 정렬·기기/실서버 검사·fixture를 다시 대조했다. **추가로 조치 가능한 발견 사항 없음**. 구현자 자체 재검토이며 독립 에이전트/승인 리뷰·무결함 보장을 뜻하지 않는다. 검토 직전 17파일 내용의 경로순 SHA256 결합 해시 `2DB7D083993EC1157C09915B9D57BC2FD29D77859BA03B30FA7DBB6F26E0CDCE`(이 기록 추가 전 공유 현황 포함), HEAD `3e30752`.
