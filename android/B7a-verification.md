@@ -2,6 +2,8 @@
 
 검증일: 2026-11-25 (KST). 구현은 전날 계획에서 이어 진행했다.
 
+게시: [PR #60](https://github.com/gerrmang/NurseFlow/pull/60), 대상 `dev`, 일반 PR. 구현 head `b328894`의 로컬·원격 일치 확인. 최종 head의 원격 CI·리뷰 상태는 `docs/work-status.md`와 PR에서 확인한다. 아래 미게시·미커밋 표현은 해당 시점 기록이다.
+
 ## 범위와 기준
 
 - 최신 `origin/dev` `db5e412` 기반 `feat/android-schedule-settings`, 같은 공유 worktree에서 구현했다. B7b 브랜치는 보존하고 해당 미병합 웹 변경을 쌓지 않았다.

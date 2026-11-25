@@ -1,5 +1,12 @@
 # 공유 작업 현황
 
+## B7a PR #60 게시 확인 (2026-11-25, Codex)
+
+- B7a 변경 20파일만 `b328894885a414f3be80849a4399d413f8089655`에 커밋·`origin/feat/android-schedule-settings`로 푸시하고 로컬·원격 head 일치를 확인했다. [PR #60](https://github.com/gerrmang/NurseFlow/pull/60)을 `dev` 대상 일반 PR로 게시했다. OPEN·isDraft=false·MERGEABLE, REVIEW_REQUIRED/BLOCKED 확인. 독립 승인 완료나 즉시 병합 가능 상태를 뜻하지 않는다.
+- GitHub 연결 도구의 생성은 integration 권한 403으로 거부되어 기존 인증된 gh의 `--body-file android/B7a-pr-draft.md`로 게시했다. 최신 원격 dev는 여전히 `db5e412`이며 기능 head에 포함된다. DB·trace는 커밋하지 않았다.
+- 구현 head의 [Verify 45523035406](https://github.com/gerrmang/NurseFlow/actions/runs/45523035406)은 조회 시 Backend tests·Web checks·Demo seed checks 진행 중, Android debug build 대기 중이었다. Vercel·Preview Comments는 성공이었다. 이 기록을 Verify 전체 통과로 해석하지 않는다. 최종 게시 기록 커밋의 원격 head·CI도 푸시 후 조회한다.
+- 직전 로컬 검증 이후 제품 코드 변경 없음. 이번에는 게시 기록만 변경해 앱·서버·기기 검사를 반복하지 않았고 `git diff --check`로 확인한다. API/DB/환경 추가 변경 없음, 수동 배포 없음. 같은 공유 worktree·B7a 브랜치에서 이 기록을 커밋·푸시한 뒤 독립 리뷰와 최종 CI 확인으로 인계한다. PR 병합·자동 병합·리뷰 요청/댓글·수동 배포는 하지 않았다.
+
 ## B7a PR 게시 준비 (2026-11-25, Codex)
 
 - 사용자 요청으로 같은 `feat/android-schedule-settings`의 B7a 변경만 커밋·푸시하고 `dev` 대상 일반 PR로 게시한다. `git fetch origin` 후 최신 dev는 `db5e412`로 시작 기준과 같으며 같은 head의 기존 PR은 0건이다. 추가 dev 통합은 필요하지 않다.
