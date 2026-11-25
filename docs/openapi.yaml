@@ -2252,6 +2252,218 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiProblem'
 
+  /wards/{wardId}/target-hour-policy:
+    parameters:
+      - $ref: '#/components/parameters/WardId'
+    get:
+      tags: [Wards]
+      operationId: getTargetHourPolicy
+      summary: 병동 월 목표시간 정책 조회
+      description: |
+        설정이 없으면 시연 기본값(하루 기준 480분, 연차·SOF 480분, 반차 240분)을 반환한다.
+        법정 상한이 아니라 병원·병동이 바꿀 수 있는 설정값이다. 응답 ETag는 병동 공통 정책 revision이다.
+      x-required-role: WARD_ADMIN
+      responses:
+        '200':
+          description: 목표시간 정책과 병동 정책 revision
+          headers:
+            ETag:
+              $ref: '#/components/headers/PolicyETag'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TargetHourPolicy'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    put:
+      tags: [Wards]
+      operationId: replaceTargetHourPolicy
+      summary: 병동 월 목표시간 정책 변경
+      description: |
+        전체 교체한다. 일반 월 목표 = (월 일수 - 기준 휴식일수) × dailyStandardMinutes.
+        Night 전담 값이 null이면 일반 목표와 근무 유형의 환산시간을 그대로 쓴다.
+        시간 진단은 조회할 때 계산하므로 초안 revision을 올리거나 재검증 표시를 하지 않는다.
+        현재 값과 같은 요청도 정책 ETag를 확인하며 revision은 올리지 않는다.
+      x-required-role: WARD_ADMIN
+      parameters:
+        - $ref: '#/components/parameters/PolicyIfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TargetHourPolicyInput'
+      responses:
+        '200':
+          description: 적용된 목표시간 정책과 병동 정책 revision
+          headers:
+            ETag:
+              $ref: '#/components/headers/PolicyETag'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TargetHourPolicy'
+        '400':
+          description: INVALID_TARGET_HOUR_POLICY(필수 값 누락·null, 범위 밖·소수·문자열 값) 또는 INVALID_REQUEST
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ApiProblem'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '412':
+          description: STALE_POLICY_REVISION. 최신 정책을 조회한 뒤 다시 저장한다.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ApiProblem'
+
+  /wards/{wardId}/holiday-calendar:
+    parameters:
+      - $ref: '#/components/parameters/WardId'
+      - name: month
+        in: query
+        required: true
+        schema:
+          type: string
+          pattern: '^\d{4}-(0[1-9]|1[0-2])$'
+          example: '2026-11'
+    get:
+      tags: [Wards]
+      operationId: getHolidayCalendar
+      summary: 병동 휴일 달력과 월 목표 조회
+      description: |
+        해당 월에 병동이 등록한 날짜(days), 서버 DB에 저장된 국가 공휴일(publicHolidays), 계산된 월 목표를 반환한다.
+        토·일은 저장하지 않고 자동으로 센다. 주말과 겹친 공휴일은 한 번만 센다. 같은 날짜에 병동 항목이 있으면 병동 항목이 우선한다.
+        국가 공휴일은 한국천문연구원 특일 정보(data.go.kr 15012690)에서 가져와 DB에 저장하며, 조회·계산은 외부 API를 부르지 않고 DB만 읽는다.
+        키가 없거나 가져오지 못한 달은 저장된 값(없으면 빈 목록)과 병동 입력으로 계산한다.
+      x-required-role: WARD_ADMIN
+      responses:
+        '200':
+          description: 달력 항목, 월 목표, 병동 정책 revision
+          headers:
+            ETag:
+              $ref: '#/components/headers/PolicyETag'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HolidayCalendar'
+        '400':
+          description: INVALID_MONTH
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ApiProblem'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    put:
+      tags: [Wards]
+      operationId: replaceHolidayCalendar
+      summary: 병동 휴일 달력의 한 달 전체 교체
+      description: |
+        해당 월의 항목을 모두 교체한다. 빈 배열은 그 달의 등록 항목을 모두 지운다. 날짜당 한 항목만 넣는다.
+        PUBLIC_HOLIDAY·SUBSTITUTE_HOLIDAY·WARD_REST_DAY는 평일이면 기준 휴식일을 하나 늘리고, 주말이면 중복으로 세지 않는다.
+        WARD_WORKDAY는 주말이나 가져온 공휴일을 이 병동에서만 목표일로 센다. 공휴일 API가 빠뜨린 날은 PUBLIC_HOLIDAY로 직접 넣는다.
+        내용이 같으면 ETag 확인 후 revision을 유지한다.
+      x-required-role: WARD_ADMIN
+      parameters:
+        - $ref: '#/components/parameters/PolicyIfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/HolidayCalendarInput'
+      responses:
+        '200':
+          description: 적용된 달력, 월 목표, 병동 정책 revision
+          headers:
+            ETag:
+              $ref: '#/components/headers/PolicyETag'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HolidayCalendar'
+        '400':
+          description: INVALID_MONTH 또는 INVALID_HOLIDAY_CALENDAR(다른 달 날짜, 중복 날짜, 알 수 없는 종류)
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ApiProblem'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '412':
+          description: STALE_POLICY_REVISION. 최신 정책을 조회한 뒤 다시 저장한다.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ApiProblem'
+
+  /wards/{wardId}/holiday-calendar/refresh:
+    parameters:
+      - $ref: '#/components/parameters/WardId'
+      - name: month
+        in: query
+        required: true
+        schema:
+          type: string
+          pattern: '^\d{4}-(0[1-9]|1[0-2])$'
+          example: '2026-09'
+    post:
+      tags: [Wards]
+      operationId: refreshPublicHolidays
+      summary: 국가 공휴일 지금 가져오기
+      description: |
+        해당 월의 국가 공휴일을 공휴일 API에서 바로 가져와 DB의 그 달을 통째로 바꾼다(모든 병동 공통).
+        서버는 키가 있으면 매일 이번 달부터 12개월 뒤까지 자동으로 갱신하므로 임시공휴일 발표 직후 등에만 쓴다.
+        작년부터 내년까지의 달만 가져올 수 있고, 10분 안에 이미 가져왔거나 시도한(실패 포함) 달은 다시 호출하지 않고 저장된 값을 돌려준다(공용 호출 한도 보호).
+        실패하면 저장된 값을 그대로 두고 503을 반환한다. 병동 항목과 정책 revision은 바꾸지 않는다.
+      x-required-role: WARD_ADMIN
+      responses:
+        '200':
+          description: 갱신 후 달력과 월 목표
+          headers:
+            ETag:
+              $ref: '#/components/headers/PolicyETag'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HolidayCalendar'
+        '400':
+          description: INVALID_MONTH 또는 HOLIDAY_MONTH_OUT_OF_RANGE
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ApiProblem'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '503':
+          description: HOLIDAY_SOURCE_NOT_CONFIGURED(키 없음) 또는 HOLIDAY_SOURCE_UNAVAILABLE(호출·응답 실패). 저장된 공휴일은 유지된다.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ApiProblem'
+
   /wards/{wardId}/rosters:
     parameters:
       - $ref: '#/components/parameters/WardId'
@@ -2398,6 +2610,40 @@ paths:
           $ref: '#/components/responses/PreconditionFailed'
         '422':
           $ref: '#/components/responses/RuleViolation'
+
+  /rosters/{rosterId}/hour-diagnostics:
+    parameters:
+      - $ref: '#/components/parameters/RosterId'
+    get:
+      tags: [Rosters]
+      operationId: getRosterHourDiagnostics
+      summary: 관리자용 개인별 월 시간 진단
+      description: |
+        활성 편성 대상 간호사와, 이 근무표에 배정·부재·휴식일이 남은 그 밖의 간호사별로
+        실제(인정) 시간, 환산시간, 목표, 잔여(환산 - 목표), 부족·초과를 계산한다. 조회 때 현재 정책으로 계산하며 저장하지 않는다.
+        환산시간 = 배정 근무의 환산시간 + 승인 연차 일수 × leaveCreditMinutes + 반차 × halfDayCreditMinutes + SOF × sofCreditMinutes.
+        연차·SOF·반차는 목표일에만 더한다(주말·공휴일·병동 휴무일은 목표에서 이미 빠졌다). 한 날짜에는 연차, SOF, 반차 순으로 하나만 더한다. OF는 0이다.
+        연차는 하루의 절반 이상을 덮은 날짜만 센다(22:00~07:00 Night 연차는 1일). 고정 Night 전담 목표에는 주말·공휴일 휴가도 더한다.
+        다른 달 공개본에 저장된 연차도 이 달과 겹치면(기간 길이와 무관) 이 달 날짜만 센다.
+        자정을 넘는 근무는 끝나는 날짜의 월에 전부 귀속한다(결정 사항 14 잠정안, nightAttribution=END_DATE_MONTH).
+        그래서 이 달 말일 Night는 다음 달로 넘어가고(carriedOutShifts), 공개된 전월 말일 Night는 이 달에 들어온다(carriedInShifts).
+        전월 공개본이 없으면 previousMonthPublished=false이며 넘어오는 근무를 세지 않는다.
+        근무 칸은 시간 값을 따로 저장하지 않으므로 공개본도 근무 유형의 현재 인정·환산시간으로 계산한다.
+        간호사에게는 노출하지 않는다. 결과가 근무표 외에 정책·달력·앞뒤 달 공개본에도 달려 있어 ETag를 주지 않는다.
+      x-required-role: WARD_ADMIN
+      responses:
+        '200':
+          description: 월 목표와 간호사별 시간 진단
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RosterHourDiagnostics'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
 
   /rosters/{rosterId}/rest-days:
     parameters:
@@ -4330,6 +4576,236 @@ components:
         flaggedDraftCount:
           type: integer
           minimum: 0
+    TargetHourPolicyInput:
+      type: object
+      additionalProperties: false
+      required: [dailyStandardMinutes, leaveCreditMinutes, halfDayCreditMinutes, sofCreditMinutes]
+      properties:
+        dailyStandardMinutes:
+          type: integer
+          minimum: 1
+          maximum: 1440
+          example: 480
+        leaveCreditMinutes:
+          type: integer
+          minimum: 0
+          maximum: 1440
+          example: 480
+        halfDayCreditMinutes:
+          type: integer
+          minimum: 0
+          maximum: 1440
+          example: 240
+        sofCreditMinutes:
+          type: integer
+          minimum: 0
+          maximum: 1440
+          example: 480
+        nightDedicatedTargetMinutes:
+          type: [integer, 'null']
+          minimum: 0
+          maximum: 44640
+          description: Night 전담 월 목표. null이면 일반 월 목표를 쓴다.
+        nightDedicatedNightCreditMinutes:
+          type: [integer, 'null']
+          minimum: 0
+          maximum: 1440
+          description: Night 전담의 Night 1회 환산시간. null이면 근무 유형의 환산시간을 쓴다.
+    TargetHourPolicy:
+      type: object
+      required: [dailyStandardMinutes, leaveCreditMinutes, halfDayCreditMinutes, sofCreditMinutes,
+        nightDedicatedTargetMinutes, nightDedicatedNightCreditMinutes, policyRevision]
+      properties:
+        dailyStandardMinutes:
+          type: integer
+        leaveCreditMinutes:
+          type: integer
+        halfDayCreditMinutes:
+          type: integer
+        sofCreditMinutes:
+          type: integer
+        nightDedicatedTargetMinutes:
+          type: [integer, 'null']
+        nightDedicatedNightCreditMinutes:
+          type: [integer, 'null']
+        policyRevision:
+          type: integer
+          minimum: 0
+    HolidayCalendarDay:
+      type: object
+      additionalProperties: false
+      required: [date, kind]
+      properties:
+        date:
+          type: string
+          format: date
+        kind:
+          type: string
+          enum: [PUBLIC_HOLIDAY, SUBSTITUTE_HOLIDAY, WARD_REST_DAY, WARD_WORKDAY]
+        name:
+          type: [string, 'null']
+          maxLength: 50
+          description: 공휴일 이름 등 공개 정보만 넣는다. 개인 사유는 넣지 않는다.
+    HolidayCalendarInput:
+      type: object
+      additionalProperties: false
+      required: [days]
+      properties:
+        days:
+          type: array
+          maxItems: 31
+          items:
+            $ref: '#/components/schemas/HolidayCalendarDay'
+    MonthTarget:
+      type: object
+      required: [month, daysInMonth, weekendDays, holidayDays, wardRestDays, wardWorkdays, restDays, targetDays,
+        dailyStandardMinutes, generalTargetMinutes]
+      properties:
+        month:
+          type: string
+          example: '2026-11'
+        daysInMonth:
+          type: integer
+          example: 30
+        weekendDays:
+          type: integer
+          example: 9
+        holidayDays:
+          type: integer
+          description: 평일에 놓인 공휴일·대체휴일 수. 주말과 겹친 날은 빼고 센다.
+        wardRestDays:
+          type: integer
+          description: 평일에 놓인 병동 휴무일 수
+        wardWorkdays:
+          type: integer
+          description: 병동이 목표일로 바꾼 주말·국가 공휴일 수
+        restDays:
+          type: integer
+          example: 9
+        targetDays:
+          type: integer
+          example: 21
+        dailyStandardMinutes:
+          type: integer
+          example: 480
+        generalTargetMinutes:
+          type: integer
+          example: 10080
+    HolidayCalendar:
+      type: object
+      required: [month, days, publicHolidays, holidaySource, target, policyRevision]
+      properties:
+        month:
+          type: string
+        days:
+          type: array
+          description: 이 병동이 등록한 항목. 같은 날짜의 국가 공휴일보다 우선한다.
+          items:
+            $ref: '#/components/schemas/HolidayCalendarDay'
+        publicHolidays:
+          type: array
+          description: DB에 저장된 국가 공휴일(PUBLIC_HOLIDAY·SUBSTITUTE_HOLIDAY)
+          items:
+            $ref: '#/components/schemas/HolidayCalendarDay'
+        holidaySource:
+          type: object
+          required: [configured, fetchedAt]
+          properties:
+            configured:
+              type: boolean
+              description: 서버에 공휴일 API 키가 있는지
+            fetchedAt:
+              type: [string, 'null']
+              format: date-time
+              description: 이 달을 마지막으로 가져온 시각. null이면 가져온 적 없음
+        target:
+          $ref: '#/components/schemas/MonthTarget'
+        policyRevision:
+          type: integer
+          minimum: 0
+    NurseHourDiagnostic:
+      type: object
+      required: [nurseId, displayName, workPattern, rosterable, shiftCount, actualMinutes, shiftCreditMinutes,
+        leaveDays, halfDays, sofDays, absenceCreditMinutes, creditMinutes, targetMinutes, remainingMinutes,
+        shortfallMinutes, overtimeMinutes, status, carriedInShifts, carriedOutShifts]
+      properties:
+        nurseId:
+          type: string
+          format: uuid
+        displayName:
+          type: string
+        workPattern:
+          type: string
+          enum: [GENERAL, DAY_EVENING_ONLY, NIGHT_ONLY]
+        rosterable:
+          type: boolean
+          description: false면 현재 편성 대상이 아니지만 이 근무표에 시간이 남은 간호사다.
+        shiftCount:
+          type: integer
+        actualMinutes:
+          type: integer
+          description: 귀속된 근무의 인정시간 합계
+        shiftCreditMinutes:
+          type: integer
+        leaveDays:
+          type: integer
+        halfDays:
+          type: integer
+        sofDays:
+          type: integer
+        absenceCreditMinutes:
+          type: integer
+        creditMinutes:
+          type: integer
+          description: 월간 환산시간
+        targetMinutes:
+          type: integer
+        remainingMinutes:
+          type: integer
+          description: creditMinutes - targetMinutes. 음수는 부족, 양수는 초과다.
+        shortfallMinutes:
+          type: integer
+          minimum: 0
+        overtimeMinutes:
+          type: integer
+          minimum: 0
+        status:
+          type: string
+          enum: [SHORTFALL, MET, OVER]
+        carriedInShifts:
+          type: integer
+        carriedOutShifts:
+          type: integer
+    RosterHourDiagnostics:
+      type: object
+      required: [rosterId, month, status, revision, policyRevision, target, nightDedicatedTargetMinutes,
+        nightAttribution, previousMonthPublished, items]
+      properties:
+        rosterId:
+          type: string
+          format: uuid
+        month:
+          type: string
+        status:
+          type: string
+          enum: [DRAFT, PUBLISHED]
+        revision:
+          type: integer
+        policyRevision:
+          type: integer
+        target:
+          $ref: '#/components/schemas/MonthTarget'
+        nightDedicatedTargetMinutes:
+          type: integer
+        nightAttribution:
+          type: string
+          enum: [END_DATE_MONTH]
+        previousMonthPublished:
+          type: boolean
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/NurseHourDiagnostic'
     RosterRestDay:
       type: object
       additionalProperties: false

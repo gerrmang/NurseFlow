@@ -1,6 +1,6 @@
 ## 변경 목적과 내용
 
-- 실서버 연동(dev `db5e412` 기준). Android 관리자가 근무 유형·팀별 필요 인원·승인 VY/반차·간호사 근무 형태를 입력하고 서버의 최신 값을 확인할 수 있게 한다. 내 병동·팀 관리에서 진입한다.
+- 실서버 연동(최신 dev `3e30752`, A13 #58 통합 기준). Android 관리자가 근무 유형·팀별 필요 인원·승인 VY/반차·간호사 근무 형태를 입력하고 서버의 최신 값을 확인할 수 있게 한다. 내 병동·팀 관리에서 진입한다. A13 관리 화면은 이번 PR에 추가하지 않는다.
 - D/E/N 시간·휴게·인정·환산, 변경 영향 preview·비활성화·재활성화, 월 초안 조회·명시 생성, 팀 수요 전체 교체·선임 칸·미충원, 부재 CRUD를 연결한다. 일정 유효성은 서버가 최종 판정한다.
 - 정책/초안 ETag, 쓰기 직렬화, 응답 유실 시 재전송 잠금·결과 확인, 세션 세대 바인딩·권한 상실 데이터 폐기, 부재 원본 나노초·오프셋 보존을 적용한다.
 
@@ -9,6 +9,8 @@
 - 없음 (breakdown B7a)
 
 ## 검증
+
+- A13 최신 dev 통합 후 서버 `test bootJar --offline --no-daemon` 성공: 304개 통과·opt-in 5개 건너뜀·실패/오류 0. 통합 JAR로 B7a 실제 서버 API/ViewModel 인수 1개 통과·실패/건너뜀 0. Android 전체 단위/앱·기기 APK/Lint 명령 성공(29초), 단위/빌드는 UP-TO-DATE로 아래 기존 결과를 재사용했다. 기기·실제 Kakao·운영은 통합 후 반복하지 않았다. `git diff --cached --check` 통과.
 
 - 최종 Android 단위 검사 226개 통과·opt-in 2개 건너뜀·실패/오류 0, 앱/테스트 APK 빌드 성공, Lint 오류 0·경고 27개. 실제 Spring/메모리 H2의 API/ViewModel 인수 1개 통과. 에뮬레이터 가상 API 화면 4개·실제 서버 화면 1개·실제 Activity 재생성/재진입 1개 통과 확인. 기기 묶음 실행의 재진입 대기 실패를 정정한 후 해당 1개는 별도 실행으로 통과했으며 상세는 `android/B7a-verification.md`에 기록했다.
 - 기본 명령: `:app:testDebugUnitTest :app:assembleDebug :app:assembleDebugAndroidTest :app:lintDebug --offline --no-daemon`.

@@ -1,5 +1,12 @@
 # B7a Android 관리자 근무 설정 검증
 
+## A13 포함 최신 dev 통합 (2026-11-25)
+
+- PR #60의 `b2d9028`에 최신 dev `3e30752`(A13 #58)을 충돌 없이 통합했다. Android 동작 코드 변경 없음. backend·OpenAPI·웹 생성 타입은 dev와 동일하다. A13 관리 화면은 추가하지 않는다.
+- 서버 `test bootJar --offline --no-daemon` BUILD SUCCESSFUL, XML 304개 통과·opt-in 5개 건너뜀·실패/오류 0. Android 전체 단위/앱·기기 APK/Lint 명령 BUILD SUCCESSFUL(29초), 단위/빌드 UP-TO-DATE로 기존 결과 재사용.
+- 통합 JAR·가상 OIDC·별도 메모리 H2에서 B7a opt-in API/ViewModel 인수 1개 통과·실패/건너뜀 0(22초). 기기·실제 Kakao·운영 검사는 반복하지 않았다. 검증 기록과 PR 본문은 이 실연동 기준으로 갱신한다. 기존 아래 기기 검증은 최초 구현 기준이다.
+- API/DB/환경의 B7a 추가 변경·수동 배포 없음. 통합 커밋 롤백은 첫 부모 기준 revert, 앱 롤백은 이전 APK 복원이다.
+
 검증일: 2026-11-25 (KST). 구현은 전날 계획에서 이어 진행했다.
 
 게시: [PR #60](https://github.com/gerrmang/NurseFlow/pull/60), 대상 `dev`, 일반 PR. 구현 head `b328894`의 로컬·원격 일치 확인. 최종 head의 원격 CI·리뷰 상태는 `docs/work-status.md`와 PR에서 확인한다. 아래 미게시·미커밋 표현은 해당 시점 기록이다.
