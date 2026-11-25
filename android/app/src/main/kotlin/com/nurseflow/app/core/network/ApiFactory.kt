@@ -84,6 +84,16 @@ object ApiFactory {
             .build().create(StaffAdminApi::class.java)
     }
 
+    fun offRequestApi(baseUrl: String, session: SessionManager): OffRequestApi {
+        val identity = session.credentials?.identity
+        val bound = RequestSessionIdentity(identity?.userId, identity?.generation)
+        val client = nonRetryingClient(session).build()
+        return Retrofit.Builder().baseUrl(baseUrl)
+            .callFactory { request -> client.newCall(request.newBuilder().tag(RequestSessionIdentity::class.java, bound).build()) }
+            .addConverterFactory(ApiJson.json.asConverterFactory("application/json".toMediaType()))
+            .build().create(OffRequestApi::class.java)
+    }
+
     private fun nonRetryingClient(session: SessionManager) = baseClient()
         .connectionPool(ConnectionPool(0, 1, TimeUnit.NANOSECONDS))
         .addInterceptor(BearerInterceptor(session))

@@ -1,5 +1,42 @@
 # 공유 작업 현황
 
+## B8a PR 게시 전 최종 재검토 (2026-11-25, Codex)
+
+- 사용자 요청으로 같은 `feat/android-off-requests`의 B8a 17파일과 P3 수정 부분을 자체 재검토했다. 서버 A12·세션 identity/refresh·권한·상태 전이·마감/한도·ETag·응답 유실/취소/늦은 응답·고정 안내/요일 정렬·기기/실서버 검사·fixture를 다시 대조했다. **추가로 조치 가능한 발견 사항 없음**. 구현자 자체 재검토이며 독립 에이전트/승인 리뷰·무결함 보장을 뜻하지 않는다. 검토 직전 17파일 내용의 경로순 SHA256 결합 해시 `2DB7D083993EC1157C09915B9D57BC2FD29D77859BA03B30FA7DBB6F26E0CDCE`(이 기록 추가 전 공유 현황 포함), HEAD `3e30752`.
+- `git fetch origin` 후 최신 `origin/dev`는 여전히 `3e30752043ed78bf8ab8b74e123bab3e28f2ea3d`로 현재 HEAD와 같고 추가 통합 없음. 같은 head 브랜치의 기존 PR 0건 확인. B8a만 커밋/푸시하고 `dev` 대상 Draft PR을 게시한다. Draft 사유는 기기 Compose 7개와 실제 Activity/서버 두 계정 1개가 ADB 연결 실패로 실행되지 않은 점이다.
+- 최종 게시 전 검증은 B8a opt-in을 켜 새 메모리 Spring/OIDC에서 실행했다. JDK 21 Android 전체 단위/앱·기기 테스트 APK/Lint **BUILD SUCCESSFUL(1분 25초)**, 80작업 중 14개 실행·66개 UP-TO-DATE. XML 240개 중 **239개 통과·기존 B5a 선택 1개 건너뜀·실패/오류 0**, B8a 실제 Spring 인수 1개 통과. Lint 오류 0·기존 경고 27, `git diff --check`·fixture `node --check` 성공. 서버/OpenAPI/웹/CI는 dev와 동일하며 실제 Kakao·물리 기기·운영·독립 리뷰는 미검증이다.
+- 사용자 DB/trace를 보존하고 커밋에서 제외한다. API/DB/환경/의존성 변경·수동 배포 없음, Android 빌드 영향. 롤백은 B8a 커밋 revert와 이전 Android 빌드 복원이다. 같은 공유 worktree·브랜치에 인계하며 게시 결과와 원격 head/CI를 뒤이어 확인한다. 병합·자동 병합·리뷰 요청/댓글·수동 배포는 하지 않는다.
+
+## B8a P3 화면 리뷰 수정 (2026-11-25, Codex)
+
+- 사용자 수정 요청에 따라 같은 공유 worktree·`feat/android-off-requests`·HEAD `3e30752`의 기존 미커밋 B8a 변경에서 P3 2건을 수정했다. 사용자 DB/trace와 기존 변경을 보존했다.
+- 오류/결과 미확인/재조회·계속 버튼을 목록 바깥의 고정 상태 영역으로 옮겼다. 긴 안내는 해당 영역 안에서 스크롤하고 접근성 live region으로 알린다. 권한 상실 시 병동 복귀 버튼, 월 한도/마감일 필드 옆 오류도 제공한다. 달력 요일은 날짜와 같은 전체 폭·7열 weight Row와 중앙 정렬을 사용한다.
+- Compose 회귀 3개(하단 정책 입력 오류 표시, 응답 유실 복구 버튼의 가시성, 날짜/요일 7열 중심 일치)를 추가해 가상 API 화면 검사는 총 7개다. 실서버 기기 1개와 함께 컴파일 성공, 현재 `adb devices -l`에 연결 기기가 없어 실제 실행은 미완료다. 이전 ADB 문제를 해결했다고 주장하지 않는다.
+- JDK 21 Android `:app:testDebugUnitTest :app:assembleDebug :app:assembleDebugAndroidTest :app:lintDebug --offline --no-daemon` **BUILD SUCCESSFUL(1분 29초)**, 80작업 중 19개 실행·61개 UP-TO-DATE. XML 240개 중 **238개 통과·실서버 opt-in 2개 건너뜀·실패/오류 0**. 초기 구현의 실서버 1개 성공 기록과 구분한다. Lint 오류 0·기존 경고 27, `git diff --check` 통과.
+- 수정된 화면/검사 코드를 자체 재확인해 고정 영역과 목록의 분리, 입력 검증·복구 버튼 활성 조건 유지, 요일/날짜 동일 열 폭을 확인했다. 독립 수정 재리뷰·기기 시각 검증은 미완료다. ViewModel/API/서버 규칙은 바꾸지 않았으며 실제 Spring/Kakao·backend/웹 전체 검사는 UI 수정 범위라 재실행하지 않았다. backend/OpenAPI/웹/CI diff 없음.
+- 검증 문서·PR 초안을 갱신했다. API/DB/환경/의존성 변경·수동 배포 없음, Android 빌드 영향. 롤백은 P3 화면 수정을 되돌리고 이전 Android 빌드를 복원한다. 같은 브랜치의 미커밋 상태로 인계하며 다음은 기기 Compose 7개·두 계정 실서버 1개 실행과 수정 diff 독립 재리뷰다. 커밋·푸시·PR 게시·병합·배포 없음.
+
+## B8a 코드 리뷰 (2026-11-25 20:12 KST, Codex)
+
+- 같은 공유 worktree·`feat/android-off-requests`, HEAD `3e30752043ed78bf8ab8b74e123bab3e28f2ea3d`의 tracked/미추적 B8a 17파일을 검토했다. 리뷰 직전 파일 경로순 SHA256 목록을 합친 해시 `A45659DAE4268A2579105ABCE2A8936E308B33A69EFF08BEBA0C97870ABC82AD`(이번 리뷰 기록 추가 전 `docs/work-status.md` 포함). 사용자 DB/trace와 build 산출물은 제외했다. 구현한 Codex의 자체 재검토이며 독립 에이전트·GitHub 승인 리뷰가 아니다.
+- 서버 A12 Service/Repository·OpenAPI, 공통 Bearer/refresh 세션 identity, 세션 ViewModelStore·병동 진입, API·ViewModel·Compose·단위/기기/실서버 검사 및 fixture를 대조했다. 조치 가능한 P1/P2는 발견하지 못했고 **P3 화면 문제 2건**을 확인했다.
+- P3(런타임/화면), `OffRequestScreen.kt:59`: 오류·결과 미확인·복구 버튼을 LazyColumn 첫 item에만 표시한다. 하단 정책에서 한도 32처럼 잘못된 입력을 저장하거나 목록 하단에서 네트워크 오류를 만나면 스크롤 위치를 유지한 채 안내가 화면 밖에 생긴다. 결과 미확인으로 편집이 잠겨도 원인·복구 버튼이 보이지 않는다. 고정 Snackbar/상태 영역 또는 오류·미확인 발생 시 안내 위치로 스크롤하고 필드 오류는 입력 옆에 표시할 필요가 있다.
+- P3(런타임/화면), `OffRequestScreen.kt:81`: 요일은 공백으로 간격을 준 단일 Text인 반면 날짜는 fillMaxWidth의 7개 weight 열이다. 두 행이 같은 열 폭·중앙 정렬을 공유하지 않아 보통 휴대폰 너비에서 요일이 날짜 위에 맞지 않으며 날짜의 요일을 오인할 수 있다. 요일도 같은 7열 Row/weight와 중앙 정렬을 사용해야 한다.
+- 검증: JDK 21 Android `:app:testDebugUnitTest --tests '*OffRequestApiTest' --tests '*OffRequestViewModelTest' --offline --no-daemon` **BUILD SUCCESSFUL(17초)**, API 11·ViewModel 31개, 총 42개 통과·실패/오류/건너뜀 0. `git diff --check` 통과. 화면 2건은 배치·스크롤 코드에서 확인한 정적 리뷰 결과이며 기기 재현/시각 측정을 수행했다고 주장하지 않는다. 기존 ADB 연결 실패로 남은 기기 두 계정 시연은 미완료이고 실제 Spring·전체 Android·Lint·Kakao는 이번 리뷰에서 재실행하지 않았다.
+- 제품·검사 코드는 수정하지 않았으며 이번 리뷰 기록만 갱신했다. 같은 브랜치의 미커밋 변경·사용자 DB/trace를 유지한다. 다음은 P3 2건 수정과 연결 가능한 기기의 화면/실서버 인수 및 수정 diff 재리뷰다. 커밋·푸시·PR 게시·병합·배포 없음.
+
+## B8a Android 희망 오프 구현·검증 (2026-11-25, Codex)
+
+- 사용자 승인 계획에 따라 같은 공유 worktree에서 `git fetch origin` 후 최신 `origin/dev` `3e30752`에서 `feat/android-off-requests`를 만들었다. A12·B3a를 소비하며 B8b·B7 미병합 코드를 쌓지 않았다. 기존 B8b 브랜치와 사용자 `nurseflow.mv.db`·`nurseflow.trace.db`를 보존했다.
+- 병동 카드→희망 오프: 간호사 본인 신청·월별 상태/이력·마감 전 미확정 철회, 관리자 취합·간호사/상태/예외 필터·대리 입력·확정·반려·확정분 철회, 월 한도/마감일 정책과 ETag를 구현했다. 최신 결정 15와 A12에 따라 마감 뒤 예외 요청은 제출 가능하지만 본인 철회 및 확정 전 편성 반영은 불가다. 관리자 대리 입력 후보는 서버 편성 대상 조회를 사용한다. 사유·공식 결재·주말 최적화·초안 편집/공개는 범위 밖이다.
+- 세션 identity에 HTTP 클라이언트를 묶고 소속/역할을 활성화·전송 전·조회 후 확인한다. 늦은 응답 폐기, 쓰기와 후속 조회 직렬화, 응답 유실/깨진 성공 응답의 자동 재전송 금지, 결과 미확인 시 월 이동/쓰기 차단과 최신 조회·사용자 확인 복구, 취소·소속 상실 시 데이터 폐기를 구현했다. 서버가 권한·한도·상태 전이·배치 금지를 최종 판정한다.
+- JDK 21·기존 사용자 Gradle 캐시: Android `:app:testDebugUnitTest :app:assembleDebug :app:assembleDebugAndroidTest :app:lintDebug --offline --no-daemon`, B8a 실서버 opt-in 포함 **BUILD SUCCESSFUL(1분 34초)**. XML 240개 중 **239개 통과·기존 B5a opt-in 1개 건너뜀·실패/오류 0**. 신규 API 11·ViewModel 31·실제 Spring 1 모두 통과. Lint 오류 0·기존 경고 27. `git diff --check`, fixture `node --check` 성공.
+- 실제 Spring 인수: 변경 없는 dev backend의 `bootJar` 성공(4작업 UP-TO-DATE), 새 메모리 H2·가상 OIDC/병원으로 실제 Retrofit/ViewModel/API를 검증했다. 관리자·간호사 초대 가입→신청/한도/중복→철회/재신청→확정/확정분 철회→대리 입력, 정책 저장/412, 간호사 관리 경로 거부·비소속 거부, 마감 후 예외/본인 철회 거부/관리자 반려, 소속 상실 후 데이터 폐기를 확인했다. 실제 Kakao 인증·기기 화면 시연과 구분한다.
+- **기기 인수 미완료**: Compose 4개와 실서버 두 계정 Activity 검사 1개는 컴파일 성공. 기존 Pixel_10을 읽기 전용으로 여러 설정에서 시작해 부팅 로그를 확인했지만 ADB 기기 미검출/연결 거부가 반복돼 APK 설치·계측 실행·화면 캡처를 못 했다. 최초 신규 Compose 검사 선택자의 미지원 `last()` 컴파일 오류는 semantics 대화상자 선택자로 수정했다. 실제 Kakao·물리 기기·다중 관리자 물리 경합·운영·독립 리뷰·GitHub PR/CI는 미검증이다.
+- 앱/서버 최초 검사는 사용자 Gradle 캐시 잠금 권한으로 시작하지 못해 로컬 검증 권한으로 실행했다. 검증 후 PID·부모 관계·명령행을 확인해 이번 에뮬레이터/가상 공급자/메모리 서버만 종료했고 18090/18091·이번 에뮬레이터 포트의 listen 없음 확인. 사용자 AVD 데이터 초기화·파일 DB 사용 없음. backend·OpenAPI·웹·CI diff는 없고 전체 서버/웹 회귀는 변경 범위가 아니어서 재실행하지 않았다.
+- API/DB/환경/의존성·서버 규칙 변경 및 수동 배포 없음. Android 빌드 영향. 롤백은 B8a 변경 revert와 이전 Android 빌드 복원. 마감 API에 병동 시간대/서버 현재시각이 없어 표시 시간대를 명시한다. 미저장 입력은 재조회/이탈 시 초기화될 수 있고 실시간 구독은 없다.
+- 공유 인계: 같은 `C:\Users\jjang\IdeaProjects\NurseFlow`, `feat/android-off-requests`, HEAD `3e30752`의 미커밋 B8a 코드·검사·문서를 유지한다. 상세 `android/B8a-verification.md`, PR 초안 `android/B8a-pr-draft.md`. 사용자 DB/trace 커밋 제외. 다음은 연결 가능한 기기에서 Compose 4개·두 계정 실서버 1개 실행과 전체 diff 독립 리뷰다. 이번에 커밋·푸시·PR 게시·병합·배포하지 않았다.
+
 ## A14 팀 간 지원 구현 (2026-11-24, Claude)
 
 - 브랜치 `feat/cross-team-support`(최신 dev `548552b`에서 분기). A12 PR #56과 `RosterService`·`schema.sql`·`openapi.yaml`·`ApiTestBase`를 함께 바꾸므로, 규칙 PR은 하나씩 병합한다는 순서에 따라 **#56 병합 뒤 최신 dev에 맞춰 PR을 연다.** 그 전에는 브랜치에만 둔다.

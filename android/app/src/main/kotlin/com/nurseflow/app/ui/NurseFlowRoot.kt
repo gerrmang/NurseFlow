@@ -31,6 +31,8 @@ import com.nurseflow.app.feature.ward.create.WardCreateViewModel
 import com.nurseflow.app.feature.ward.create.resolveCreateIntent
 import com.nurseflow.app.feature.staff.StaffAdminScreen
 import com.nurseflow.app.feature.staff.StaffAdminViewModel
+import com.nurseflow.app.feature.offrequest.OffRequestScreen
+import com.nurseflow.app.feature.offrequest.OffRequestViewModel
 
 @Composable
 fun NurseFlowRoot(container: AppContainer) {
@@ -45,6 +47,7 @@ fun NurseFlowRoot(container: AppContainer) {
     var selectedWardId by rememberSaveable(sessionKey) { mutableStateOf<String?>(null) }
     var adminWardId by rememberSaveable(sessionKey) { mutableStateOf<String?>(null) }
     var staffWardId by rememberSaveable(sessionKey) { mutableStateOf<String?>(null) }
+    var offWardId by rememberSaveable(sessionKey) { mutableStateOf<String?>(null) }
     var wardEntry by rememberSaveable(sessionKey) { mutableStateOf(0) }
     var pasting by remember(sessionKey) { mutableStateOf(false) }
     var creatingWard by rememberSaveable(sessionKey) { mutableStateOf(false) }
@@ -97,6 +100,7 @@ fun NurseFlowRoot(container: AppContainer) {
                             val ward = loaded?.firstOrNull { it.wardId == selectedWardId }
                             val adminWard = loaded?.firstOrNull { it.wardId == adminWardId && it.isAdmin }
                             val staffWard = loaded?.firstOrNull { it.wardId == staffWardId && it.isAdmin }
+                            val offWard = loaded?.firstOrNull { it.wardId == offWardId }
                             // Created for the whole session so a newer link replaces, not duplicates, the flow.
                             // One fixed-key model; reset() on entry and exit means flows never pile up in the store.
                             val createModel = viewModel(key = "ward-create") {
@@ -129,6 +133,7 @@ fun NurseFlowRoot(container: AppContainer) {
                                         adminWardId = null
                                         selectedWardId = wardId
                                         staffWardId = null
+                                        offWardId = null
                                         wardEntry += 1
                                     }
                                 }
@@ -142,6 +147,15 @@ fun NurseFlowRoot(container: AppContainer) {
                                         onOpenInvites = { leaveCreate(); adminWardId = it.wardId },
                                         onOpenStaff = { leaveCreate(); staffWardId = it.wardId },
                                     )
+                                }
+                                offWard != null -> {
+                                    val off = viewModel(key = "off-${offWard.wardId}-${offWard.isAdmin}") {
+                                        OffRequestViewModel(container.offRequestApi(), offWard.wardId, offWard.isAdmin,
+                                            memberships = { container.api.wards().items },
+                                            sessionValid = { val now = container.session.state.value; now is SessionState.SignedIn && now.userId == current.userId && now.generation == current.generation },
+                                            onSessionInvalid = { container.logout() })
+                                    }
+                                    OffRequestScreen(offWard.wardName, off) { offWardId = null; wardsModel.reload(silent = true) }
                                 }
                                 staffWard != null -> {
                                     val staff = viewModel(key = "staff-${staffWard.wardId}") {
@@ -177,6 +191,7 @@ fun NurseFlowRoot(container: AppContainer) {
                                     onCreateWard = enterCreate,
                                     onLogout = container::logout,
                                     onManageStaff = { staffWardId = it.wardId },
+                                    onOffRequests = { offWardId = it.wardId },
                                 )
                                 else -> {
                                     BackHandler { selectedWardId = null }
