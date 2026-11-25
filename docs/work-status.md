@@ -1,5 +1,13 @@
 # 공유 작업 현황
 
+## B8b PR #61 게시 확인 (2026-11-25, Codex)
+
+- B8b 변경 16파일만 `fe0b44200172cfbf459afb03c8f2297ce8b73e90`에 커밋하고 `origin/feat/web-off-requests`로 푸시했다. 로컬/원격 head 일치 및 최신 dev `3e30752043ed78bf8ab8b74e123bab3e28f2ea3d` 포함을 확인했다. 사용자 DB/trace는 미추적 상태로 보존하고 커밋하지 않았다.
+- [PR #61](https://github.com/gerrmang/NurseFlow/pull/61)을 `dev` 대상 일반 PR로 게시했다. 조회 결과 OPEN·isDraft=false·MERGEABLE·REVIEW_REQUIRED/BLOCKED다. 이는 GitHub 승인 완료·즉시 병합 가능 상태를 뜻하지 않는다. GitHub 연결 도구는 생성 권한 403(`Resource not accessible by integration`)을 반환해 기존 인증된 gh와 `--body-file web/B8b-pr-draft.md`로 게시했다.
+- 구현 head의 [Verify 45529049144](https://github.com/gerrmang/NurseFlow/actions/runs/45529049144)는 조회 시 Demo seed checks·Backend tests·Android debug build·Web checks 모두 IN_PROGRESS, Vercel·Vercel Preview Comments는 SUCCESS였다. Verify 전체 통과로 해석하지 않는다. 게시 기록 커밋의 최종 원격 head/검사는 푸시 뒤 별도 조회한다.
+- 독립 리뷰 뒤 제품 코드 변경 없음. 게시 준비와 이번 기록은 문서만 정리해 기존 로컬/실서버/브라우저 검사 결과를 유지하고 `git diff --check`를 확인한다. API/DB/환경 추가 변경·수동 배포 없음. 롤백은 기능 커밋 revert와 이전 웹 빌드 복원이다.
+- 같은 공유 worktree·`feat/web-off-requests`에서 이 게시 기록만 커밋/푸시한다. 사용자 DB/trace 보존, 병합·자동 병합·리뷰 요청/댓글·수동 배포 없음. 남은 원격 CI·GitHub 승인과 기존 실제 Kakao/물리 기기 등 제한은 유지한다.
+
 ## B8b PR 게시 준비 (2026-11-25, Codex)
 
 - 사용자 요청으로 같은 `feat/web-off-requests`의 B8b 변경만 커밋·푸시하고 `dev` 대상 일반 PR로 게시한다. `git fetch origin` 후 최신 dev는 여전히 `3e30752043ed78bf8ab8b74e123bab3e28f2ea3d`로 현재 HEAD에 포함된다. 같은 head 브랜치의 기존 PR 0건을 확인했다. 추가 dev 통합 없음.
