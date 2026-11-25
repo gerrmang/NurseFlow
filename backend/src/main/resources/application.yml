@@ -51,6 +51,12 @@ nurseflow:
       # latest import, unless that import is of a later or unknown period (backend/README.md).
       # false and no path: search falls back to the live API above.
       bundled: ${NURSEFLOW_HOSPITAL_DATASET_BUNDLED:true}
+  holiday:
+    # data.go.kr key for 한국천문연구원 특일 정보 (dataset 15012690). One data.go.kr account has one key, so it falls
+    # back to the hospital key; the account still has to apply for this API. Empty: no import, wards enter holidays.
+    service-key: ${NURSEFLOW_HOLIDAY_API_KEY:${NURSEFLOW_HOSPITAL_API_KEY:}}
+    # Daily refresh of this and the next 12 months (temporary holidays are announced late). "-" disables it.
+    refresh-cron: ${NURSEFLOW_HOLIDAY_REFRESH_CRON:0 30 3 * * *}
   ward:
     # Wards one account may create; protects against scripted mass creation.
     max-created-per-user: ${NURSEFLOW_WARD_MAX_CREATED_PER_USER:5}
