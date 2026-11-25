@@ -49,18 +49,22 @@ class OffRequestScreenUiTest {
         rule.setContent { NurseFlowTheme { OffRequestScreen("가상 병동", vm) {} } }
         rule.onNodeWithText("가상 병동 · 희망 오프").assertExists()
     }
+    private fun scrollToText(text: String, substring: Boolean = false) {
+        rule.onNodeWithTag("off-list").performScrollToNode(hasText(text, substring = substring))
+        rule.onNodeWithText(text, substring = substring).assertIsDisplayed()
+    }
     @Test fun selfSubmissionRequiresConfirmationThenShowsHistoryAndWithdrawal() {
         show(); rule.onNodeWithText("10", substring = false).performScrollTo().performClick()
         rule.onNodeWithText("신청", substring = false).performScrollTo().performClick()
         rule.runOnIdle { assertEquals(0, writes) }
         rule.onNodeWithText("제출", substring = false).performClick()
-        rule.onNodeWithText("2026-12-10 · 신청").performScrollTo().assertExists()
+        scrollToText("2026-12-10 · 신청")
         rule.onNodeWithText("철회", substring = false).performScrollTo().performClick()
         rule.onNodeWithText("취소", substring = false).performClick()
         rule.runOnIdle { assertEquals(1, writes) }
         rule.onNodeWithText("철회", substring = false).performScrollTo().performClick()
         rule.onNode(hasText("철회", substring = false) and hasAnyAncestor(isDialog())).performClick()
-        rule.onNodeWithText("2026-12-10 · 철회").performScrollTo().assertExists()
+        scrollToText("2026-12-10 · 철회")
     }
     @Test fun lateRequestIsExplicitExceptionWithNoSelfWithdrawal() {
         deadline = "2000-01-01T00:00:00Z"; show()
@@ -68,7 +72,7 @@ class OffRequestScreenUiTest {
         rule.onNodeWithText("11", substring = false).performScrollTo().performClick()
         rule.onNode(hasText("예외 요청 제출", substring = false) and hasClickAction()).performScrollTo().performClick()
         rule.onNodeWithText("제출", substring = false).performClick()
-        rule.onNodeWithText("2026-12-11 · 신청").performScrollTo().assertExists()
+        scrollToText("2026-12-11 · 신청")
         rule.onNodeWithText("본인 신청 · 마감 후 예외").assertExists()
         rule.onNodeWithText("철회", substring = false).assertDoesNotExist()
     }
@@ -79,14 +83,14 @@ class OffRequestScreenUiTest {
         rule.onNodeWithText("12", substring = false).performScrollTo().performClick()
         rule.onNodeWithText("대리 입력", substring = false).performScrollTo().performClick()
         rule.onNodeWithText("제출", substring = false).performClick()
-        rule.onNodeWithText("2026-12-12 · 신청").performScrollTo().assertExists()
+        scrollToText("2026-12-12 · 신청")
         rule.onNodeWithText("확정", substring = false).performScrollTo().performClick()
         rule.onNodeWithText("확정 또는 확정분 철회는 초안 재검증이 필요해요. 기존 공개본은 유지돼요.").assertExists()
         rule.onNode(hasText("확정", substring = false) and hasAnyAncestor(isDialog())).performClick()
-        rule.onNodeWithText("2026-12-12 · 확정").performScrollTo().assertExists()
+        scrollToText("2026-12-12 · 확정")
         rule.onNodeWithText("철회", substring = false).performScrollTo().performClick()
         rule.onNode(hasText("철회", substring = false) and hasAnyAncestor(isDialog())).performClick()
-        rule.onNodeWithText("2026-12-12 · 철회").performScrollTo().assertExists()
+        scrollToText("2026-12-12 · 철회")
         rule.runOnIdle { assertEquals(3, writes) }
     }
     @Test fun adminPolicySaveRequiresConfirmationAndAppliesNewLimit() {
@@ -97,7 +101,7 @@ class OffRequestScreenUiTest {
         rule.runOnIdle { assertEquals(0, writes) }
         rule.onNodeWithText("저장", substring = false).performClick()
         rule.runOnIdle { assertEquals(1, writes); assertEquals(0, limit) }
-        rule.onNodeWithText("월 본인 신청 한도 0일", substring = true).performScrollTo().assertExists()
+        scrollToText("월 본인 신청 한도 0일", substring = true)
     }
     @Test fun policyErrorStaysVisibleWhileScrolledToBottom() {
         show(true)

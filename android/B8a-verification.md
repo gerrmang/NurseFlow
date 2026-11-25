@@ -1,5 +1,23 @@
 # B8a Android 희망 오프 검증
 
+## 기기 인수 완료 (2026-11-25 20:44 KST)
+
+- 사용자 요청에 따라 미완료였던 실제 Android 화면·두 계정 실서버 인수를 끝냈다. 아래 절의 '기기 미완료/Draft 대기'는 당시 기록이며, 현재 상태는 이 절을 따른다.
+- 원인: `netsh interface ipv4 show excludedportrange protocol=tcp`에서 Windows 예약 범위 **5517~5616** 확인. 기본 에뮬레이터 포트 5554/5562/5584의 임시 바인딩은 권한 오류였고 18082/18083은 성공했다. Windows 예약 설정을 바꾸지 않고 콘솔/ADB 포트를 **18082/18083**으로 지정해 연결했다.
+- 기존 사용자 Pixel_10은 보존했다. 같은 Android 37.2 x86_64 Google Play 시스템 이미지로 `app/build/b8a-avd/`에 검증 전용 AVD를 만들고 snapshot 없이 실행했다. 새 기기의 디버깅 허용을 처리한 뒤 인증된 serial **emulator-18082**로 실제 APK 설치·ADB reverse·계측을 수행했다. 앱 인증과 서버 권한은 기존 코드 그대로다.
+- 첫 Compose 7개 실행은 **5개 성공·2개 실패**였다. 실패는 화면 밖 LazyColumn 항목에 바로 `performScrollTo()`를 호출한 검사 코드였다. 목록의 `performScrollToNode()`로 항목을 찾고 표시 여부를 단언하도록 수정했다. 실서버 검사에도 같은 패턴을 적용해 비동기 조회 결과를 기다리며 실제로 스크롤한다. 수정 후 Compose 단독 **7/7 성공**.
+- 최종 통합 명령(저장소 루트):
+
+```powershell
+./android/scripts/verify-off-requests.ps1 -Serial emulator-18082 -Adb '<SDK>/platform-tools/adb.exe' -WithServer
+```
+
+- **OK (8 tests), 37.328초, 실패·오류·건너뜀 0**. 가상 API Compose 7개와 실제 Activity/Compose/Retrofit/Spring/H2 두 계정 1개를 같은 계측 실행에서 통과했다. 스크립트는 adb exit 0만 믿지 않고 JUnit 성공 수와 실패·건너뜀을 검사한다.
+- 실제 기기에서 간호사 신청→Activity 재생성→로그아웃→관리자 로그인/확정→로그아웃→간호사 재로그인/확정 상태·철회 불가, 서버 재조회 결과 일치를 확인했다. 인증 공급자·계정은 가상 OIDC이고 Spring/API/DB·화면은 실제 구현이다.
+- `app/build/b8a-device-results/instrumentation.txt`, `b8a-admin-confirmed.png`, `b8a-nurse-confirmed.png`를 수집했다. 두 화면을 직접 열어 가상 간호사 확정 상태, 관리자 철회 제공·본인 철회 없음, 고정 성공 안내와 달력 요일/날짜 정렬을 확인했다. 산출물은 build 아래에만 두고 커밋하지 않는다.
+- 최종 기기 검사 APK/Lint: JDK 21 `:app:assembleDebugAndroidTest :app:lintDebug --offline --no-daemon` **BUILD SUCCESSFUL(39초)**, 57작업 중 7개 실행·50개 UP-TO-DATE, Lint 오류 0·기존 경고 27. 이번 변경은 계측 검사·재현 스크립트·문서이며 API/ViewModel/운영 코드는 그대로다. 앞서 실행한 JVM 239개/실제 Spring opt-in 성공은 유지한다. `git diff --check` 통과.
+- Android README에 Windows 예약 포트 점검·우회와 재현 명령을 남겼다. 기기 인수 완료 결과로 PR 본문을 갱신하고 Draft를 해제한다. 실제 Kakao 인증·물리 기기·운영 검증과 독립 승인은 별도 범위로 명시한다.
+
 ## PR 게시 전 최종 확인 (2026-11-25)
 
 - 사용자 요청으로 전체 B8a 변경과 P3 수정을 자체 재검토했다. 서버 계약·세션/권한·상태 전이·마감/한도·경합/결과 유실·화면 안내/정렬·검사/fixture에서 추가로 조치할 결함을 찾지 못했다. 독립 에이전트·GitHub 승인 리뷰가 아니다.
@@ -76,8 +94,8 @@ adb shell am instrument -w -e b8aE2e true -e class com.nurseflow.app.feature.off
 
 - Compose 7개: 초기 제출 확인·상태·철회, 마감 후 예외·철회 없음, 관리자 대리 입력·확정·철회, 정책 확인 저장 4개와 P3 회귀 3개. 가상 API 검사와 실서버 검사를 구분한다.
 - 실서버 기기 1개: 실제 Activity/Compose/HTTP로 간호사 신청→회전→로그아웃→관리자 확정→로그아웃→간호사 재진입 상태 확인. 가상 OIDC 공급자만 사용한다.
-- **기기 검사 실행 미완료**. 기존 Pixel_10(Android 37.2) AVD를 읽기 전용·snapshot 저장 없음·창 숨김으로 시작했다. 기본/SwiftShader, 명시 포트, Vulkan 비활성화·2코어/2GB 최소 설정을 시도했으며 게스트 부팅 완료 로그도 있었지만 `adb devices -l`은 연결 기기를 반환하지 않았다. `device 'emulator-5554/5556' not found`, 루프백 ADB 연결 거부/임시 offline이 반복됐다. APK 설치·계측 실행·화면 캡처는 수행되지 않았다. 컴파일 성공을 기기 인수 성공으로 표시하지 않는다.
-- 이번에 만든 에뮬레이터·가상 공급자·메모리 서버만 PID/부모/명령행을 확인해 종료했다. 18090/18091·이번 에뮬레이터 포트의 listen 없음 확인. 사용자 AVD 데이터 초기화·이미지 설치·저장 스냅샷 변경은 하지 않았다. B8a 완료 증명의 기기 두 계정 실서버 시연은 후속으로 남긴다.
+- **초기 기기 연결 실패 이력(현재 해결)**. 기존 Pixel_10(Android 37.2) AVD를 읽기 전용·snapshot 저장 없음·창 숨김으로 시작했다. 기본/SwiftShader, 명시 포트, Vulkan 비활성화·2코어/2GB 최소 설정을 시도했으며 게스트 부팅 완료 로그도 있었지만 `adb devices -l`은 연결 기기를 반환하지 않았다. `device 'emulator-5554/5556' not found`, 루프백 ADB 연결 거부/임시 offline이 반복됐다. 당시 APK 설치·계측 실행·화면 캡처는 수행되지 않았다. 상단의 예약 포트 우회 후 기기 인수 완료 기록이 이를 갱신한다.
+- 초기 시도의 에뮬레이터·가상 공급자·메모리 서버만 PID/부모/명령행을 확인해 종료했다. 사용자 AVD 데이터 초기화·이미지 설치·저장 스냅샷 변경은 하지 않았다. 당시 후속이던 기기 두 계정 실서버 시연은 상단 기록대로 완료했다.
 
 ## 제한·배포·되돌리기
 

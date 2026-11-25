@@ -1,5 +1,17 @@
 # 공유 작업 현황
 
+## B8a 기기 인수 완료·PR 마무리 (2026-11-25 20:44 KST, Codex)
+
+- 사용자 지적을 반영해 미완료를 Draft로 넘기던 중단 지점에서 계속 작업했다. 같은 공유 worktree·`feat/android-off-requests`·기존 PR #62를 유지했다. **기기 Compose 7개와 두 계정 실서버 1개를 모두 실행해 완료했다.** 아래의 기기 미완료/Draft 대기 기록은 당시 이력이며 이 절이 갱신한다.
+- 원인 확인: Windows TCP 예약 범위 `5517~5616` 때문에 5554/5562/5584 바인딩이 실제 권한 오류였다. 빈 18082/18083 바인딩 성공을 확인해 콘솔/ADB를 옮겼다. Windows 예약 설정·기존 Pixel_10·사용자 DB/trace는 변경하지 않았다. 같은 Android 37.2 x86_64 이미지를 쓰는 검증 전용 AVD를 무시되는 `android/app/build/b8a-avd/`에 만들었고 디버깅 인증 후 `emulator-18082`에서 앱·기기 테스트 APK를 설치했다.
+- 첫 Compose 실행 **5개 성공·2개 실패**: 화면 밖 LazyColumn 항목을 바로 조회한 검사 오류였다. `performScrollToNode`로 실제 스크롤·표시를 확인하도록 고치고, 같은 패턴을 실서버 검사에서도 조회 결과 대기에 적용했다. 수정 후 Compose 단독 **7/7 성공**.
+- 최종 `android/scripts/verify-off-requests.ps1 -Serial emulator-18082 -Adb <SDK 경로> -WithServer`: **OK (8 tests), 37.328초, 실패/오류/건너뜀 0**. 가상 API 화면 7개와 실제 Activity/Compose/Retrofit/Spring/H2 두 계정 1개다. 간호사 신청→Activity 재생성→로그아웃→관리자 로그인·확정→로그아웃→간호사 재로그인·확정 상태/철회 불가 및 서버 재조회 일치를 확인했다. 인증 공급자/신원은 가상 OIDC이며 실제 Kakao 인증과 구분한다.
+- 관리자·간호사 확정 화면 PNG와 계측 로그를 `android/app/build/b8a-device-results/`에 수집·직접 열어 확인했다. 가상 간호사의 같은 확정 상태, 관리자 철회 버튼·본인 철회 없음, 고정 안내·달력 정렬을 확인했다. 산출물은 build에만 두고 커밋하지 않는다. 새 재현 스크립트는 adb exit 0만으로 성공 처리하지 않고 JUnit 성공 수·실패·건너뜀을 확인한다.
+- JDK 21 `:app:assembleDebugAndroidTest :app:lintDebug --offline --no-daemon` **BUILD SUCCESSFUL(39초)**, 57작업 중 7개 실행·50개 UP-TO-DATE. Lint 오류 0·기존 경고 27. 앱/API/ViewModel/서버 운영 코드는 이번에 변경하지 않아 앞서 실행한 JVM **239개 성공·기존 B5a 선택 1개 건너뜀** 결과를 유지한다. `git diff --check` 통과. 계측/스크립트 수정 자체 재확인 완료, 독립 승인이라고 표현하지 않는다.
+- 검증 후 이번 전용 AVD·가상 공급자·메모리 서버만 명령행/부모 관계를 확인해 종료했고 18082/18083/18085/18090/18091 listen 없음 확인. 사용자 AVD와 DB는 보존했다.
+- `git fetch origin` 후 최신 dev는 여전히 `3e30752`이며 추가 통합 없음. 기존 최종 head `81dfa90`의 Verify `45603850392`는 Android/Web/Demo/Backend 4개 모두 성공을 확인했다. 이번 보완을 푸시하고 PR 본문을 완료된 인수 결과로 갱신해 Draft를 해제하며, 보완 head의 CI도 확인한다.
+- 같은 브랜치에 검사 2파일·재현 스크립트·Android README·검증/PR 초안·이 기록만 반영한다. 사용자 DB/trace 보존·제외. API/DB/환경/의존성 변경·수동 배포 없음, Android 검사/문서 영향. 롤백은 이번 인수 보완 커밋 revert(기존 앱/API 동작 유지). 실제 Kakao·물리 기기·운영·독립 승인은 별도 범위로 남긴다. 병합·자동 병합·리뷰 요청/댓글·수동 배포 없음.
+
 ## B8a Draft PR #62 게시 확인 (2026-11-25, Codex)
 
 - 사용자 요청으로 B8a 변경 17파일을 `d889ddb84ea29f4ee1e87855a152e2a3984c00cb`에 커밋하고 `origin/feat/android-off-requests`로 푸시했다. 로컬/원격 head 일치, 최신 dev `3e30752` 포함을 확인했다. 사용자 `nurseflow.mv.db`·`nurseflow.trace.db`는 미추적 상태로 보존·커밋 제외했다.

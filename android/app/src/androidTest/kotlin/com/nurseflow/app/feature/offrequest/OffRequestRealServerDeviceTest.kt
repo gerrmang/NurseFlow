@@ -1,6 +1,7 @@
 package com.nurseflow.app.feature.offrequest
 
 import android.content.Intent
+import android.graphics.Bitmap
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
 import androidx.test.core.app.ActivityScenario
@@ -22,6 +23,7 @@ import org.junit.Assert.*
 import org.junit.Assume.assumeTrue
 import org.junit.runner.RunWith
 import java.time.YearMonth
+import java.io.File
 import java.util.UUID
 
 /** Opt-in real Activity/Compose/Retrofit/Spring; fixture OIDC identities are fictional, no SDK login. */
@@ -69,6 +71,23 @@ class OffRequestRealServerDeviceTest {
         container.session.loginWithKakao(token("member"), "fictional-nonce")
         app.useContainer(container)
         fun waitText(text: String) { rule.waitUntil(15_000) { rule.onAllNodesWithText(text, substring = false).fetchSemanticsNodes().isNotEmpty() } }
+        fun waitListText(text: String) {
+            rule.waitUntil(15_000) {
+                try {
+                    rule.onNodeWithTag("off-list").performScrollToNode(hasText(text, substring = false))
+                    rule.onNodeWithText(text, substring = false).assertIsDisplayed()
+                    true
+                } catch (_: AssertionError) { false }
+            }
+        }
+        fun proof(name: String) {
+            rule.waitForIdle()
+            val screenshot = requireNotNull(instrumentation.uiAutomation.takeScreenshot())
+            File(context.getExternalFilesDir(null), name).outputStream().use {
+                check(screenshot.compress(Bitmap.CompressFormat.PNG, 100, it))
+            }
+            screenshot.recycle()
+        }
         try {
             ActivityScenario.launch<MainActivity>(Intent(context, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)).use { scenario ->
                 waitText("희망 오프")
@@ -82,11 +101,11 @@ class OffRequestRealServerDeviceTest {
                 rule.onNodeWithText("10", substring = false).performScrollTo().performClick()
                 rule.onNode(hasText("신청", substring = false) and hasClickAction()).performScrollTo().performClick()
                 rule.onNodeWithText("제출", substring = false).performClick()
-                waitText("${month.atDay(10)} · 신청")
-                rule.onNodeWithText("${month.atDay(10)} · 신청").performScrollTo().assertExists()
+                waitListText("${month.atDay(10)} · 신청")
                 scenario.recreate()
-                waitText("${month.atDay(10)} · 신청")
-                rule.onNodeWithText("‹ 병동 목록").performScrollTo().performClick()
+                waitListText("${month.atDay(10)} · 신청")
+                waitListText("‹ 병동 목록")
+                rule.onNodeWithText("‹ 병동 목록").performClick()
                 rule.onNodeWithText("로그아웃", substring = false).performClick()
                 waitText("카카오 로그인")
                 assertEquals(SessionState.SignedOut, container.session.state.value)
@@ -95,22 +114,23 @@ class OffRequestRealServerDeviceTest {
                 rule.onNodeWithText("희망 오프", substring = false).performScrollTo().performClick()
                 waitText("관리자 취합·판단")
                 repeat(2) { rule.onNodeWithText("다음 달 ›").performScrollTo().performClick(); rule.waitForIdle() }
-                waitText("${month.atDay(10)} · 신청")
+                waitListText("${month.atDay(10)} · 신청")
                 rule.onNodeWithText("확정", substring = false).performScrollTo().performClick()
                 rule.onNode(hasText("확정", substring = false) and hasAnyAncestor(isDialog())).performClick()
-                waitText("${month.atDay(10)} · 확정")
-                rule.onNodeWithText("${month.atDay(10)} · 확정").performScrollTo().assertExists()
-                rule.onNodeWithText("‹ 병동 목록").performScrollTo().performClick()
+                waitListText("${month.atDay(10)} · 확정")
+                proof("b8a-admin-confirmed.png")
+                waitListText("‹ 병동 목록")
+                rule.onNodeWithText("‹ 병동 목록").performClick()
                 rule.onNodeWithText("로그아웃", substring = false).performClick()
                 waitText("카카오 로그인")
                 container.session.loginWithKakao(token("member"), "fictional-nonce")
                 waitText("희망 오프"); rule.onNodeWithText("희망 오프", substring = false).performScrollTo().performClick()
                 waitText("내 희망 오프")
                 repeat(2) { rule.onNodeWithText("다음 달 ›").performScrollTo().performClick(); rule.waitForIdle() }
-                waitText("${month.atDay(10)} · 확정")
-                rule.onNodeWithText("${month.atDay(10)} · 확정").performScrollTo().assertExists()
+                waitListText("${month.atDay(10)} · 확정")
                 rule.onNodeWithText("철회", substring = false).assertDoesNotExist()
                 assertEquals("CONFIRMED", ApiFactory.offRequestApi(base, member).list(ward.wardId, month.toString()).items.single().status)
+                proof("b8a-nurse-confirmed.png")
             }
         } finally { container.session.logout(); app.useContainer(original) }
     }

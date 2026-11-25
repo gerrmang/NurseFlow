@@ -144,3 +144,22 @@ adb shell am instrument -w -e class com.nurseflow.app.core.session.AppContainerL
 저장 결과가 불명확하면 자동 재전송하지 않습니다. 최신 목록과 이력을 확인하고 **최신 목록 확인 후 계속**으로 재개합니다. 재조회·화면 이탈 때 미저장 입력은 초기화될 수 있습니다. 마감 절대시각은 기기 시간대로 표시하며, 서버 현재시각과 병동 시간대가 응답에 없어 기기 시각이 틀리면 안내와 서버 판단이 다를 수 있습니다.
 
 실행 명령·검증 결과·미검증 항목은 [B8a-verification.md](B8a-verification.md)를 확인하세요. 실제 Kakao 인증과 가상 OIDC로 확인한 실서버 연동은 구분합니다.
+
+기기 인수는 앱·테스트 APK를 빌드하고 `node android/scripts/b8a-server.mjs`로 고립된 서버를 실행한 뒤, 저장소 루트에서 아래처럼 실행합니다. 사용자 데이터와 분리된 테스트 에뮬레이터를 지정하세요.
+
+```powershell
+./android/scripts/verify-off-requests.ps1 -Serial emulator-18082 -WithServer
+```
+
+`adb`가 PATH에 없으면 `-Adb <SDK의 platform-tools/adb.exe 경로>`를 전달합니다. 스크립트는 화면 7개와 두 계정 실서버 1개가 모두 성공했는지 확인하며, `adb`의 종료 코드가 0이어도 JUnit 실패·건너뜀은 실패로 처리합니다. 로그와 가상 관리자·간호사 화면은 무시되는 `app/build/b8a-device-results/`에 저장합니다.
+
+### Windows에서 에뮬레이터가 ADB에 보이지 않을 때
+
+기본 포트 재시도 전에 `netsh interface ipv4 show excludedportrange protocol=tcp`로 Windows 예약 범위를 확인합니다. 이 작업 환경에서는 `5517~5616`이 예약돼 기본 에뮬레이터 포트 `5554~5585`에 바인딩할 수 없었습니다. Windows 예약 설정을 바꾸지 않고 빈 포트를 지정할 수 있습니다.
+
+```powershell
+emulator -avd <검증용 AVD> -no-snapshot -ports 18082,18083
+adb devices -l
+```
+
+콘솔 18082·ADB 18083이 비어 있는지 먼저 확인하고, 표시된 USB 디버깅 허용을 처리합니다. `adb devices -l`에서 실제 `device` 상태인 serial을 사용하세요. 같은 기기가 TCP 별칭으로도 표시되면 미인증 별칭 대신 인증된 `emulator-18082`를 선택합니다. `offline`·`unauthorized` 상태나 APK 컴파일만으로 기기 인수를 완료 처리하지 않습니다.
