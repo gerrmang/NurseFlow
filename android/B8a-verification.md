@@ -16,7 +16,7 @@
 - 실제 기기에서 간호사 신청→Activity 재생성→로그아웃→관리자 로그인/확정→로그아웃→간호사 재로그인/확정 상태·철회 불가, 서버 재조회 결과 일치를 확인했다. 인증 공급자·계정은 가상 OIDC이고 Spring/API/DB·화면은 실제 구현이다.
 - `app/build/b8a-device-results/instrumentation.txt`, `b8a-admin-confirmed.png`, `b8a-nurse-confirmed.png`를 수집했다. 두 화면을 직접 열어 가상 간호사 확정 상태, 관리자 철회 제공·본인 철회 없음, 고정 성공 안내와 달력 요일/날짜 정렬을 확인했다. 산출물은 build 아래에만 두고 커밋하지 않는다.
 - 최종 기기 검사 APK/Lint: JDK 21 `:app:assembleDebugAndroidTest :app:lintDebug --offline --no-daemon` **BUILD SUCCESSFUL(39초)**, 57작업 중 7개 실행·50개 UP-TO-DATE, Lint 오류 0·기존 경고 27. 이번 변경은 계측 검사·재현 스크립트·문서이며 API/ViewModel/운영 코드는 그대로다. 앞서 실행한 JVM 239개/실제 Spring opt-in 성공은 유지한다. `git diff --check` 통과.
-- Android README에 Windows 예약 포트 점검·우회와 재현 명령을 남겼다. 기기 인수 완료 결과로 PR 본문을 갱신하고 Draft를 해제한다. 실제 Kakao 인증·물리 기기·운영 검증과 독립 승인은 별도 범위로 명시한다.
+- Android README에 Windows 예약 포트 점검·우회와 재현 명령을 남겼다. 기기 인수 보완 `3b8cd34`를 푸시하고 [PR #62](https://github.com/gerrmang/NurseFlow/pull/62) 본문을 완료 결과로 갱신했으며 **Draft 해제(isDraft=false)**를 재조회로 확인했다. 실제 Kakao 인증·물리 기기·운영 검증과 독립 승인은 별도 범위로 명시한다.
 
 ## PR 게시 전 최종 확인 (2026-11-25)
 

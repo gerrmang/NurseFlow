@@ -1,5 +1,12 @@
 # 공유 작업 현황
 
+## B8a PR #62 일반 PR 전환 확인 (2026-11-25, Codex)
+
+- 기기 인수 보완 7파일을 `3b8cd345b547666aa5bc3a7d8193a95a1a10f485`에 커밋·푸시했다. PR #62 본문을 실제 Android **8/8 성공·실패/건너뜀 0**, 두 계정 실서버 인수·Windows 예약 포트 해결·재현 명령으로 갱신하고 **Draft를 해제했다**. GitHub 재조회로 OPEN·isDraft=false·dev 대상·MERGEABLE·REVIEW_REQUIRED/BLOCKED를 확인했다. 병합이나 승인 완료를 뜻하지 않는다.
+- 연결 도구의 본문 갱신과 Ready 전환은 integration 권한 403으로 실패해 기존 인증된 `gh pr edit --body-file`·`gh pr ready`로 완료했다. 새 PR·중복 브랜치·worktree를 만들지 않았다.
+- 보완 head Verify [45607890815](https://github.com/gerrmang/NurseFlow/actions/runs/45607890815)는 조회 시 IN_PROGRESS, 이전 `81dfa90` Verify [45603850392](https://github.com/gerrmang/NurseFlow/actions/runs/45603850392)는 4개 전체 성공이다. 이 게시 기록 커밋을 포함한 최종 head의 CI도 별도 확인한다. 문서 기록만 추가하므로 기기/앱 검사를 반복하지 않는다.
+- B8a의 구현·자체 재검토·JVM/실제 Spring/실제 기기 화면/두 계정 인수·일반 PR 전환을 완료했다. 같은 공유 worktree·`feat/android-off-requests`·PR #62에서 인계한다. 실제 Kakao·물리 기기·운영·독립 승인은 별도 범위다. 사용자 DB/trace는 보존·커밋 제외했고 이번 검증 프로세스/포트는 정리했다. 병합·자동 병합·리뷰 요청/댓글·수동 배포 없음.
+
 ## B8a 기기 인수 완료·PR 마무리 (2026-11-25 20:44 KST, Codex)
 
 - 사용자 지적을 반영해 미완료를 Draft로 넘기던 중단 지점에서 계속 작업했다. 같은 공유 worktree·`feat/android-off-requests`·기존 PR #62를 유지했다. **기기 Compose 7개와 두 계정 실서버 1개를 모두 실행해 완료했다.** 아래의 기기 미완료/Draft 대기 기록은 당시 이력이며 이 절이 갱신한다.
