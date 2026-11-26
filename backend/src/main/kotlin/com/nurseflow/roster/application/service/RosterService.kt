@@ -44,6 +44,7 @@ class RosterService(
     private val mapper: JsonMapper,
     private val replays: MutationReplayRepository,
     private val supportAllowances: SupportAllowanceJdbcRepository,
+    private val setupReadiness: SetupReadinessService,
 ) {
     private val validator = RosterRuleValidator()
     private val diagnosticList = object : TypeReference<List<RuleDiagnostic>>() {}
@@ -333,6 +334,8 @@ class RosterService(
         if (repo.activeNurseCount(roster.wardId) > 200) {
             throw BusinessException(ErrorCode.GENERATION_TOO_LARGE, safeDetail = "자동배치 한도는 활성 간호사 200명입니다.")
         }
+        // A18: required settings must exist before generation; senior and other notices never block.
+        setupReadiness.requireReadyForGeneration(roster)
         val job = GenerationJob(UUID.randomUUID(), rosterId, "QUEUED", roster.revision, Instant.now(), progressPercent = 0)
         repo.insertGenerationJob(
             job.jobId, rosterId, subject, roster.revision,

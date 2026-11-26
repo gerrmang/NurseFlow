@@ -75,6 +75,7 @@ enum class ErrorCode(val status: HttpStatus, val safeMessage: String) {
     REST_DAY_CONFLICT(HttpStatus.CONFLICT, "휴식일이 기존 근무 배정 또는 승인 연차와 겹칩니다."),
     ROSTER_REQUIREMENTS_REQUIRED(HttpStatus.UNPROCESSABLE_CONTENT, "필요 인원을 설정한 뒤 확정해 주세요."),
     RULE_VIOLATION(HttpStatus.UNPROCESSABLE_CONTENT, "배치할 수 없는 근무 칸입니다."),
+    SETUP_INCOMPLETE(HttpStatus.UNPROCESSABLE_CONTENT, "필수 설정이 빠져 자동배치를 시작할 수 없습니다."),
     SHIFT_SPANS_MIDNIGHT_MISMATCH(HttpStatus.UNPROCESSABLE_CONTENT, "자정 통과 여부가 시작·종료 시각과 맞지 않습니다."),
     SHIFT_TYPE_CODE_DUPLICATE(HttpStatus.CONFLICT, "같은 코드의 근무 유형이 이미 있습니다."),
     SHIFT_TYPE_NOT_FOUND(HttpStatus.BAD_REQUEST, "근무 유형을 찾을 수 없습니다."),

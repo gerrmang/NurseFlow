@@ -1,5 +1,14 @@
 # 공유 작업 현황
 
+## A18 설정 준비 상태·생성 전 점검 구현 (2026-11-26, Claude)
+
+- `origin/dev` `d6f69de`에서 `claude/project-thread-1tgx42`로 분기했다. 새 API: `GET /api/v1/wards/{wardId}/setup-readiness`(병동 준비 상태), `GET /api/v1/rosters/{rosterId}/generation-precheck`(초안 생성 전 점검). 둘 다 관리자 전용·조회 전용이며 `Cache-Control: private, no-store`, ETag 없음.
+- 항목 상태는 COMPLETE/DEFAULT/WARNING/MISSING. 생성을 막는 필수 항목(MISSING)은 활성 D/E/N 근무 유형 0개, 편성 가능한 간호사 0명, 그 달 필요 인원 칸 0개 세 가지다. `POST /rosters/{id}/generation-jobs`는 이 중 하나라도 있으면 422 `SETUP_INCOMPLETE`로 거부하고 작업을 만들지 않으며, `ruleViolations`에 `SETUP_<항목>`을 하나씩 담는다.
+- 알림 항목(생성 막지 않음): D/E/N 일부 누락, 팀 미지정 간호사, 선임 없는 팀, 목표 시간 정책 미입력(DEFAULT), 그 달 공휴일 미수신, 확정하지 않은 희망 오프, 초안 재검증 필요. 팀·근무 종류별 선임 필요 칸 대비 가용 선임(근무 형태 반영)과 월 상한(월 일수 - floor(월 일수 / (최대 연속 + 1)))을 비교해 NO_SENIOR·MONTHLY_CAPACITY·SAME_DAY 부족을 보여준다. 팀 간 지원 허용은 공급에 넣지 않았다.
+- 스키마 변경 없음(`schema.sql` 미수정). `RosterService`는 생성자 의존성 1개와 `startGeneration`의 점검 호출 2줄만 바뀌었다. 새 코드는 `roster/domain/readiness/**`, `SetupReadiness*` 파일에 있다.
+- 검증: `./gradlew test` 318개 중 315 통과·5 건너뜀·3 실패. 실패 3건은 `HospitalDatasetSearchHttpTest`의 한글 파일 경로 `InvalidPathException`(이 컨테이너 로캘 문제)이며 `LC_ALL=C.UTF-8`로 다시 실행해 통과했다. 새 테스트 9개(`SetupReadinessEvaluatorTest` 7, `SetupReadinessHttpTest` 2) 통과.
+- 남은 일: 기본값을 관리자가 "확인"했는지 저장하는 기능은 없다(스키마 필요). Night 전담·SOF 준비 항목은 A15 병합 뒤 추가. 클라이언트(B10a/b, 설정 홈) 연동 전. PR 병합·배포하지 않았다.
+
 ## B8a PR #62 최신 dev(B7a #60) 통합 (2026-11-26, Claude)
 
 - 사용자 요청으로 `feat/android-off-requests`에 B7a(#60)가 병합된 `origin/dev` `3c777e9`를 병합했다. 충돌 6파일(`AppContainer.kt`, `ApiFactory.kt`, `WardListScreen.kt`, `NurseFlowRoot.kt`, `android/README.md`, 이 문서)은 모두 양쪽을 함께 유지해 해결했다.
