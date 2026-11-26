@@ -33,6 +33,8 @@ import com.nurseflow.app.feature.staff.StaffAdminScreen
 import com.nurseflow.app.feature.staff.StaffAdminViewModel
 import com.nurseflow.app.feature.offrequest.OffRequestScreen
 import com.nurseflow.app.feature.offrequest.OffRequestViewModel
+import com.nurseflow.app.feature.schedule.ScheduleSettingsScreen
+import com.nurseflow.app.feature.schedule.ScheduleSettingsViewModel
 
 @Composable
 fun NurseFlowRoot(container: AppContainer) {
@@ -48,6 +50,7 @@ fun NurseFlowRoot(container: AppContainer) {
     var adminWardId by rememberSaveable(sessionKey) { mutableStateOf<String?>(null) }
     var staffWardId by rememberSaveable(sessionKey) { mutableStateOf<String?>(null) }
     var offWardId by rememberSaveable(sessionKey) { mutableStateOf<String?>(null) }
+    var scheduleWardId by rememberSaveable(sessionKey) { mutableStateOf<String?>(null) }
     var wardEntry by rememberSaveable(sessionKey) { mutableStateOf(0) }
     var pasting by remember(sessionKey) { mutableStateOf(false) }
     var creatingWard by rememberSaveable(sessionKey) { mutableStateOf(false) }
@@ -101,6 +104,7 @@ fun NurseFlowRoot(container: AppContainer) {
                             val adminWard = loaded?.firstOrNull { it.wardId == adminWardId && it.isAdmin }
                             val staffWard = loaded?.firstOrNull { it.wardId == staffWardId && it.isAdmin }
                             val offWard = loaded?.firstOrNull { it.wardId == offWardId }
+                            val scheduleWard = loaded?.firstOrNull { it.wardId == scheduleWardId && it.isAdmin }
                             // Created for the whole session so a newer link replaces, not duplicates, the flow.
                             // One fixed-key model; reset() on entry and exit means flows never pile up in the store.
                             val createModel = viewModel(key = "ward-create") {
@@ -134,6 +138,7 @@ fun NurseFlowRoot(container: AppContainer) {
                                         selectedWardId = wardId
                                         staffWardId = null
                                         offWardId = null
+                                        scheduleWardId = null
                                         wardEntry += 1
                                     }
                                 }
@@ -157,6 +162,17 @@ fun NurseFlowRoot(container: AppContainer) {
                                     }
                                     OffRequestScreen(offWard.wardName, off) { offWardId = null; wardsModel.reload(silent = true) }
                                 }
+                                scheduleWard != null -> {
+                                    val settings = viewModel(key = "schedule-${scheduleWard.wardId}") {
+                                        ScheduleSettingsViewModel(container.scheduleSettingsApi(), scheduleWard.wardId,
+                                            memberships = { container.api.wards().items },
+                                            sessionValid = { val now = container.session.state.value; now is SessionState.SignedIn && now.userId == current.userId && now.generation == current.generation },
+                                            onSessionInvalid = { container.logout() })
+                                    }
+                                    ScheduleSettingsScreen(scheduleWard.wardName, settings,
+                                        onBack = { scheduleWardId = null; wardsModel.reload(silent = true) },
+                                        onForbidden = { scheduleWardId = null; staffWardId = null; selectedWardId = null; wardsModel.reload() })
+                                }
                                 staffWard != null -> {
                                     val staff = viewModel(key = "staff-${staffWard.wardId}") {
                                         StaffAdminViewModel(container.staffAdminApi(), staffWard.wardId,
@@ -166,7 +182,8 @@ fun NurseFlowRoot(container: AppContainer) {
                                     }
                                     StaffAdminScreen(staffWard.wardName, staff,
                                         onBack = { staffWardId = null; wardsModel.reload(silent = true) },
-                                        onForbidden = { staffWardId = null; selectedWardId = null; wardsModel.reload() })
+                                        onForbidden = { staffWardId = null; selectedWardId = null; wardsModel.reload() },
+                                        onScheduleSettings = { scheduleWardId = staffWard.wardId })
                                 }
                                 adminWard != null -> {
                                     BackHandler { adminWardId = null }
@@ -192,6 +209,7 @@ fun NurseFlowRoot(container: AppContainer) {
                                     onLogout = container::logout,
                                     onManageStaff = { staffWardId = it.wardId },
                                     onOffRequests = { offWardId = it.wardId },
+                                    onScheduleSettings = { scheduleWardId = it.wardId },
                                 )
                                 else -> {
                                     BackHandler { selectedWardId = null }
