@@ -1,6 +1,5 @@
-@font-face { font-family: 'Noto Sans KR'; src: url('./assets/NotoSansKR.woff2') format('woff2'); font-weight: 100 900; font-style: normal; font-display: swap; }
 @font-face { font-family: Inter; src: url('./assets/Inter.woff2') format('woff2'); font-weight: 100 900; font-style: normal; font-display: swap; }
-:root { --bg: #f4f6f8; --surface: #fff; --subtle: #eef2f5; --text: #18212b; --muted: #5b6775; --border: #e3e8ee; --border-strong: #c5ced8; --brand: #0f8b7e; --primary: #0e7c71; --brand-deep: #0b5f57; --brand-soft: #e0f3f0; --error: #d1343a; --error-soft: #fdecec; --warning: #8f5800; --warning-soft: #fff4db; --info: #2456b8; --info-soft: #e7eefb; --kakao: #fee500; --kakao-text: #191600; color-scheme: light; font-family: 'Noto Sans KR', sans-serif; font-size: 14px; line-height: 20px; font-synthesis: none; text-rendering: optimizeLegibility; -webkit-font-smoothing: antialiased; }
+:root { --bg: #f4f6f8; --surface: #fff; --subtle: #eef2f5; --text: #18212b; --muted: #5b6775; --border: #e3e8ee; --border-strong: #c5ced8; --brand: #0f8b7e; --primary: #0e7c71; --brand-deep: #0b5f57; --brand-soft: #e0f3f0; --error: #d1343a; --error-soft: #fdecec; --warning: #8f5800; --warning-soft: #fff4db; --info: #2456b8; --info-soft: #e7eefb; --kakao: #fee500; --kakao-text: #191600; color-scheme: light; font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans KR', 'Malgun Gothic', sans-serif; font-size: 14px; line-height: 20px; font-synthesis: none; text-rendering: optimizeLegibility; -webkit-font-smoothing: antialiased; }
 * { box-sizing: border-box; }
 body { margin: 0; background: var(--bg); color: var(--text); }
 button, input, select, textarea { font: inherit; }
@@ -85,6 +84,7 @@ button.link:hover:not(:disabled) { background: transparent; text-decoration: und
 .segmented { display: flex; gap: 4px; padding: 4px; background: var(--subtle); border-radius: 999px; margin: 16px 0; }
 .segmented button, .segmented button.secondary { flex: 1; min-height: 36px; padding: 7px 10px; border: 0; border-radius: 999px; background: transparent; color: var(--muted); font-size: 13px; font-weight: 500; }
 .segmented button[aria-pressed='true'] { background: var(--surface); color: var(--text); font-weight: 700; box-shadow: 0 1px 2px #0f172914; }
+.staff-page { max-width: 1040px; }
 .admin-fields { border: 0; margin: 0; padding: 0; min-width: 0; }
 .staff-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr)); gap: 0 16px; }
 .team-editor { padding: 16px 0; border-top: 1px solid var(--border); margin-top: 16px; }
@@ -93,8 +93,10 @@ button.link:hover:not(:disabled) { background: transparent; text-decoration: und
 .staff-directory > form { padding: 16px; margin: 12px 0; background: var(--surface); border: 1px solid var(--border); border-radius: 16px; }
 .staff-team { margin: 20px 0; }
 .staff-team h3 { margin: 0 0 12px; }
-.staff-list { margin: 0; overflow: hidden; background: var(--surface); border: 1px solid var(--border); border-radius: 16px; }
-.staff-list li + li { border-top: 1px solid var(--border); }
+.staff-list li { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; padding: 12px 0; border-bottom: 1px solid var(--border); overflow-wrap: anywhere; }
+.staff-directory .staff-list > li { display: block; padding: 0; border-bottom: 0; }
+.staff-directory .staff-list { margin: 0; overflow: hidden; background: var(--surface); border: 1px solid var(--border); border-radius: 16px; }
+.staff-directory .staff-list li + li { border-top: 1px solid var(--border); }
 button.staff-row { display: flex; width: 100%; justify-content: flex-start; gap: 8px; min-height: 72px; padding: 12px 16px; border: 0; border-radius: 0; background: var(--surface); color: var(--text); text-align: left; }
 button.staff-row:hover:not(:disabled) { background: var(--brand-soft); }
 button.staff-row:focus-visible { outline-offset: -3px; }
@@ -164,7 +166,7 @@ button.roster-day:hover { background: var(--subtle); }
 .roster-counts { display: none; }
 .roster-note { padding: 16px; border: 1px solid var(--border); border-radius: 16px; background: var(--surface); }
 .login-brand { display: flex; flex: 1; flex-direction: column; align-items: center; justify-content: center; gap: 16px; min-height: 300px; padding: 40px 24px; }
-.login-brand > h1 { display: flex; }
+.login-brand-logo { display: flex; }
 .login-brand > p { color: var(--muted); font-size: 14px; }
 .login-actions { display: flex; flex-direction: column; align-items: stretch; gap: 16px; padding: 0 24px max(40px, env(safe-area-inset-bottom)); }
 .login-actions .actions { margin: 0; }
@@ -206,7 +208,7 @@ button.roster-day:hover { background: var(--subtle); }
   .login-entry .login-brand { display: none; }
   .login-actions { width: 440px; max-width: 100%; padding: 40px 40px 36px; gap: 14px; background: white; border: 1px solid var(--border); border-radius: 20px; }
   .login-desktop-title { display: block; }
-  .login-desktop-title h1 { font-size: 26px; line-height: 36px; margin-bottom: 8px; }
+  .login-desktop-title h2 { font-size: 26px; line-height: 36px; margin-bottom: 8px; }
   .login-desktop-title p { color: var(--muted); }
   .page.roster-page { display: grid; grid-template-columns: 232px minmax(0, 1fr); max-width: none; padding: 0; }
   .roster-sidebar { display: flex; flex-direction: column; gap: 20px; padding: 24px 16px; background: white; border-right: 1px solid var(--border); }

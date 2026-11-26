@@ -113,10 +113,10 @@ function StaffList({ data, store, run, onSelect }: { data: StaffData; store: Sta
       return <section className="staff-team" key={teamId}>
         <h3>{nurses[0]?.team?.name ?? '팀 미지정'} · {nurses.length}명 · 선임 {nurses.filter((item) => item.seniorEligible).length}</h3>
         <ul className="staff-list">{nurses.map((item) => <li key={item.nurseId}>
-          <button className="staff-row" aria-label={item.displayName} onClick={() => onSelect(item.nurseId)}>
-            <span className="staff-order">{item.teamOrder ?? '—'}</span>
-            <span className="staff-row-copy"><strong>{item.displayName}{item.seniorEligible && <span className="senior-mark" aria-label="선임 자격 있음"> ★</span>}</strong><span>{item.team?.name ?? '미배정'} · 편성 {stage(item.rosterStage)} · {item.active ? '기록 활성' : '기록 비활성'}</span></span>
-            <span className={`badge ${item.linkedAccount ? '' : 'badge-muted'}`}>{item.linkedAccount ? '계정 연결됨' : '계정 미연결'}</span>
+          <button className="staff-row" aria-label={item.displayName} aria-describedby={`staff-info-${item.nurseId} staff-account-${item.nurseId}`} onClick={() => onSelect(item.nurseId)}>
+            <span className="staff-order" aria-hidden="true">{item.teamOrder ?? '—'}</span>
+            <span className="staff-row-copy"><strong>{item.displayName}{item.seniorEligible && <span className="senior-mark" aria-hidden="true"> ★</span>}</strong><span id={`staff-info-${item.nurseId}`}>{item.team?.name ?? '미배정'} · 팀 안 순서 {item.teamOrder ?? '미지정'} · 편성 {stage(item.rosterStage)} · {item.active ? '기록 활성' : '기록 비활성'}{item.seniorEligible && <span className="sr-only"> · 선임 자격 있음</span>}</span></span>
+            <span id={`staff-account-${item.nurseId}`} className={`badge ${item.linkedAccount ? '' : 'badge-muted'}`}>{item.linkedAccount ? '계정 연결됨' : '계정 미연결'}</span>
             <span className="row-chevron" aria-hidden="true">›</span>
           </button>
         </li>)}</ul>

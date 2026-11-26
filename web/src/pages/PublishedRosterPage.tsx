@@ -117,12 +117,12 @@ function WardMonthTable({ calendar, selected, onSelect }: { calendar: WardCalend
       <thead><tr><th scope="col">간호사</th>{dates.map(date => <th key={date} scope="col">
         <button type="button" aria-label={`${date} 선택`} aria-pressed={date === selected} onClick={() => onSelect(date)}>{Number(date.slice(-2))}</button>
       </th>)}</tr></thead>
-      <tbody>{[...nurses].map(([id, nurse]) => <tr key={id}>
+      <tbody>{[...nurses].sort(([idA, a], [idB, b]) => a.name.localeCompare(b.name, 'ko') || idA.localeCompare(idB)).map(([id, nurse]) => <tr key={id}>
         <th scope="row">{nurse.name}</th>{dates.map(date => <td key={date} className={date === selected ? 'selected-column' : ''}>
           {nurse.days.get(date)?.map(slot => <ShiftChip key={slot.slotId} code={slot.shiftCode} />)}
         </td>)}
       </tr>)}</tbody>
     </table>
-    <p className="notice">공개된 근무 배정이 있는 간호사만 표시합니다.</p>
+    <p className="notice">공개된 근무 배정이 있는 간호사만 이름순으로 표시합니다.</p>
   </div>
 }

@@ -5,9 +5,10 @@ import { json, USER_A, USER_B } from '../test/fakeAuthServer'
 import { WARD_1 } from '../test/fakeInvitationBackend'
 
 const path = `/wards/${WARD_1.wardId}/published-roster`
-function setup(options: { admin?: boolean; permission?: boolean; code?: string; status?: number; empty?: boolean } = {}) {
+function setup(options: { admin?: boolean; permission?: boolean; code?: string; status?: number; empty?: boolean; multipleNurses?: boolean } = {}) {
   const requests: string[] = []
   let failure = options.code
+  let reverseSlots = false
   const app = setupApp(path, { configure: ({ server, backend }) => {
     server.signInAs(USER_A)
     const base = backend.fetch
@@ -19,16 +20,21 @@ function setup(options: { admin?: boolean; permission?: boolean; code?: string; 
         const month = new URL(input, 'http://local').searchParams.get('month')!
         const common = { wardId: WARD_1.wardId, month, revision: 4, timeZone: 'Asia/Seoul' }
         const start = `${month}-01T13:00:00Z`, end = `${month}-01T22:00:00Z`
-        return input.includes('/mine?') ? json(200, { ...common, assignments: options.empty ? [] : [{ date: `${month}-01`, shiftType: '가상N', startsAt: start, endsAt: end }] })
-          : json(200, { ...common, staffing: { required: 2, assigned: 1, unfilled: 1, hardRuleViolations: 0 }, slots: [
+        const slots = [
             { slotId: '1', date: `${month}-01`, shiftCode: '가상N', shiftKind: 'NIGHT', startAt: start, endAt: end, status: 'FILLED', assignment: { nurseId: 'a', displayName: '가상 간호사', locked: false } },
             { slotId: '2', date: `${month}-01`, shiftCode: '가상N', shiftKind: 'NIGHT', startAt: start, endAt: end, status: 'UNFILLED', assignment: null },
-          ] })
+          ]
+        if (options.multipleNurses) {
+          slots.unshift({ ...slots[0]!, slotId: '3', assignment: { nurseId: 'b', displayName: '가상 나', locked: false } })
+          slots.push({ ...slots[0]!, slotId: '4', shiftCode: '가상D', assignment: { nurseId: 'c', displayName: '가상 간호사', locked: false } })
+        }
+        return input.includes('/mine?') ? json(200, { ...common, assignments: options.empty ? [] : [{ date: `${month}-01`, shiftType: '가상N', startsAt: start, endsAt: end }] })
+          : json(200, { ...common, staffing: { required: slots.length, assigned: slots.length - 1, unfilled: 1, hardRuleViolations: 0 }, slots: reverseSlots ? slots.reverse() : slots })
       }
       return base(input, init)
     })
   } })
-  return { ...app, requests, recover: () => { failure = undefined } }
+  return { ...app, requests, recover: () => { failure = undefined }, reverseSlots: () => { reverseSlots = true } }
 }
 
 it('offers published roster entry for both nurses and admins on the ward list', async () => {
@@ -57,6 +63,19 @@ it('hides ward tab without permission, including for an admin', async () => {
   setup({ permission: false, admin: true, empty: true })
   expect(await screen.findByText('이번 달 배정된 근무가 없습니다.')).toBeInTheDocument()
   expect(screen.queryByRole('button', { name: '병동 전체' })).not.toBeInTheDocument()
+})
+it('keeps nurse rows in name and ID order when the slot response is reversed', async () => {
+  const app = setup({ admin: true, multipleNurses: true })
+  await screen.findByRole('region', { name: '병동 전체 공개 근무표' })
+  const rows = () => within(screen.getByRole('table')).getAllByRole('rowheader')
+  expect(rows().map(row => row.textContent)).toEqual(['가상 간호사', '가상 간호사', '가상 나'])
+  const firstDayCodes = () => rows().map(row => within(row.parentElement!).getAllByRole('cell')[0]!.textContent)
+  expect(firstDayCodes()).toEqual(['가상N', '가상D', '가상N'])
+  app.reverseSlots()
+  await userEvent.click(screen.getByRole('button', { name: '새로고침' }))
+  await screen.findByRole('region', { name: '병동 전체 공개 근무표' })
+  expect(rows().map(row => row.textContent)).toEqual(['가상 간호사', '가상 간호사', '가상 나'])
+  expect(firstDayCodes()).toEqual(['가상N', '가상D', '가상N'])
 })
 it.each([['PUBLISHED_ROSTER_NOT_FOUND', 404, '아직 확정된 근무표가 없습니다.'], ['WARD_NOT_FOUND', 404, '소속 병동을 확인할 수 없습니다.'], ['FORBIDDEN', 403, '이 근무표를 조회할 권한이 없습니다.'], ['NETWORK', 0, '서버에 연결할 수 없어요.']])('distinguishes %s and retries', async (code, status, message) => {
   // NETWORK uses a synthetic server code to exercise the same user-facing mapping.

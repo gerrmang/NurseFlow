@@ -1,5 +1,15 @@
 # 공유 작업 현황
 
+## PR #64 리뷰 수정 (2026-11-26, Codex)
+
+- 공유 worktree `C:\Users\jjang\IdeaProjects\NurseFlow`, 기존 `fix/web-figma-ui`, 기준 HEAD `2012e68`에서 [리뷰](https://github.com/gerrmang/NurseFlow/pull/64#pullrequestreview-6069089093)를 반영했다. 사용자 DB 두 파일은 그대로 보존했다.
+- P2: `.staff-page`의 1040px 상한을 복원하고, 공통 `.staff-list li`의 세로 배치·여백을 복원했다. 카드형 목록 스타일은 `.staff-directory` 안에만 적용해 구성원 접근 목록과 후속 #59 근무 설정 목록으로 번지지 않게 했다. 본문은 시스템 글꼴로 전환하고 Noto Sans KR 전체 파일·관련 라이선스를 제거했다. 최종 빌드의 폰트 자산은 Inter 350.34kB만 남는다.
+- P3: 로그인 버튼의 보이는 문구와 접근 가능한 이름을 `카카오로 로그인`으로 통일하고 화면 크기와 무관하게 h1을 하나만 제공한다. 간호사 행은 `aria-describedby`로 팀·팀 내 순서·편성 단계·활성 상태·선임 자격·계정 연결 여부를 설명한다. 밝은 테마 고정 결정을 `web/README.md`에 기록했다.
+- 공개 월간 표는 slot 응답 순서 대신 이름·동명이인 ID순으로 안정 정렬하고 표시 기준을 안내한다. **팀별 정렬은 후속 계약 보완 사항**이다. 공개 Assignment에는 소속 팀·팀 내 순서가 없으며, StaffingSlot의 `teamId`는 지원근무의 배치 팀일 수 있어 소속 팀으로 추정하지 않았다. 관리자 전용 staff API를 간호사 공개 화면에 추가 호출하지 않았다.
+- 최종 검증: web `npm run api:check`, `npm run typecheck`, `npm run lint`, `npm run build` 성공. `npm test -- --run`: 397개 통과·기존 opt-in 3개 건너뜀·실패 0. 로그인 접근성·행 설명·응답 역순 및 동명이인 정렬 회귀 검증 포함. `git diff --check` 성공. 이번 수정 diff를 자체 재검토했다. 독립 재리뷰·브라우저 시각 검증·실제 스크린리더·실제 Kakao·실서버·Android·backend 검사는 이번에 실행하지 않았다.
+- API·DB·환경 변경 없음. 웹 정적 자산만 영향이 있고 시스템 글꼴에 따라 자폭·줄바꿈이 달라질 수 있다. 롤백은 수정 커밋 revert 후 웹 정적 빌드 재배포다.
+- 인계: 같은 브랜치의 PR #64로 이어간다. #59의 `근무 설정` 링크는 추후 통합 시 segmented 탭 nav 밖의 이동 링크로 배치하고, #61의 `.off-page` 규칙을 유지한다. #59~#62의 문서 충돌은 양쪽 진행 기록을 보존한다. 다른 열린 PR을 이번 브랜치에 선행 병합하지 않았다. 원격 CI는 수정 커밋 게시 후 별도로 확인하며 병합·수동 배포하지 않는다.
+
 ## 웹 기존 화면 디자인 반영·재검증 (2026-11-26, Codex)
 
 - 공유 worktree `C:\Users\jjang\IdeaProjects\NurseFlow`, `fix/web-figma-ui`, 기준 HEAD `3e30752`. 이후 origin/dev의 #63은 문서만 추가하며 웹 코드 차이는 없다. 로그인·병동 선택/생성·초대·구성원·공개 근무표의 기존 기능에 디자인을 반영했다. Android·서버·API·DB·환경 변경 없음.
