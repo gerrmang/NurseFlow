@@ -6,7 +6,7 @@ import { json, USER_A } from '../test/fakeAuthServer'
 import { OFF_ADMIN, OFF_MEMBER, OFF_ITEM, OFF_POLICY, OFF_ELIGIBILITY } from '../test/offRequestFixtures'
 
 const path = `/wards/${OFF_ADMIN.wardId}/off-requests`
-function setup(options: { admin?: boolean; late?: boolean; empty?: boolean; limit?: number; failure?: string; status?: OffRequest['status']; writeFailure?: string; uncertain?: boolean } = {}) {
+function setup(options: { admin?: boolean; secondNurse?: boolean; late?: boolean; empty?: boolean; limit?: number; failure?: string; status?: OffRequest['status']; writeFailure?: string; uncertain?: boolean } = {}) {
   let items: OffRequest[] = options.empty ? [] : [{ ...OFF_ITEM, status: options.status ?? 'SUBMITTED', afterDeadline: !!options.late }]
   let failure = options.failure
   let monthlyLimit = options.limit ?? 4
@@ -17,7 +17,7 @@ function setup(options: { admin?: boolean; late?: boolean; empty?: boolean; limi
     const base = backend.fetch
     vi.spyOn(backend, 'fetch').mockImplementation(async (input, init) => {
       if (input.endsWith('/wards')) return json(200, { items: [options.admin ? OFF_ADMIN : OFF_MEMBER] })
-      if (input.includes('/roster-eligibility')) return json(200, OFF_ELIGIBILITY)
+      if (input.includes('/roster-eligibility')) return json(200, options.secondNurse ? { ...OFF_ELIGIBILITY, items: [...OFF_ELIGIBILITY.items, { ...OFF_ELIGIBILITY.items[0], nurseId: 'fictional-nurse-b', displayName: '가상 간호사 나' }] } : OFF_ELIGIBILITY)
       if (input.includes('/off-requests')) {
         if (init?.method === 'POST' || init?.method === 'PUT') {
           const body = init.body ? JSON.parse(String(init.body)) : undefined
@@ -200,4 +200,16 @@ it('links a filtered admin grid request to its existing decision card without wr
   expect(app.writes).toHaveLength(0)
   await userEvent.selectOptions(screen.getByLabelText('상태 필터'), 'CONFIRMED')
   expect(within(screen.getByRole('region', { name: '병동 희망 오프 월간 표' })).queryByRole('link')).not.toBeInTheDocument()
+})
+
+it('describes calendar request status and restricts proxy markers to the selected nurse', async () => {
+  setup({ admin: true, secondNurse: true })
+  await screen.findByRole('form', { name: '대리 입력' })
+  const month = (screen.getByLabelText('대상 월') as HTMLInputElement).value
+  const day = screen.getByRole('button', { name: month + '-01 선택' })
+  expect(day).toHaveAccessibleDescription('등록된 요청 없음')
+  await userEvent.selectOptions(screen.getByLabelText('대상 간호사'), OFF_ITEM.nurseId)
+  expect(day).toHaveAccessibleDescription('신청')
+  await userEvent.selectOptions(screen.getByLabelText('대상 간호사'), 'fictional-nurse-b')
+  expect(day).toHaveAccessibleDescription('등록된 요청 없음')
 })

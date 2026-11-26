@@ -100,7 +100,7 @@ function OffContent({ data, month, locked, store }: { data: OffData; month: stri
         {admin && <label className="field">대상 간호사<select required value={nurseId} onChange={e => store.updateDraft({ nurseId: e.target.value })}><option value="">선택해 주세요</option>{nurses.filter(item => item.eligible).map(item => <option key={item.nurseId} value={item.nurseId}>{item.displayName}</option>)}</select></label>}
         {admin && data.eligibility?.demoMode && <p className="notice">시연 모드 · 가상 데이터가 편성 대상에 포함됩니다.</p>}
         {admin && !nurses.some(item => item.eligible) && <p>대리 입력 가능한 간호사가 없어요. 팀·구성원 관리에서 확인해 주세요.</p>}
-        <OffCalendar month={month} items={data.list.items} selected={date} disabled={locked} onSelect={date => store.updateDraft({ date })} />
+        <OffCalendar month={month} items={admin ? data.list.items.filter(item => item.nurseId === nurseId) : data.list.items} selected={date} disabled={locked} onSelect={date => store.updateDraft({ date })} />
         <label className="field off-date-field">희망 날짜<input type="date" required min={`${month}-01`} max={monthDates(month).at(-1)!} value={date} onChange={e => store.updateDraft({ date: e.target.value })} /></label>
         <p className="notice">날짜 변경은 철회 후 다시 신청해 주세요. 확정된 요청과 마감 후 요청의 변경은 관리자에게 문의해 주세요.</p>
         <button disabled={locked || !validDate(date) || !date.startsWith(`${month}-`) || (admin ? !nurses.some(item => item.nurseId === nurseId && item.eligible) : count >= data.list.monthlyLimit)}>{admin ? late ? '예외 대리 접수' : '대리 입력' : late ? '예외 요청 제출' : '신청'}</button>

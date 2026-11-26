@@ -1,18 +1,20 @@
+import { useId } from 'react'
 import type { OffRequest } from '../api/offRequestApi'
 import { monthDates } from '../roster/calendar'
 
 const statusLabel = { SUBMITTED: '신청', CONFIRMED: '확정', REJECTED: '반려', WITHDRAWN: '철회' }
 
 export function OffCalendar({ month, items, selected, disabled, onSelect }: { month: string; items: OffRequest[]; selected: string; disabled: boolean; onSelect: (date: string) => void }) {
+  const descriptionId = useId()
   return <div className="off-calendar-wrap">
     <div className="off-calendar" aria-label={`${month} 희망 날짜 선택`}>
       {['일', '월', '화', '수', '목', '금', '토'].map(day => <span className="off-weekday" key={day}>{day}</span>)}
       {monthDates(month).map((date, index) => {
         if (!date) return <span key={`blank-${index}`} />
         const requests = items.filter(item => item.date === date)
-        return <button type="button" className="off-calendar-day" key={date} disabled={disabled} aria-label={`${date} 선택`} aria-pressed={selected === date} onClick={() => onSelect(date)}>
+        return <button type="button" className="off-calendar-day" key={date} disabled={disabled} aria-label={`${date} 선택`} aria-describedby={`${descriptionId}-${date}`} aria-pressed={selected === date} onClick={() => onSelect(date)}>
           <span>{Number(date.slice(-2))}</span>
-          <span className="off-date-status">{requests.map(item => <span key={item.requestId} className={`off-dot off-status-${item.status.toLowerCase()}`} title={statusLabel[item.status]}>{statusLabel[item.status]}</span>)}</span>
+          <span id={`${descriptionId}-${date}`} className="off-date-status">{requests.length === 0 && <span className="sr-only">등록된 요청 없음</span>}{requests.map(item => <span key={item.requestId} className={`off-dot off-status-${item.status.toLowerCase()}`} title={statusLabel[item.status]}>{statusLabel[item.status]}</span>)}</span>
         </button>
       })}
     </div>
