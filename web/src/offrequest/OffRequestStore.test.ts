@@ -9,7 +9,7 @@ function setup(admin = false) {
     policy: vi.fn().mockResolvedValue(OFF_POLICY), savePolicy: vi.fn().mockResolvedValue(OFF_POLICY), eligibility: vi.fn().mockResolvedValue(OFF_ELIGIBILITY),
   } satisfies OffRequestApi
   const wards = { getWards: vi.fn().mockResolvedValue({ items: [admin ? OFF_ADMIN : OFF_MEMBER] }) }
-  const store = new OffRequestStore(OFF_ADMIN.wardId, api, wards, new Date('2031-03-01T00:00:00Z'))
+  const store = new OffRequestStore(OFF_ADMIN.wardId, api, wards, new Date(2031, 1, 1))
   return { api, wards, store }
 }
 it('only fetches own list for a nurse, and admin policy and targets for an admin', async () => {
@@ -112,4 +112,72 @@ it('ignores responses across disposal and reactivation, including a write reload
   expect(fresh.busy).toBe(false); expect(fresh.uncertain).toBe(true)
   resolveOld(OFF_LIST); await mutation
   expect(store.getSnapshot()).toBe(fresh)
+})
+
+it.each([new Date(2031, 10, 30), new Date(2031, 11, 31)])('opens next month including the year boundary %s', now => {
+  const { api, wards } = setup()
+  const store = new OffRequestStore(OFF_ADMIN.wardId, api, wards, now)
+  expect(store.getSnapshot().month).toBe(now.getMonth() === 11 ? '2032-01' : '2031-12')
+})
+it('retries a mixed policy snapshot once and displays the consistent result', async () => {
+  const { store, api } = setup(true)
+  api.list.mockResolvedValueOnce({ ...OFF_LIST, monthlyLimit: 3 })
+  await store.reload()
+  expect(api.list).toHaveBeenCalledTimes(2)
+  expect(api.policy).toHaveBeenCalledTimes(2)
+  expect(store.getSnapshot().stale).toBe(false)
+  expect(store.getSnapshot().data?.list.monthlyLimit).toBe(4)
+  expect(api.savePolicy).not.toHaveBeenCalled()
+})
+it('bounds snapshot retries and explains repeated policy changes', async () => {
+  const { store, api } = setup(true)
+  api.list.mockResolvedValue({ ...OFF_LIST, monthlyLimit: 3 })
+  await store.reload()
+  expect(api.list).toHaveBeenCalledTimes(2)
+  expect(store.getSnapshot().data).toBeNull()
+  expect(store.getSnapshot().notice).toContain('조회 중 정책이 다시 변경')
+})
+it('discards a late snapshot retry after another month is selected', async () => {
+  const { store, api } = setup(true)
+  let resolve!: (value: typeof OFF_LIST) => void
+  api.list.mockResolvedValueOnce({ ...OFF_LIST, monthlyLimit: 3 }).mockImplementationOnce(() => new Promise(r => { resolve = r }))
+  const old = store.reload()
+  await vi.waitFor(() => expect(api.list).toHaveBeenCalledTimes(2))
+  store.selectMonth('2031-04')
+  await vi.waitFor(() => expect(store.getSnapshot().loading).toBe(false))
+  const fresh = store.getSnapshot()
+  resolve(OFF_LIST); await old
+  expect(store.getSnapshot()).toBe(fresh)
+})
+it('preserves request inputs and filters on rejection and clears only inputs on success', async () => {
+  const { store, api } = setup(true); await store.reload()
+  const draft = { date: OFF_ITEM.date, nurseId: OFF_ITEM.nurseId, filterNurse: OFF_ITEM.nurseId, filterStatus: 'SUBMITTED', exceptions: true }
+  store.updateDraft(draft)
+  api.submit.mockRejectedValueOnce(new ApiError(409, 'OFF_REQUEST_DUPLICATE'))
+  await store.submit(draft.date, draft.nurseId)
+  expect(store.getSnapshot().draft).toEqual(draft)
+  await store.submit(draft.date, draft.nurseId)
+  expect(store.getSnapshot().draft).toEqual({ ...draft, date: '', nurseId: '' })
+  await store.reload()
+  expect(store.getSnapshot().draft.filterNurse).toBe(draft.nurseId)
+})
+it('clears drafts on month change, access loss and disposal', async () => {
+  const { store, api } = setup(); await store.reload()
+  store.updateDraft({ date: OFF_ITEM.date, filterStatus: 'SUBMITTED' })
+  store.selectMonth('2031-04')
+  expect(store.getSnapshot().draft.date).toBe('')
+  await vi.waitFor(() => expect(store.getSnapshot().loading).toBe(false))
+  store.updateDraft({ date: '2031-04-01' })
+  api.list.mockRejectedValueOnce(new ApiError(403, 'FORBIDDEN')); await store.reload()
+  expect(store.getSnapshot().draft.date).toBe('')
+  store.updateDraft({ filterStatus: 'SUBMITTED' }); store.dispose()
+  expect(store.getSnapshot().draft.filterStatus).toBe('')
+})
+it('clears admin drafts after failed reload and subsequent role change', async () => {
+  const { store, api, wards } = setup(true); await store.reload()
+  store.updateDraft({ nurseId: OFF_ITEM.nurseId, filterNurse: OFF_ITEM.nurseId })
+  api.list.mockRejectedValueOnce(new ApiError(503, 'HTTP_503')); await store.reload()
+  wards.getWards.mockResolvedValue({ items: [OFF_MEMBER] }); await store.reload()
+  expect(store.getSnapshot().draft.nurseId).toBe('')
+  expect(store.getSnapshot().draft.filterNurse).toBe('')
 })

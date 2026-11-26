@@ -46,11 +46,7 @@ function OffContent({ data, month, locked, store }: { data: OffData; month: stri
   const [now, setNow] = useState(Date.now)
   useEffect(() => { const timer = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(timer) }, [])
   const late = deadlinePassed(data.list, now)
-  const [date, setDate] = useState('')
-  const [nurseId, setNurse] = useState('')
-  const [filterNurse, setFilterNurse] = useState('')
-  const [filterStatus, setFilterStatus] = useState('')
-  const [exceptions, setExceptions] = useState(false)
+  const { date, nurseId, filterNurse, filterStatus, exceptions } = store.getSnapshot().draft
   const [pending, setPending] = useState<{ item: OffRequest; action: Decision } | null>(null)
   const confirmation = useRef<HTMLElement>(null)
   useEffect(() => { if (pending) confirmation.current?.focus() }, [pending])
@@ -75,10 +71,10 @@ function OffContent({ data, month, locked, store }: { data: OffData; month: stri
     <form className="card" aria-label={admin ? '대리 입력' : '본인 신청'} onSubmit={submit}>
       <h2>{admin ? '간호사 대리 입력' : late ? '예외 요청' : '희망 날짜 신청'}</h2>
       <fieldset className="admin-fields" disabled={locked}>
-        {admin && <label className="field">대상 간호사<select required value={nurseId} onChange={e => setNurse(e.target.value)}><option value="">선택해 주세요</option>{nurses.filter(item => item.eligible).map(item => <option key={item.nurseId} value={item.nurseId}>{item.displayName}</option>)}</select></label>}
+        {admin && <label className="field">대상 간호사<select required value={nurseId} onChange={e => store.updateDraft({ nurseId: e.target.value })}><option value="">선택해 주세요</option>{nurses.filter(item => item.eligible).map(item => <option key={item.nurseId} value={item.nurseId}>{item.displayName}</option>)}</select></label>}
         {admin && data.eligibility?.demoMode && <p className="notice">시연 모드 · 가상 데이터가 편성 대상에 포함됩니다.</p>}
         {admin && !nurses.some(item => item.eligible) && <p>대리 입력 가능한 간호사가 없어요. 팀·구성원 관리에서 확인해 주세요.</p>}
-        <label className="field">희망 날짜<input type="date" required min={`${month}-01`} max={monthDates(month).at(-1)!} value={date} onChange={e => setDate(e.target.value)} /></label>
+        <label className="field">희망 날짜<input type="date" required min={`${month}-01`} max={monthDates(month).at(-1)!} value={date} onChange={e => store.updateDraft({ date: e.target.value })} /></label>
         <p className="notice">날짜 변경은 철회 후 다시 신청해 주세요. 확정된 요청과 마감 후 요청의 변경은 관리자에게 문의해 주세요.</p>
         <button disabled={locked || !validDate(date) || !date.startsWith(`${month}-`) || (admin ? !nurses.some(item => item.nurseId === nurseId && item.eligible) : count >= data.list.monthlyLimit)}>{admin ? late ? '예외 대리 접수' : '대리 입력' : late ? '예외 요청 제출' : '신청'}</button>
       </fieldset>
@@ -86,10 +82,10 @@ function OffContent({ data, month, locked, store }: { data: OffData; month: stri
     <section className="card" aria-label="희망 오프 목록">
       <h2>{admin ? '병동 요청 취합' : '본인 요청과 이력'}</h2>
       <div className="staff-grid">
-        {admin && <label className="field">간호사 필터<select value={filterNurse} onChange={e => setFilterNurse(e.target.value)}><option value="">전체</option>{[...new Set(data.list.items.map(item => item.nurseId))].map(id => <option key={id} value={id}>{name(id)}</option>)}</select></label>}
-        <label className="field">상태 필터<select value={filterStatus} onChange={e => setFilterStatus(e.target.value)}><option value="">전체</option>{Object.entries(offStatus).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
+        {admin && <label className="field">간호사 필터<select value={filterNurse} onChange={e => store.updateDraft({ filterNurse: e.target.value })}><option value="">전체</option>{[...new Set(data.list.items.map(item => item.nurseId))].map(id => <option key={id} value={id}>{name(id)}</option>)}</select></label>}
+        <label className="field">상태 필터<select value={filterStatus} onChange={e => store.updateDraft({ filterStatus: e.target.value })}><option value="">전체</option>{Object.entries(offStatus).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
       </div>
-      <label className="check"><input type="checkbox" checked={exceptions} onChange={e => setExceptions(e.target.checked)} />마감 후 예외만 보기</label>
+      <label className="check"><input type="checkbox" checked={exceptions} onChange={e => store.updateDraft({ exceptions: e.target.checked })} />마감 후 예외만 보기</label>
       {list.length === 0 && <p role="status">표시할 요청이 없어요.</p>}
       <ul className="history-list">{list.map(item => <li key={item.requestId}>
         <strong>{item.date}{admin && ` · ${name(item.nurseId)}`}</strong>

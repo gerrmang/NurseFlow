@@ -1,11 +1,14 @@
 import { ApiError, asApiError } from '../api/http'
 import type { NurseFlowApi } from '../api/nurseflowApi'
-import { invalid, validDate, type Decision, type OffEligibility, type OffPolicy, type OffPolicyInput, type OffRequest, type OffRequestApi, type OffRequestList } from '../api/offRequestApi'
+import { validDate, type Decision, type OffEligibility, type OffPolicy, type OffPolicyInput, type OffRequest, type OffRequestApi, type OffRequestList } from '../api/offRequestApi'
 import type { WardMembership } from '../api/types'
-import { validMonth } from '../roster/PublishedRosterStore'
+import { moveMonth, validMonth } from '../roster/PublishedRosterStore'
 
 export interface OffData { ward: WardMembership; list: OffRequestList; policy: OffPolicy | null; eligibility: OffEligibility | null }
+interface Draft { date: string; nurseId: string; filterNurse: string; filterStatus: string; exceptions: boolean }
+const emptyDraft = (): Draft => ({ date: '', nurseId: '', filterNurse: '', filterStatus: '', exceptions: false })
 interface State {
+  draft: Draft
   month: string; data: OffData | null; loading: boolean; busy: boolean; uncertain: boolean; stale: boolean
   notice: string | null; error: boolean; version: number
 }
@@ -19,6 +22,7 @@ const messages: Record<string, string> = {
   WARD_NOT_FOUND: '소속 병동을 확인할 수 없어요. 내 병동 목록을 확인해 주세요.',
   OFF_REQUEST_NOT_FOUND: '요청을 찾을 수 없어요. 최신 목록을 확인해 주세요.',
   NURSE_NOT_FOUND: '선택한 간호사는 현재 편성 대상이 아니에요. 최신 목록을 확인해 주세요.',
+  POLICY_SNAPSHOT_CHANGED: '조회 중 정책이 다시 변경됐어요. 새로고침해 최신 목록을 확인해 주세요.',
   INVALID_REQUEST: '신청 날짜와 입력값을 확인해 주세요. 지난 날짜의 본인 신청은 할 수 없어요.',
 }
 const accessError = (e: ApiError) => e.status === 401 || e.status === 403 || ['WARD_NOT_FOUND', 'USER_NOT_FOUND', 'SESSION_EXPIRED', 'ABORTED'].includes(e.code)
@@ -31,24 +35,27 @@ export const deadlinePassed = (list: OffRequestList, now = Date.now()) => now >=
 export class OffRequestStore {
   private state: State
   private ticket = 0
+  private draftAdmin: boolean | null = null
   private disposed = false
   private listeners = new Set<() => void>()
   constructor(readonly wardId: string, private api: OffRequestApi, private memberships: Pick<NurseFlowApi, 'getWards'>, now = new Date()) {
-    this.state = { month: `${now.getFullYear().toString().padStart(4, '0')}-${String(now.getMonth() + 1).padStart(2, '0')}`, data: null, loading: true, busy: false, uncertain: false, stale: true, notice: null, error: false, version: 0 }
+    this.state = { draft: emptyDraft(), month: moveMonth(`${now.getFullYear().toString().padStart(4, '0')}-${String(now.getMonth() + 1).padStart(2, '0')}`, 1), data: null, loading: true, busy: false, uncertain: false, stale: true, notice: null, error: false, version: 0 }
   }
   getSnapshot = () => this.state
   subscribe = (fn: () => void) => { this.listeners.add(fn); return () => { this.listeners.delete(fn) } }
   private patch(patch: Partial<State>) { if (!this.disposed) { this.state = { ...this.state, ...patch }; this.listeners.forEach(fn => fn()) } }
+  updateDraft(patch: Partial<Draft>) { this.patch({ draft: { ...this.state.draft, ...patch } }) }
   activate() { this.disposed = false }
   dispose() {
     this.disposed = true; ++this.ticket
-    this.state = { ...this.state, data: null, busy: false, loading: true, stale: true, notice: null, uncertain: this.state.uncertain || this.state.busy }
+    this.draftAdmin = null
+    this.state = { ...this.state, draft: emptyDraft(), data: null, busy: false, loading: true, stale: true, notice: null, uncertain: this.state.uncertain || this.state.busy }
   }
   private current(ticket: number) { return !this.disposed && ticket === this.ticket }
   acknowledge() { if (!this.state.stale && !this.state.loading && !this.state.busy) this.patch({ uncertain: false, notice: '결과를 확인했어요. 필요한 작업을 계속해 주세요.', error: false }) }
   selectMonth(month: string) {
     if (!validMonth(month) || this.state.busy || this.state.uncertain) return
-    this.patch({ month }); void this.reload()
+    this.patch({ month, draft: emptyDraft() }); void this.reload()
   }
   async reload(fromWrite = false): Promise<boolean> {
     if (this.disposed || (this.state.busy && !fromWrite)) return false
@@ -61,15 +68,22 @@ export class OffRequestStore {
       const ward = items.find(item => item.wardId === this.wardId)
       if (!ward || !ward.roles.some(role => role === 'WARD_ADMIN' || role === 'WARD_MEMBER')) throw new ApiError(404, 'WARD_NOT_FOUND')
       const admin = ward.roles.includes('WARD_ADMIN')
-      const [list, policy, eligibility] = await Promise.all([this.api.list(month), admin ? this.api.policy() : null, admin ? this.api.eligibility() : null])
+      if (this.draftAdmin !== null && this.draftAdmin !== admin) this.patch({ draft: emptyDraft() })
+      this.draftAdmin = admin
+      let [list, policy, eligibility] = await Promise.all([this.api.list(month), admin ? this.api.policy() : null, admin ? this.api.eligibility() : null])
       if (!this.current(ticket)) return false
-      if (policy && policy.value.monthlyLimit !== list.monthlyLimit) throw invalid()
+      // Reads can straddle another admin's policy save. Retry reads once; never retry writes.
+      if (policy && policy.value.monthlyLimit !== list.monthlyLimit) {
+        ;[list, policy, eligibility] = await Promise.all([this.api.list(month), this.api.policy(), this.api.eligibility()])
+      }
+      if (!this.current(ticket)) return false
+      if (policy && policy.value.monthlyLimit !== list.monthlyLimit) throw new ApiError(409, 'POLICY_SNAPSHOT_CHANGED')
       this.patch({ data: { ward, list, policy, eligibility }, loading: false, stale: false, version: this.state.version + 1 })
       return true
     } catch (error) {
       if (!this.current(ticket)) return false
       const e = asApiError(error)
-      this.patch({ loading: false, stale: true, data: null, error: true, notice: messages[e.code] ?? (accessError(e) ? '접근 권한이나 로그인 상태가 변경됐어요. 내 병동 목록을 확인해 주세요.' : '최신 목록을 불러오지 못했어요. 다시 불러와 주세요.') })
+      this.patch({ ...(accessError(e) ? { draft: emptyDraft() } : {}), loading: false, stale: true, data: null, error: true, notice: messages[e.code] ?? (accessError(e) ? '접근 권한이나 로그인 상태가 변경됐어요. 내 병동 목록을 확인해 주세요.' : '최신 목록을 불러오지 못했어요. 다시 불러와 주세요.') })
       return false
     }
   }
@@ -78,7 +92,10 @@ export class OffRequestStore {
     if (!data || !validDate(date) || !date.startsWith(`${this.state.month}-`)) return Promise.resolve(false)
     const admin = isAdmin(data)
     if (admin ? !data.eligibility?.items.some(item => item.nurseId === nurseId && item.eligible) : nurseId !== undefined || ownCount(data.list.items) >= data.list.monthlyLimit) return Promise.resolve(false)
-    return this.run('신청', () => this.api.submit(date, admin ? nurseId : undefined))
+    return this.run('신청', () => this.api.submit(date, admin ? nurseId : undefined)).then(success => {
+      if (success) this.updateDraft({ date: '', nurseId: '' })
+      return success
+    })
   }
   decide(requestId: string, action: Decision) {
     const data = this.state.data, item = data?.list.items.find(item => item.requestId === requestId)
@@ -112,7 +129,7 @@ export class OffRequestStore {
       if (!this.current(ticket)) return false
       const e = asApiError(error)
       if (accessError(e)) {
-        this.patch({ busy: false, stale: true, data: null, error: true, notice: '접근 권한이나 로그인 상태가 변경됐어요. 내 병동 목록을 확인해 주세요.' })
+        this.patch({ draft: emptyDraft(), busy: false, stale: true, data: null, error: true, notice: '접근 권한이나 로그인 상태가 변경됐어요. 내 병동 목록을 확인해 주세요.' })
         return false
       }
       const uncertain = sent && (e.status === 0 || e.status >= 500 || e.code === 'INVALID_RESPONSE')

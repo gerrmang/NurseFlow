@@ -6,7 +6,7 @@ import { json, USER_A } from '../test/fakeAuthServer'
 import { OFF_ADMIN, OFF_MEMBER, OFF_ITEM, OFF_POLICY, OFF_ELIGIBILITY } from '../test/offRequestFixtures'
 
 const path = `/wards/${OFF_ADMIN.wardId}/off-requests`
-function setup(options: { admin?: boolean; late?: boolean; empty?: boolean; limit?: number; failure?: string; status?: OffRequest['status']; uncertain?: boolean } = {}) {
+function setup(options: { admin?: boolean; late?: boolean; empty?: boolean; limit?: number; failure?: string; status?: OffRequest['status']; writeFailure?: string; uncertain?: boolean } = {}) {
   let items: OffRequest[] = options.empty ? [] : [{ ...OFF_ITEM, status: options.status ?? 'SUBMITTED', afterDeadline: !!options.late }]
   let failure = options.failure
   let monthlyLimit = options.limit ?? 4
@@ -22,6 +22,7 @@ function setup(options: { admin?: boolean; late?: boolean; empty?: boolean; limi
         if (init?.method === 'POST' || init?.method === 'PUT') {
           const body = init.body ? JSON.parse(String(init.body)) : undefined
           writes.push({ path: input, body })
+          if (options.writeFailure) return json(options.writeFailure === 'STALE_POLICY_REVISION' ? 412 : 409, { code: options.writeFailure })
           if (input.endsWith('/policy')) { monthlyLimit = body.monthlyLimit; return new Response(JSON.stringify({ ...OFF_POLICY.value, monthlyLimit, deadlineDay: body.deadlineDay }), { status: 200, headers: { 'Content-Type': 'application/json', ETag: OFF_POLICY.etag } }) }
           const action = input.split('/').at(-1)
           if (action === 'off-requests') {
@@ -135,4 +136,45 @@ it('erases the screen on logout and guards direct signed-out URLs', async () => 
   const app = setup(); await screen.findByRole('region', { name: '희망 오프 목록' }); await act(() => app.manager.logout())
   expect(screen.queryByRole('region', { name: '희망 오프 목록' })).not.toBeInTheDocument()
   act(() => app.navigate(path)); expect(await screen.findByRole('button', { name: '카카오로 로그인' })).toBeInTheDocument()
+})
+
+it.each(['확정', '반려', '철회'])('preserves all filters after %s and reload', async action => {
+  setup({ admin: true, late: true }); await screen.findByRole('form', { name: '대리 입력' })
+  await userEvent.selectOptions(screen.getByLabelText('간호사 필터'), OFF_ITEM.nurseId)
+  await userEvent.selectOptions(screen.getByLabelText('상태 필터'), 'SUBMITTED')
+  await userEvent.click(screen.getByLabelText('마감 후 예외만 보기'))
+  await userEvent.click(screen.getByRole('button', { name: action }))
+  await userEvent.click(screen.getByRole('button', { name: action + ' 실행' }))
+  await screen.findByText(new RegExp(action + ' 완료'))
+  expect(screen.getByLabelText('간호사 필터')).toHaveValue(OFF_ITEM.nurseId)
+  expect(screen.getByLabelText('상태 필터')).toHaveValue('SUBMITTED')
+  expect(screen.getByLabelText('마감 후 예외만 보기')).toBeChecked()
+  expect(screen.getByText('표시할 요청이 없어요.')).toBeInTheDocument()
+  await userEvent.click(screen.getByRole('button', { name: '새로고침' }))
+  await screen.findByRole('form', { name: '대리 입력' })
+  expect(screen.getByLabelText('상태 필터')).toHaveValue('SUBMITTED')
+})
+it.each(['OFF_REQUEST_DUPLICATE', 'OFF_REQUEST_LIMIT_REACHED', 'INVALID_REQUEST'])('preserves rejected proxy inputs for %s until month changes', async writeFailure => {
+  setup({ admin: true, writeFailure }); await screen.findByRole('form', { name: '대리 입력' })
+  await userEvent.selectOptions(screen.getByLabelText('대상 간호사'), OFF_ITEM.nurseId)
+  const date = await selectDate()
+  await userEvent.click(screen.getByRole('button', { name: '대리 입력' }))
+  await screen.findByRole('alert')
+  expect(screen.getByLabelText('희망 날짜')).toHaveValue(date)
+  expect(screen.getByLabelText('대상 간호사')).toHaveValue(OFF_ITEM.nurseId)
+  await userEvent.click(screen.getByRole('button', { name: '다음 달' }))
+  await screen.findByRole('form', { name: '대리 입력' })
+  expect(screen.getByLabelText('희망 날짜')).toHaveValue('')
+  expect(screen.getByLabelText('대상 간호사')).toHaveValue('')
+})
+it('refreshes stale policy values while keeping the request draft', async () => {
+  setup({ admin: true, writeFailure: 'STALE_POLICY_REVISION' }); await screen.findByRole('form', { name: '대리 입력' })
+  const date = await selectDate()
+  fireEvent.change(screen.getByLabelText('월 한도 (0~31일)'), { target: { value: '2' } })
+  fireEvent.change(screen.getByLabelText('전달 마감일 (1~28일)'), { target: { value: '28' } })
+  await userEvent.click(screen.getByRole('button', { name: '정책 저장' }))
+  await screen.findByText(/정책이 변경됐어요/)
+  expect(screen.getByLabelText('월 한도 (0~31일)')).toHaveValue(4)
+  expect(screen.getByLabelText('전달 마감일 (1~28일)')).toHaveValue(15)
+  expect(screen.getByLabelText('희망 날짜')).toHaveValue(date)
 })
