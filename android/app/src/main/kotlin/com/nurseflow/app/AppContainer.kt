@@ -21,6 +21,7 @@ class AppContainer(
     val wardCreationApi = ApiFactory.wardCreationApi(apiBaseUrl, session)
     /** Created inside the session-owned ViewModel factory, so queued writes keep that identity. */
     fun staffAdminApi() = ApiFactory.staffAdminApi(apiBaseUrl, session)
+    fun offRequestApi() = ApiFactory.offRequestApi(apiBaseUrl, session)
     fun scheduleSettingsApi() = ApiFactory.scheduleSettingsApi(apiBaseUrl, session)
     /** Invitation link being handled; memory only, never persisted. */
     val invites = PendingInvitationStore()
