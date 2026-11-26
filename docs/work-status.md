@@ -1,5 +1,13 @@
 # 공유 작업 현황
 
+## B8b 리뷰 수정 푸시·스레드 해결 완료 (2026-11-26, Codex)
+
+- 사용자 명시 요청으로 수정 커밋 aa719ad와 최신 dev 748a0a9 문서 통합을 기존 PR #61 브랜치에 푸시했다. 게시 확인 head 9b4e7c17061b1dccb59bd8df7a5d13480326fdca와 원격 일치. 통합 추가 diff는 docs/holiday-calendar-client-handoff.md와 docs/work-status.md뿐이며 충돌 시 양쪽 현황을 모두 보존했다.
+- GitHub 연결 도구의 스레드 해결은 integration 권한 FORBIDDEN으로 실패해 기존 인증된 gh GraphQL로 처리했다. 해당 리뷰 스레드 5개 모두 해결, 재조회 미해결 0건. PR 기존 본문을 보존하며 수정·검증·제한을 추가했다. 독립 승인·병합과 구분한다.
+- 이 head의 Verify 45761314614 조회 시 Demo/Backend/Android/Web 4개 IN_PROGRESS, Vercel/Preview Comments SUCCESS. PR은 OPEN·MERGEABLE·BLOCKED·autoMergeRequest=null이다. 승인 완료·CI 전체 통과로 표시하지 않는다. 이 게시 기록을 포함하는 최종 문서 head의 CI는 별도다.
+- 제품 코드·테스트는 앞선 검증 스냅샷과 동일함을 SHA256으로 확인했다. 검사를 반복하지 않았고 git diff --check 통과. 이 문서만 후속 커밋·푸시하며 API/DB/환경/배포 영향·롤백은 직전 리뷰 수정 기록과 같다. 같은 worktree·브랜치에서 최종 head CI와 독립 재리뷰/승인 확인으로 인계한다. GitHub PR 병합·자동 병합·수동 배포 없음.
+
+
 ## 공휴일·휴일 달력 클라이언트 인수인계 문서 (2026-11-26, Claude)
 
 - 브랜치 `claude/project-thread-0nhhfg`(최신 `dev` `3e30752`에서 분기). 문서만 추가: `docs/holiday-calendar-client-handoff.md`.
