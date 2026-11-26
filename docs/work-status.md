@@ -1262,3 +1262,15 @@ Claude와 Codex가 같은 진행 기록을 사용한다. PR 또는 정기 리뷰
 - A14 통합(2026-11-24): A14 PR #57 병합본(`db5e412`)을 병합했다. `schema.sql`은 A13 표 뒤에 A14 `cross_team_support_allowances`를 두었고, `ApiTestBase.kt` 초기화 목록은 양쪽 표를 모두 포함한다. `openapi.yaml`은 dev 쪽에 A13 변경(472줄 추가, 삭제 없음)을 다시 적용했고 `schema.gen.ts`는 다시 생성했다. 동작 변경은 없다. 검증: `./gradlew check`(LC_ALL=C.UTF-8) 306개 중 301개 통과·5개 opt-in 건너뜀·실패 0, web api:check·lint·typecheck·테스트 394개 통과(3개 건너뜀)·build 성공.
 - PR #58 재검토(hyen11, P2 1건·P3 1건) 반영: 공휴일 응답은 `totalCount`가 0으로 명시된 경우만 빈 달로 저장하고, `body`·`totalCount` 누락이나 항목 수 불일치는 `HOLIDAY_SOURCE_UNAVAILABLE`로 처리해 저장값을 유지한다. 연차 날짜는 대상 월의 날짜만 확인한다(3일 이상 연차는 가운데 날짜를 온전히 덮으므로 시작일 대체 규칙은 2일 이하 연차에만 적용). 테스트 3개 추가. 검증: `./gradlew check`(LC_ALL=C.UTF-8) 309개 중 304개 통과·5개 opt-in 건너뜀·실패 0.
 - 인계: A14가 먼저 병합되었으므로 PR #58은 최신 dev 기준으로 병합 가능하다.
+
+## A16 확정 확인 기록 구현 (2026-11-26, Claude)
+
+- 브랜치 `claude/project-thread-l8hxs5`(최신 `dev` `d6f69de`에서 분기, 기능 순서표의 `feat/confirm-acknowledgements`에 해당). A15·A18과 동시 진행했다.
+- 확정 요청 `ConfirmRosterRequest`의 `acknowledgeUnfilledCount`를 `acknowledgements`로 대체했다. 일반 미충원(`generalUnfilledSlotIds`), 선임 미충원(`seniorUnfilledSlotIds`), 개인별 목표시간 미달(`hourShortfalls[nurseId, shortfallMinutes]`)을 **각각** 대상별로 보낸다. 서버는 확정 시점에 다시 계산해 비교한다.
+- 순서: 필수 규칙 위반이 있으면 확인과 무관하게 `RULE_VIOLATION`(422). 그다음 항목이 있는 분류의 확인이 없거나 비면 `UNFILLED_ACK_REQUIRED`·`HOUR_SHORTFALL_ACK_REQUIRED`(422), 대상·규모가 하나라도 다르면 `CONFIRM_ACK_MISMATCH`(409, 같은 revision이라도 정책·달력 변경으로 목표 미달이 바뀐 경우 포함). 진단 0건 분류에 항목을 보내도 불일치다. 같은 `Idempotency-Key` 재시도는 처음 결과를 돌려주고 기록을 다시 만들지 않는다.
+- API: `GET /rosters/{rosterId}/confirmation-check`(확정 전 확인 항목, 저장하지 않음, `no-store`), `GET /rosters/{rosterId}/confirmation`(공개 revision의 확인 기록, 없으면 `CONFIRMATION_RECORD_NOT_FOUND` 404). 모두 관리자 전용이며 간호사 공개 근무표 응답에는 섞이지 않는다.
+- DB: `roster_confirmations`(근무표별 헤더, 공개된 revision·확정자·시각), `roster_confirmation_items`(항목별 스냅샷: 칸 날짜·근무·팀 또는 간호사·목표·환산·부족 분, 서버 사유 코드). 마이그레이션 번호 없이 `schema.sql`에 `CREATE TABLE IF NOT EXISTS`로 추가했다.
+- 가정(결정 사항 20 미확정): 확인 기록은 "총량만"이 아니라 **대상별 목록 스냅샷**으로 남긴다(Figma L5W-6 "목표 미달 1명(이도현)" 표시 근거). 목표시간 미달은 활성 편성 대상 간호사만 센다. 사유는 분류별 서버 코드(`UNFILLED_SLOT`·`SENIOR_UNFILLED`·`BELOW_MONTHLY_TARGET`)만 두고, 칸별 세부 원인은 A19 생성 진단으로 넘긴다. 확정자 이름은 응답에 넣지 않았다(저장만).
+- 검증: JDK 21 `./gradlew test`(LC_ALL=C.UTF-8) 318개 실행·실패 0. 새 테스트 `ConfirmAcknowledgementIntegrationTest`(7개: 분류별 누락·불일치·위반 차단·0건·스냅샷 불변·멱등 재시도·권한)와 `ConfirmAcknowledgementHttpTest`(1개). 기존 확정 테스트는 서버 확인 항목을 그대로 보내도록 갱신했다. web `npm run api:gen`·`api:check`·`lint`·`typecheck`·`npm test -- --run`(534개 통과·5개 건너뜀) 성공. opt-in 실서버 web 테스트 2개(`*.server.test.ts`)는 새 요청 형식으로 고쳤으나 실행하지 않았다.
+- 클라이언트 영향: 기존 `acknowledgeUnfilledCount`를 보내는 클라이언트는 400(`INVALID_REQUEST`)이 되고, 빈 본문은 목표 미달이 있으면 422가 된다. 웹·Android 확정 화면(B10a/b)이 새 계약을 사용해야 한다.
+- 인계: A15·A18 PR과 `docs/work-status.md`·`schema.sql`·`openapi.yaml`·`ApiTestBase.kt` 초기화 목록이 겹칠 수 있다. 충돌 시 양쪽 항목을 모두 살린다.

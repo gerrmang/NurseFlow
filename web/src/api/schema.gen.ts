@@ -1433,6 +1433,53 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/rosters/{rosterId}/confirmation-check": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                rosterId: components["parameters"]["RosterId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * 확정 전 확인 항목 조회 (A16)
+         * @description 지금 확정하려면 무엇을 확인해야 하는지 서버가 계산한다. 필수 규칙 위반(blockingViolations)은 확인으로 면제되지 않는다.
+         *     일반 미충원(선임 필수가 아닌 빈 칸), 선임 미충원(선임 필수 빈 칸), 개인별 월 목표시간 미달(hour-diagnostics의 부족)을 따로 돌려준다.
+         *     저장하지 않으며, 목표시간이 정책·달력에도 달려 있어 ETag를 주지 않는다(Cache-Control: private, no-store). 간호사에게는 노출하지 않는다.
+         */
+        get: operations["getRosterConfirmationCheck"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/rosters/{rosterId}/confirmation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                rosterId: components["parameters"]["RosterId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * 공개 revision의 확정 확인 기록 조회 (A16)
+         * @description 확정할 때 관리자가 확인한 항목의 스냅샷이다. 이후 근무 칸·간호사·정책이 바뀌어도 기록은 바뀌지 않는다.
+         *     A16 이전에 공개된 근무표와 초안은 CONFIRMATION_RECORD_NOT_FOUND(404)다. 관리자만 조회한다.
+         */
+        get: operations["getRosterConfirmationRecord"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/rosters/{rosterId}/confirm": {
         parameters: {
             query?: never;
@@ -1448,7 +1495,13 @@ export interface paths {
          * 최신 draft 확정 및 활성 달력에 공개 적용
          * @description 한 번의 원자적 명령이다. 최신 hard rules와 revision을 재검증한 뒤 PUBLISHED snapshot을 적용한다.
          *     필요 인원으로 생성된 근무 칸이 하나도 없는 draft는 ROSTER_REQUIREMENTS_REQUIRED 오류로 확정할 수 없다.
-         *     미충원은 허용한다. 미충원이 있으면 관리자는 표시된 부족 인원 수를 확인하고 acknowledgeUnfilledCount에 같은 값을 보내야 한다.
+         *     필수 배치 규칙 위반이 하나라도 있으면 확인 내용과 관계없이 RULE_VIOLATION(422)로 거부한다(먼저 검사한다).
+         *     일반 미충원, 선임 미충원, 개인별 월 목표시간 미달은 허용하되 각각 대상별로 확인해야 한다(A16).
+         *     관리자는 GET /rosters/{rosterId}/confirmation-check의 항목을 acknowledgements에 그대로 보낸다.
+         *     서버는 확정 시점에 다시 계산해 비교한다. 항목이 있는 분류의 확인이 없거나 비어 있으면
+         *     UNFILLED_ACK_REQUIRED 또는 HOUR_SHORTFALL_ACK_REQUIRED(422), 대상·규모가 하나라도 다르면 CONFIRM_ACK_MISMATCH(409)다.
+         *     진단이 0건인 분류는 생략하거나 빈 목록으로 보낸다. 확정되면 확인한 항목의 스냅샷이 공개 revision과 함께 저장된다.
+         *     같은 Idempotency-Key 재시도는 처음 결과를 돌려주고 기록을 다시 만들지 않는다.
          *     확정 전에는 새 draft가 간호사 달력에 보이지 않는다. 기존 공개본은 새 snapshot 적용 전까지 유지된다.
          */
         post: operations["confirmAndPublishRoster"];
@@ -2332,9 +2385,80 @@ export interface components {
             /** Format: date-time */
             finishedAt?: string;
         };
+        /** @description A16. 이전의 acknowledgeUnfilledCount는 제거되었고 보내면 INVALID_REQUEST(400)다. */
         ConfirmRosterRequest: {
-            /** @description 미충원이 있을 때 최신 staffing.unfilled와 일치해야 한다. 미충원 0이면 생략 가능. */
-            acknowledgeUnfilledCount?: number;
+            acknowledgements?: components["schemas"]["ConfirmAcknowledgements"];
+        };
+        /** @description confirmation-check의 각 분류 항목을 그대로 되돌려 보낸다. 순서는 상관없다. */
+        ConfirmAcknowledgements: {
+            generalUnfilledSlotIds?: string[];
+            seniorUnfilledSlotIds?: string[];
+            hourShortfalls?: {
+                /** Format: uuid */
+                nurseId: string;
+                shortfallMinutes: number;
+            }[];
+        };
+        ConfirmationCheck: {
+            /** Format: uuid */
+            rosterId: string;
+            /** @enum {string} */
+            status: "DRAFT" | "PUBLISHED";
+            revision: number;
+            /** @description DRAFT이고 근무 칸이 있으며 blockingViolations가 없을 때 true. 확인 항목 체크 여부와는 무관하다. */
+            confirmable: boolean;
+            /** @description 필수 배치 규칙 위반. 하나라도 있으면 확인해도 확정할 수 없다. DRAFT가 아니면 빈 목록. */
+            blockingViolations: components["schemas"]["RuleDiagnostic"][];
+            generalUnfilled: components["schemas"]["UnfilledAcknowledgementGroup"];
+            seniorUnfilled: components["schemas"]["UnfilledAcknowledgementGroup"];
+            hourShortfalls: components["schemas"]["HourShortfallAcknowledgementGroup"];
+        };
+        ConfirmationRecord: {
+            /** Format: uuid */
+            rosterId: string;
+            /** @example 2026-12 */
+            month: string;
+            /** @description 이 기록과 함께 공개된 revision */
+            revision: number;
+            /** Format: date-time */
+            confirmedAt: string;
+            generalUnfilled: components["schemas"]["UnfilledAcknowledgementGroup"];
+            seniorUnfilled: components["schemas"]["UnfilledAcknowledgementGroup"];
+            hourShortfalls: components["schemas"]["HourShortfallAcknowledgementGroup"];
+        };
+        UnfilledAcknowledgementGroup: {
+            /** @description 0이면 화면에서 카드를 숨기고 확인할 필요가 없다. */
+            count: number;
+            items: {
+                /** Format: uuid */
+                slotId: string;
+                /** Format: date */
+                date: string;
+                /** Format: uuid */
+                shiftTypeId: string;
+                shiftCode: string;
+                /** Format: uuid */
+                teamId?: string | null;
+                /** @enum {string} */
+                reason: "UNFILLED_SLOT" | "SENIOR_UNFILLED";
+                message: string;
+            }[];
+        };
+        HourShortfallAcknowledgementGroup: {
+            count: number;
+            totalShortfallMinutes: number;
+            /** @description 활성 편성 대상 간호사 중 환산시간이 목표보다 적은 사람. 부족분이 큰 순. */
+            items: {
+                /** Format: uuid */
+                nurseId: string;
+                displayName: string;
+                targetMinutes: number;
+                creditMinutes: number;
+                shortfallMinutes: number;
+                /** @enum {string} */
+                reason: "BELOW_MONTHLY_TARGET";
+                message: string;
+            }[];
         };
         PublishedWardCalendar: {
             /** Format: uuid */
@@ -5927,6 +6051,56 @@ export interface operations {
             409: components["responses"]["Conflict"];
         };
     };
+    getRosterConfirmationCheck: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                rosterId: components["parameters"]["RosterId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 확정 전 확인 항목 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConfirmationCheck"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    getRosterConfirmationRecord: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                rosterId: components["parameters"]["RosterId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 확인 기록 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConfirmationRecord"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
     confirmAndPublishRoster: {
         parameters: {
             query?: never;
@@ -5963,6 +6137,15 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            /** @description CONFIRM_ACK_MISMATCH(확인 내용이 서버 재계산과 다름) 또는 NOT_DRAFT */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
             412: components["responses"]["PreconditionFailed"];
             422: components["responses"]["RuleViolation"];
         };

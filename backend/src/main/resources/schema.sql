@@ -376,3 +376,31 @@ CREATE TABLE IF NOT EXISTS cross_team_support_allowances (
     CHECK (start_date <= end_date)
 );
 CREATE INDEX IF NOT EXISTS ix_support_allowances_ward ON cross_team_support_allowances(ward_id, start_date, end_date);
+
+-- A16: what the admin acknowledged when publishing a roster. One header row per published roster (the revision it
+-- became) and one snapshot row per acknowledged item, so the record does not change when slots, nurses or the
+-- target-hour policy change later. Only targets, sizes and server reason codes: never leave reasons or health data.
+CREATE TABLE IF NOT EXISTS roster_confirmations (
+    roster_id UUID PRIMARY KEY REFERENCES rosters(roster_id),
+    revision INT NOT NULL,
+    confirmed_by VARCHAR(255) NOT NULL,
+    confirmed_at VARCHAR(40) NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS roster_confirmation_items (
+    roster_id UUID NOT NULL REFERENCES roster_confirmations(roster_id),
+    item_no INT NOT NULL,
+    kind VARCHAR(20) NOT NULL CHECK (kind IN ('GENERAL_UNFILLED','SENIOR_UNFILLED','HOUR_SHORTFALL')),
+    slot_id UUID,
+    shift_date DATE,
+    shift_type_id UUID,
+    shift_code VARCHAR(32),
+    team_id UUID,
+    nurse_id UUID,
+    display_name VARCHAR(100),
+    target_minutes INT,
+    credit_minutes INT,
+    shortfall_minutes INT,
+    reason VARCHAR(40) NOT NULL,
+    PRIMARY KEY (roster_id, item_no)
+);

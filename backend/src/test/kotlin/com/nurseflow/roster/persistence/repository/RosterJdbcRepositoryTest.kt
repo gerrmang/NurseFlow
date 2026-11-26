@@ -39,7 +39,7 @@ class RosterJdbcRepositoryTest @Autowired constructor(
 
     @BeforeEach
     fun setup() {
-        listOf("mutation_replays", "generation_jobs", "approved_absences", "roster_slots", "rosters",
+        listOf("mutation_replays", "generation_jobs", "approved_absences", "roster_slots", "roster_confirmation_items", "roster_confirmations", "rosters",
             "shift_types", "off_requests", "nurses", "ward_memberships", "wards").forEach { jdbc.update("DELETE FROM $it") }
         wardId = UUID.randomUUID()
         nurseId = UUID.randomUUID()

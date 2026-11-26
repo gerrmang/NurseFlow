@@ -27,7 +27,19 @@ data class ValidateAssignmentRequest(val slotId: UUID, val nurseId: UUID)
 
 data class AssignNurseRequest(val nurseId: UUID, val locked: Boolean = false)
 
-data class ConfirmRosterRequest(val acknowledgeUnfilledCount: Int? = null)
+/**
+ * A16: the admin echoes each diagnostic the server showed. Null or empty means "not acknowledged"; the server
+ * compares every list with its own calculation at confirm time and rejects any difference.
+ */
+data class ConfirmRosterRequest(val acknowledgements: ConfirmAcknowledgements? = null)
+
+data class ConfirmAcknowledgements(
+    val generalUnfilledSlotIds: List<UUID>? = null,
+    val seniorUnfilledSlotIds: List<UUID>? = null,
+    val hourShortfalls: List<HourShortfallAcknowledgement>? = null,
+)
+
+data class HourShortfallAcknowledgement(val nurseId: UUID, val shortfallMinutes: Int)
 
 data class StartGenerationRequest(
     val preserveLockedAssignments: Boolean,

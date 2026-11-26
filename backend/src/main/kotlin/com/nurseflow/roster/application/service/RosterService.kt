@@ -13,6 +13,7 @@ import com.nurseflow.roster.domain.model.RosterRestDay
 import com.nurseflow.roster.domain.model.RuleSeverity
 import com.nurseflow.roster.domain.model.ShiftAssignment
 import com.nurseflow.roster.domain.model.ShiftKind
+import com.nurseflow.policy.domain.TargetStatus
 import com.nurseflow.roster.domain.rule.ConfirmedOffRequestRule
 import com.nurseflow.roster.domain.rule.ConsecutiveWorkRule
 import com.nurseflow.roster.domain.rule.CrossTeamSupportRule
@@ -23,6 +24,7 @@ import com.nurseflow.roster.persistence.entity.DbNurse
 import com.nurseflow.roster.persistence.entity.DbRoster
 import com.nurseflow.roster.persistence.entity.DbSlot
 import com.nurseflow.roster.persistence.entity.NewSlot
+import com.nurseflow.roster.persistence.repository.ConfirmationJdbcRepository
 import com.nurseflow.roster.persistence.repository.RosterJdbcRepository
 import com.nurseflow.roster.persistence.repository.SupportAllowanceJdbcRepository
 import com.nurseflow.common.idempotency.IdempotencyKeyRaceException
@@ -44,6 +46,8 @@ class RosterService(
     private val mapper: JsonMapper,
     private val replays: MutationReplayRepository,
     private val supportAllowances: SupportAllowanceJdbcRepository,
+    private val hourDiagnostics: HourDiagnosticsService,
+    private val confirmations: ConfirmationJdbcRepository,
 ) {
     private val validator = RosterRuleValidator()
     private val diagnosticList = object : TypeReference<List<RuleDiagnostic>>() {}
@@ -275,6 +279,29 @@ class RosterService(
         return roster.revision + 1
     }
 
+    /**
+     * What confirming this roster would need now (A16): hard violations that block it, and the unfilled slots and
+     * target-hour shortfalls the admin must acknowledge one by one. Read only; the confirm recomputes it.
+     */
+    @Transactional(readOnly = true)
+    fun confirmationCheck(rosterId: UUID, subject: String): ConfirmationCheck {
+        val roster = visibleToAdmin(rosterId, subject)
+        val slots = repo.slots(roster.id)
+        val violations = if (roster.status == "DRAFT" && slots.isNotEmpty()) blockingViolations(roster, slots) else emptyList()
+        return diagnose(roster, slots, violations, subject)
+    }
+
+    /** The acknowledgement snapshot stored when this roster was published (A16). Admin only. */
+    @Transactional(readOnly = true)
+    fun confirmation(rosterId: UUID, subject: String): ConfirmationRecord {
+        val roster = visibleToAdmin(rosterId, subject)
+        val stored = confirmations.find(roster.id) ?: throw BusinessException(ErrorCode.CONFIRMATION_RECORD_NOT_FOUND)
+        return ConfirmationRecord(
+            roster.id, roster.month, stored.revision, stored.confirmedAt,
+            stored.generalUnfilled, stored.seniorUnfilled, stored.hourShortfalls,
+        )
+    }
+
     @Transactional
     fun confirm(
         rosterId: UUID, ifMatch: String, idempotencyKey: UUID,
@@ -290,25 +317,25 @@ class RosterService(
         if (currentSlots.isEmpty()) {
             throw BusinessException(ErrorCode.ROSTER_REQUIREMENTS_REQUIRED)
         }
-        val unfilled = currentSlots.count { it.nurseId == null }
-        if (unfilled > 0 && request.acknowledgeUnfilledCount != unfilled) {
-            throw BusinessException(ErrorCode.UNFILLED_ACK_REQUIRED)
-        }
-        val context = loadValidationContext(roster, currentSlots)
-        val nursesById = mutableMapOf<UUID, DbNurse?>()
-        val violations = currentSlots.filter { it.nurseId != null }.flatMap { slot ->
-            candidateViolations(roster, slot, slot.nurseId!!, context, nursesById)
-        }.plus(draftAbsenceConflicts(roster)).plus(draftRestConflicts(roster, context))
-            .distinctBy { it.code to it.affectedDate }
+        // Hard rules first: no acknowledgement can publish a roster that breaks one.
+        val violations = blockingViolations(roster, currentSlots)
         if (violations.isNotEmpty()) {
             throw BusinessException(
                 ErrorCode.RULE_VIOLATION, ruleViolations = violations,
                 safeDetail = "확정 전에 근무 배치를 수정해 주세요.",
             )
         }
+        val check = diagnose(roster, currentSlots, violations, subject)
+        requireAcknowledged(check, request.acknowledgements)
+        val publishedAt = Instant.now()
         repo.deactivatePublished(roster.wardId, roster.month)
-        repo.publishRoster(roster.id, Instant.now(), subject)
-        return summary(repo.findRoster(roster.id)!!).also { recordReplay(idempotencyKey, action, payload, it) }
+        repo.publishRoster(roster.id, publishedAt, subject)
+        val published = repo.findRoster(roster.id)!!
+        confirmations.insert(
+            roster.id, published.revision, subject, publishedAt,
+            check.generalUnfilled, check.seniorUnfilled, check.hourShortfalls,
+        )
+        return summary(published).also { recordReplay(idempotencyKey, action, payload, it) }
     }
 
     @Transactional
@@ -508,6 +535,59 @@ class RosterService(
     }
 
     // ── Internal helpers ──
+
+    private fun blockingViolations(roster: DbRoster, slots: List<DbSlot>): List<RuleDiagnostic> {
+        val context = loadValidationContext(roster, slots)
+        val nursesById = mutableMapOf<UUID, DbNurse?>()
+        return slots.filter { it.nurseId != null }.flatMap { slot ->
+            candidateViolations(roster, slot, slot.nurseId!!, context, nursesById)
+        }.plus(draftAbsenceConflicts(roster)).plus(draftRestConflicts(roster, context))
+            .distinctBy { it.code to it.affectedDate }
+    }
+
+    private fun diagnose(roster: DbRoster, slots: List<DbSlot>, violations: List<RuleDiagnostic>, subject: String): ConfirmationCheck {
+        fun unfilled(slot: DbSlot, reason: String) = UnfilledSlotDiagnostic(
+            slot.id, slot.date, slot.shiftTypeId, slot.shiftCode, slot.teamId, reason, ConfirmationReasons.message(reason),
+        )
+        val empty = slots.filter { it.nurseId == null }
+        // Only nurses the roster is made for: an inactive or excluded record is not short of anything here.
+        val shortfalls = hourDiagnostics.diagnose(roster.id, subject).nurses
+            .filter { it.nurse.rosterable && it.status == TargetStatus.SHORTFALL }
+            .map {
+                HourShortfallDiagnostic(
+                    it.nurse.nurseId, it.nurse.displayName, it.targetMinutes, it.creditMinutes, -it.remainingMinutes,
+                    ConfirmationReasons.BELOW_MONTHLY_TARGET, ConfirmationReasons.message(ConfirmationReasons.BELOW_MONTHLY_TARGET),
+                )
+            }
+            .sortedWith(compareByDescending<HourShortfallDiagnostic> { it.shortfallMinutes }.thenBy { it.nurseId.toString() })
+        return ConfirmationCheck(
+            roster.id, roster.status, roster.revision, slots.isNotEmpty(), violations,
+            empty.filter { !it.seniorRequired }.map { unfilled(it, ConfirmationReasons.UNFILLED_SLOT) },
+            empty.filter { it.seniorRequired }.map { unfilled(it, ConfirmationReasons.SENIOR_UNFILLED) },
+            shortfalls,
+        )
+    }
+
+    /**
+     * Each category must be acknowledged exactly as the server computes it now. A missing list where items exist
+     * is "not acknowledged" (422); any other difference means the diagnosis changed after the admin looked (409).
+     */
+    private fun requireAcknowledged(check: ConfirmationCheck, ack: ConfirmAcknowledgements?) {
+        val general = ack?.generalUnfilledSlotIds.orEmpty()
+        val senior = ack?.seniorUnfilledSlotIds.orEmpty()
+        val hours = ack?.hourShortfalls.orEmpty()
+        if ((check.generalUnfilled.isNotEmpty() && general.isEmpty()) || (check.seniorUnfilled.isNotEmpty() && senior.isEmpty())) {
+            throw BusinessException(ErrorCode.UNFILLED_ACK_REQUIRED)
+        }
+        if (check.hourShortfalls.isNotEmpty() && hours.isEmpty()) {
+            throw BusinessException(ErrorCode.HOUR_SHORTFALL_ACK_REQUIRED)
+        }
+        val matches = general.size == check.generalUnfilled.size && general.toSet() == check.generalUnfilled.map { it.slotId }.toSet() &&
+            senior.size == check.seniorUnfilled.size && senior.toSet() == check.seniorUnfilled.map { it.slotId }.toSet() &&
+            hours.size == check.hourShortfalls.size &&
+            hours.associate { it.nurseId to it.shortfallMinutes } == check.hourShortfalls.associate { it.nurseId to it.shortfallMinutes }
+        if (!matches) throw BusinessException(ErrorCode.CONFIRM_ACK_MISMATCH)
+    }
 
     private fun candidateViolations(
         roster: DbRoster,

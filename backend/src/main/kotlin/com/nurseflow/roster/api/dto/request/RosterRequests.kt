@@ -54,9 +54,25 @@ data class ValidateAssignmentRequest(val slotId: UUID, val nurseId: UUID)
 
 data class AssignNurseRequest(val nurseId: UUID, val locked: Boolean = false)
 
+/** A16: echo every diagnostic of the confirmation check. An empty body confirms only a roster with none. */
 data class ConfirmRosterRequest(
-    @field:PositiveOrZero
-    val acknowledgeUnfilledCount: Int? = null,
+    @field:Valid
+    val acknowledgements: ConfirmAcknowledgements? = null,
+)
+
+data class ConfirmAcknowledgements(
+    @field:Size(max = 2000)
+    val generalUnfilledSlotIds: List<UUID>? = null,
+    @field:Size(max = 2000)
+    val seniorUnfilledSlotIds: List<UUID>? = null,
+    @field:Size(max = 500) @field:Valid
+    val hourShortfalls: List<HourShortfallAcknowledgement>? = null,
+)
+
+data class HourShortfallAcknowledgement(
+    val nurseId: UUID,
+    @field:Min(1)
+    val shortfallMinutes: Int,
 )
 
 @InvalidRequestCode(ErrorCode.INVALID_TIME_LIMIT)

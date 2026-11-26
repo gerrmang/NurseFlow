@@ -118,15 +118,26 @@ class RosterRequestValidationHttpTest : ApiTestBase() {
     }
 
     @Test
-    fun `negative unfilled acknowledgement is rejected before confirmation`() {
+    fun `non-positive shortfall acknowledgement is rejected before confirmation`() {
         val (rosterId, etag) = createRoster()
 
-        val response = http.post("/api/v1/rosters/$rosterId/confirm", mapOf("acknowledgeUnfilledCount" to -1),
+        val response = http.post("/api/v1/rosters/$rosterId/confirm",
+            mapOf("acknowledgements" to mapOf("hourShortfalls" to listOf(mapOf("nurseId" to UUID.randomUUID().toString(), "shortfallMinutes" to 0)))),
             admin, idem() + ("If-Match" to etag))
 
         assertEquals(400, response.status)
         assertEquals("INVALID_REQUEST", response.code)
-        assertEquals(listOf("acknowledgeUnfilledCount"), response.fieldNames)
+        assertEquals(listOf("acknowledgements.hourShortfalls[0].shortfallMinutes"), response.fieldNames)
+    }
+
+    @Test
+    fun `the replaced unfilled count field is rejected as unknown`() {
+        val (rosterId, etag) = createRoster()
+
+        val response = http.post("/api/v1/rosters/$rosterId/confirm", mapOf("acknowledgeUnfilledCount" to 1),
+            admin, idem() + ("If-Match" to etag))
+
+        assertEquals(400, response.status, response.body)
     }
 
     @Test
