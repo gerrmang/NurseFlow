@@ -309,9 +309,7 @@ export function InvitationAdminPage({ wardId }: { wardId: string }) {
           {load.items.map((item) => (
             <li key={item.invitationId} className="card">
               <div>
-                <span className="ward-name">
-                  {invitationStatusLabel(item.status)} · {invitationRoleLabel(item.role)}
-                </span>
+                <div className="invite-row-title"><span className="ward-name">{invitationRoleLabel(item.role)} 초대</span><span className={`badge invitation-status-${item.status.toLowerCase()}`}>{invitationStatusLabel(item.status)}</span></div>
                 <div>{invitationTargetLabel(item, load.staff)}</div>
                 <div className="notice">
                   발급 {formatInviteTime(item.createdAt)} · 만료 {formatInviteTime(item.expiresAt)}
@@ -386,9 +384,9 @@ function composeNotice(action: Action, failure: InviteFailure | null, reloaded: 
 
 function Shell({ wardName, children }: { wardName: string | null; children: ReactNode }) {
   return (
-    <main className="page">
+    <main className="page invitation-admin-page">
       <header className="toolbar">
-        <h1>초대 관리{wardName ? ` · ${wardName}` : ''}</h1>
+        <div><h1>초대 관리</h1>{wardName && <p className="notice">{wardName}</p>}</div>
         <div className="actions">
           <Link className="button secondary" to="/wards">
             내 병동

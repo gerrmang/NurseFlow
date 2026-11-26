@@ -51,7 +51,7 @@ export function WardsPage({ user }: { user: SessionUser }) {
   // Set by the invitation screen after a successful join; non-sensitive (ward id and name only).
 
   return (
-    <main className="page">
+    <main className="page wards-page">
       <header className="toolbar">
         <h1>내 병동</h1>
         <div className="actions">
@@ -63,7 +63,7 @@ export function WardsPage({ user }: { user: SessionUser }) {
           </button>
         </div>
       </header>
-      <p>{name}님, 안녕하세요.</p>
+      <p className="page-subtitle">{name}님, 안녕하세요.</p>
       <RestoreNotice />
       {joined?.joinedWardName && (
         <p role="status" className="notice">
@@ -94,18 +94,13 @@ export function WardsPage({ user }: { user: SessionUser }) {
           </ul>
         </section>
       )}
-      {load.status === 'ready' && (
-        <section className="card" aria-label="초대 링크로 가입">
-          <h2>초대 링크로 가입</h2>
-          <PasteInviteForm />
-        </section>
-      )}
       {load.status === 'ready' && load.wards.length > 0 && (
+        <section aria-label="내 병동 목록"><h2 className="section-label">내 병동 {load.wards.length}</h2>
         <ul className="ward-list" aria-label="소속 병동">
           {load.wards.map((ward) => (
             <li key={ward.wardId} className={`card${joined?.joinedWardId === ward.wardId ? ' highlight' : ''}`}>
-              <div>
-                <span className="ward-name">{ward.wardName}</span>
+              <div className="ward-card-title">
+                <Link className="ward-name" to={`/wards/${encodeURIComponent(ward.wardId)}/published-roster`}>{ward.wardName}<span className="ward-chevron" aria-hidden="true" /></Link>
                 {ward.hospitalName && <div className="notice">{ward.hospitalName}</div>}
               </div>
               <span className="roles">
@@ -116,6 +111,11 @@ export function WardsPage({ user }: { user: SessionUser }) {
                     {roleLabel(role)}
                   </span>
                 ))}
+                {ward.roles.includes('WARD_ADMIN') && (
+                  <Link className="button secondary" to={`/wards/${encodeURIComponent(ward.wardId)}/schedule-settings`}>
+                    근무 설정
+                  </Link>
+                )}
                 {ward.roles.includes('WARD_ADMIN') && (
                   <Link className="button secondary" to={`/wards/${encodeURIComponent(ward.wardId)}/staff`}>
                     팀·구성원 관리
@@ -129,8 +129,9 @@ export function WardsPage({ user }: { user: SessionUser }) {
               </span>
             </li>
           ))}
-        </ul>
+        </ul></section>
       )}
+      {load.status === 'ready' && <section className="card" aria-label="초대 링크로 가입"><h2>초대 링크로 가입</h2><PasteInviteForm /></section>}
     </main>
   )
 }
