@@ -27,7 +27,28 @@ it('serializes writes and reloads server revisions after success', async () => {
 })
 it.each(['STALE_POLICY_REVISION', 'STALE_ROSTER_REVISION', 'ASSIGNMENTS_EXIST'])('reloads without retrying rejected writes: %s', async code => {
   const { store, api } = setup(); await store.reload(); const operation = vi.fn().mockRejectedValue(new ApiError(code.startsWith('STALE') ? 412 : 409, code))
+  const version = store.getSnapshot().version
   await store.run('설정', operation); expect(operation).toHaveBeenCalledOnce(); expect(api.shifts).toHaveBeenCalledTimes(2); expect(store.getSnapshot().uncertain).toBe(false); expect(store.getSnapshot().notice).toMatch(/변경|배치/)
+  expect(store.getSnapshot().version).toBe(version + 1)
+})
+it.each(['DUPLICATE_REQUIREMENT', 'TEAM_REQUIRED_FOR_DEMAND', 'TOO_MANY_SLOTS', 'SHIFT_TYPE_CODE_DUPLICATE', 'INVALID_ABSENCE'])('preserves the editable snapshot after validation rejection: %s', async code => {
+  const { store, api } = setup(); await store.reload()
+  const before = store.getSnapshot()
+  expect(await store.run('저장', async () => { throw new ApiError(400, code) })).toBe(false)
+  expect(store.getSnapshot().data).toBe(before.data)
+  expect(store.getSnapshot().version).toBe(before.version)
+  expect(api.shifts).toHaveBeenCalledOnce()
+  expect(store.canWrite()).toBe(true)
+  expect(store.getSnapshot().uncertain).toBe(false)
+})
+it('preserves the editable snapshot after preview validation rejection', async () => {
+  const { store, api } = setup(); await store.reload()
+  const before = store.getSnapshot()
+  api.preview.mockRejectedValue(new ApiError(400, 'INVALID_SHIFT_MINUTES'))
+  expect(await store.preview(SHIFT.shiftTypeId, { ...SHIFT, kind: 'DAY' })).toBeNull()
+  expect(store.getSnapshot().version).toBe(before.version)
+  expect(api.shifts).toHaveBeenCalledOnce()
+  expect(store.canWrite()).toBe(true)
 })
 it.each([new ApiError(0, 'NETWORK'), new ApiError(503, 'UNAVAILABLE'), new ApiError(200, 'INVALID_RESPONSE')])('blocks resending uncertain writes until a fresh result is acknowledged: %j', async error => {
   const { store } = setup(); await store.reload(); const operation = vi.fn().mockRejectedValue(error)

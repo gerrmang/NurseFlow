@@ -1,5 +1,13 @@
 # 공유 작업 현황
 
+## B7b PR #59 리뷰 지적 3건 수정 (2026-11-26, Codex)
+
+- 같은 공유 worktree의 기존 `feat/web-schedule-settings`(시작 `1fd0e7b`)에서 리뷰 P2 2건·P3 1건을 수정했다. 400 입력 거절 뒤에는 저장/preview 재조회로 폼을 초기화하지 않아 수요·유형·부재 입력을 유지한다. 409/412 충돌 재조회와 결과 불명 저장의 재전송 차단·권한 상실 시 데이터 폐기는 유지한다.
+- 수요 필요 자격은 제출 직전 trim·빈 항목 제거 후 검증/전송한다. 원문 입력은 유지한다. 기본 대상 월은 브라우저 로컬 연월로 계산하여 한국 월초 새벽의 UTC 전월 선택을 막는다. 같은 패턴 검색에서 B7b의 대상 월 계산·필요 자격 분리는 각각 한 곳이며 시간대 변환 모듈의 의도적인 ISO 변환은 유지했다.
+- 검증: `TZ=Asia/Seoul`의 관련 Store/DOM 테스트 49개 통과 후 전체 `npm test -- --run` **461개 통과·실서버 opt-in 4개 건너뜀·실패 0**(25파일). `npm run typecheck`, `npm run lint`, `npm run api:check`, `npm run build`, `git diff --check` exit 0. 신규 회귀 13건: 거절 후 입력 보존/수정 후 재전송, 유형 preview/저장, 부재, 월초·연초, Store의 400 처리. 기존 수요 회귀는 공백·빈 항목을 포함한 자격 정규화 검증으로 보강했다.
+- 수정 diff 자체 재검토 완료. 별도 에이전트 독립 재리뷰·브라우저 수동 검사·실서버·실제 Kakao·Android/backend 전체 검사는 이번 웹 상태/입력 변경에서 실행하지 않았다. 서버 필수 규칙·API/DB/환경·의존성 변경 없음. 웹 정적 빌드 영향만 있으며 롤백은 수정 커밋 revert 및 이전 빌드 복원이다.
+- 인계: 같은 B7b 브랜치에 수정과 검증 기록을 커밋·푸시해 기존 PR #59를 갱신한다. 원격 최종 CI는 푸시 후 별도 확인 대상이다. 사용자 `nurseflow.mv.db`·`nurseflow.trace.db` 보존·커밋 제외. PR 병합·수동 배포 없음.
+
 ## B7b 근무 설정 디자인 반영 (2026-11-26, Codex)
 
 - 같은 공유 worktree C:\Users\jjang\IdeaProjects\NurseFlow에서 기존 feat/web-schedule-settings(시작 5ec7892)를 이어갔다. 원래 fix/web-figma-ui 12ca66d의 커밋과 사용자 DB/trace는 보존했다. Figma 디자인 구현 스킬과 사용자가 허용한 브라우저 원본으로 L3 근무 유형·편집·변경 확인, L3W 팀별 필요 인원 구성을 확인했다.

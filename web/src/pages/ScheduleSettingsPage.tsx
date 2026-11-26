@@ -18,7 +18,9 @@ export function ScheduleSettingsPage({ wardId }: { wardId: string }) {
   const manager = useSessionManager()
   const store = useMemo(() => {
     const fetch = (path: string, init?: RequestInit) => manager.authorizedFetch(path, init)
-    return new ScheduleSettingsStore(createScheduleSettingsApi(fetch, wardId), createStaffAdminApi(fetch, wardId), () => manager.api.getWards(), wardId, new Date().toISOString().slice(0, 7))
+    const now = new Date()
+    const month = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+    return new ScheduleSettingsStore(createScheduleSettingsApi(fetch, wardId), createStaffAdminApi(fetch, wardId), () => manager.api.getWards(), wardId, month)
   }, [manager, wardId])
   const state = useSyncExternalStore(store.subscribe, store.getSnapshot)
   const [tab, setTab] = useState('shifts')
@@ -137,9 +139,10 @@ function DemandSettings({ data, store, confirm }: { data: SettingsData; store: S
     {assigned && <p role="alert">이미 배치가 있는 초안이에요. 수요 교체는 서버에서 거절돼요. 배치 편집에서 먼저 해제해야 해요.</p>}
     <fieldset className="admin-fields" disabled={assigned}><legend className="sr-only">전체 교체할 수요</legend>
     <form onSubmit={e => { e.preventDefault(); const seen = new Set<string>(); let total = 0
-      for (const r of rows) { const key = `${r.date}:${r.teamId}:${r.shiftTypeId}`; total += r.requiredCount; if (!r.date.startsWith(`${draft.value.month}-`) || seen.has(key) || (data.teams.length > 0 && r.requiredCount > 0 && !r.teamId) || !r.shiftTypeId || r.requiredQualifications.length > 50 || r.requiredQualifications.some(q => !q || q.length > 64)) { setError('월·중복·팀·근무 유형·필요 자격(각 64자, 최대 50개)을 확인해 주세요.'); return } seen.add(key) }
+      const items = rows.map(({ key: _key, ...r }) => ({ ...r, requiredQualifications: r.requiredQualifications.map(q => q.trim()).filter(Boolean) }))
+      for (const r of items) { const key = `${r.date}:${r.teamId}:${r.shiftTypeId}`; total += r.requiredCount; if (!r.date.startsWith(`${draft.value.month}-`) || seen.has(key) || (data.teams.length > 0 && r.requiredCount > 0 && !r.teamId) || !r.shiftTypeId || r.requiredQualifications.length > 50 || r.requiredQualifications.some(q => q.length > 64)) { setError('월·중복·팀·근무 유형·필요 자격(각 64자, 최대 50개)을 확인해 주세요.'); return } seen.add(key) }
       if (total > 10000) { setError('총 필요 인원은 10,000명 이하여야 해요.'); return }
-      setError(''); const items = rows.map(({ key: _key, ...r }) => r)
+      setError('')
       confirm('수요 전체 교체', `${draft.value.month}의 기존 ${draft.value.slots.length}칸과 필요 자격을 새 목록 ${rows.length}건 · ${total}명으로 모두 교체할까요?`, () => store.api.requirements(draft.value.rosterId, items, draft.etag))
     }}>
       {rows.map((r, index) => <section className="team-editor" key={r.key} aria-label={`새 수요 ${index + 1}`}><h3>새 수요 {index + 1}</h3><div className="staff-grid">

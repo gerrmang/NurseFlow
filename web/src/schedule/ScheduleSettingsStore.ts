@@ -117,6 +117,10 @@ export class ScheduleSettingsStore {
       const uncertain = failure.status === 0 || failure.status >= 500 || failure.code === ClientErrorCode.INVALID_RESPONSE
       this.patch({ uncertain })
       notice = uncertain ? '저장 결과를 확인하지 못했어요. 이미 처리됐을 수 있어요. 최신 결과를 확인하기 전에는 다시 보내지 마세요.' : messages[failure.code] ?? '서버가 변경을 거절했어요. 최신 값과 입력을 확인해 주세요.'
+      // Validation rejection did not save anything. Keep form keys and the input to correct.
+      if (failure.status === 400 && !uncertain) {
+        this.patch({ busy: false, notice }); return false
+      }
     }
     if (this.disposed || mine !== this.ticket) return false
     const loaded = await this.reload(true)
@@ -136,7 +140,7 @@ export class ScheduleSettingsStore {
       if (this.disposed || mine !== this.ticket) return null
       const failure = asApiError(error)
       if (ended(failure.code) || forbidden(failure.status, failure.code)) { this.patch({ data: null, busy: false, stale: true, forbidden: true }); return null }
-      await this.reload(true)
+      if (failure.status !== 400) await this.reload(true)
       this.patch({ busy: false, notice: messages[failure.code] ?? '변경 영향을 불러오지 못했어요. 입력을 확인하고 다시 시도해 주세요.' })
       return null
     }
