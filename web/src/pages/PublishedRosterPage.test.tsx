@@ -82,6 +82,18 @@ it('moves months, changes mode and refetches when returning from ward list', asy
   act(() => app.navigate(path)); await screen.findByRole('region', { name: '본인 공개 근무표' })
   expect(app.requests.length).toBeGreaterThan(count)
 })
+it('keeps the selected day when switching roster modes and refreshing', async () => {
+  setup()
+  await screen.findByRole('region', { name: '본인 공개 근무표' })
+  const month = (screen.getByLabelText('대상 월') as HTMLInputElement).value
+  await userEvent.click(screen.getByRole('button', { name: `${month}-02 보기` }))
+  await userEvent.click(screen.getByRole('button', { name: '병동 전체' }))
+  await screen.findByRole('region', { name: '병동 전체 공개 근무표' })
+  expect(within(screen.getByRole('region', { name: '선택 날짜 근무' })).getByRole('heading')).toHaveTextContent(`${month}-02`)
+  await userEvent.click(screen.getByRole('button', { name: '새로고침' }))
+  await screen.findByRole('region', { name: '병동 전체 공개 근무표' })
+  expect(within(screen.getByRole('region', { name: '선택 날짜 근무' })).getByRole('heading')).toHaveTextContent(`${month}-02`)
+})
 it('removes schedule immediately on logout and never restores it for a signed out visitor', async () => {
   const app = setup(); await screen.findByRole('region', { name: '본인 공개 근무표' })
   await act(() => app.manager.logout())
