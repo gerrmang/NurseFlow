@@ -26,6 +26,13 @@ function open(roles: ('WARD_ADMIN' | 'WARD_MEMBER')[] = ['WARD_ADMIN']) {
   return { ...app, user: userEvent.setup(), writes, data }
 }
 const body = (app: ReturnType<typeof open>, index = 0) => JSON.parse(app.writes.mock.calls[index]![1].body)
+it('describes team, order, stage, senior eligibility and account connection on staff rows', async () => {
+  const app = open()
+  app.data.staff[0]!.seniorEligible = true
+  const row = await screen.findByRole('button', { name: NURSE_A.displayName })
+  expect(row).toHaveAccessibleDescription(/가상 A팀 · 팀 안 순서 1 · 편성 4단계 · 기록 활성\s*· 선임 자격 있음 계정 연결됨/)
+  expect(screen.getByRole('button', { name: NURSE_B.displayName })).toHaveAccessibleDescription(/계정 미연결/)
+})
 it('labels server demo mode and replaces it after a successful refresh', async () => {
   const app = open()
   app.data.demoMode = true
