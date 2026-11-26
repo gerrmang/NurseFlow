@@ -191,6 +191,9 @@ button.roster-day:hover { background: var(--subtle); }
 .join-page .summary { padding: 16px; background: var(--surface); border: 1px solid var(--border); border-radius: 16px; }
 .join-page .actions > button:first-child { flex: 1; }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.off-page { max-width: 960px; }
+.off-page h2 { font-size: 1.1rem; }
+.off-page time { overflow-wrap: anywhere; }
 @media (min-width: 760px) { .page { padding-top: 32px; } .login-page { padding-top: 0; } .login-actions { width: min(100%, 408px); align-self: center; } }
 @media (max-width: 480px) { .toolbar .actions button { min-height: 36px; padding: 6px 10px; font-size: 12px; } }
 @media (min-width: 1024px) {
