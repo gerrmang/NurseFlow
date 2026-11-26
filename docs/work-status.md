@@ -13,6 +13,127 @@
 - 이 head의 Verify 45761307233 조회 시 Demo/Backend/Android/Web 4개 IN_PROGRESS, Vercel/Preview Comments SUCCESS. PR은 OPEN·MERGEABLE·BLOCKED·autoMergeRequest=null이다. 승인 완료·CI 전체 통과로 표시하지 않는다. 이 게시 기록을 포함하는 최종 문서 head의 CI는 별도다.
 - 제품 코드·테스트는 앞선 검증 스냅샷과 동일함을 SHA256으로 확인했다. 검사를 반복하지 않았고 git diff --check 통과. 이 문서만 후속 커밋·푸시하며 API/DB/환경/배포 영향·롤백은 직전 리뷰 수정 기록과 같다. 같은 worktree·브랜치에서 최종 head CI와 독립 재리뷰/승인 확인으로 인계한다. GitHub PR 병합·자동 병합·수동 배포 없음.
 
+## B8b PR #61 최신 dev(#64·#60·#59) 통합 (2026-11-26, Claude)
+
+- 사용자 요청으로 `feat/web-off-requests`에 최신 `origin/dev` `ec5aafc`(#64 웹 디자인, #60 B7a, #59 B7b)를 병합했다. 충돌 4파일(`web/src/App.tsx`, `web/src/styles.css`, `web/README.md`, 이 문서)은 모두 양쪽 내용을 유지해 해결했다.
+- `App.tsx`에 희망 오프·근무 설정 경로를 모두 두고, `styles.css`에는 #64 디자인 규칙과 `.off-page` 규칙을 함께 둔다. README 소개 문장에 B7b·B8b 범위를 모두 적었다. `WardsPage.tsx`는 자동 병합돼 희망 오프·근무 설정 링크가 모두 있다.
+- 로컬 검증(web): `npm run typecheck`, `npm run lint`, `npm run api:check`, `npm run build` 성공. `npm test -- --run` 534개 통과·opt-in 5개 건너뜀·실패 0. 브라우저 시각 확인·실서버·실제 Kakao 재검증은 하지 않았다. PR 병합·배포하지 않았다.
+
+## B8b 디자인 독립 리뷰 수정 (2026-11-26, Codex)
+
+- 762ad68 독립 읽기 전용 리뷰에서 P3 두 건 확인: 날짜 버튼의 상태 설명 누락, 대리 입력 달력에 다른 간호사의 요청 표시. useId+aria-describedby로 빈 날짜/상태를 설명하고 관리자 달력은 선택 nurseId로 제한했다. 미선택→간호사 가→다른 간호사 전환의 접근 가능한 설명 회귀 검사를 추가했다.
+- 최신 공통 디자인 12ca66d 기준에 맞춰 시스템 글꼴로 전환하고 Noto Sans KR 3.9MB와 라이선스를 제거했다. Inter·브랜드 마크는 유지한다. 독립 재리뷰에서 두 원지적 해결 및 새 조치 사항 없음 확인.
+- 전체 웹 464개 통과·기존 실서버 opt-in 4개 건너뜀. typecheck·lint·build·diff 공백 검사 통과. 브라우저·실서버·Kakao·Android는 이번 작은 수정에서 반복하지 않았다. API/DB/환경·Store 변경 없음. 기존 PR #61에 게시하며 최종 CI는 게시 후 확인한다. 같은 B8b worktree와 브랜치에서 인계한다. 롤백은 수정 커밋 revert.
+
+## B8b 희망 오프 디자인 반영 (2026-11-26, Codex)
+
+- 기존 공유 작업 폴더 C:\Users\jjang\.codex\worktrees\b8b-review\NurseFlow, feat/web-off-requests에서 이어갔다. 시작 HEAD f06b345, tracked 변경 없음 확인. 사용자 요청으로 기존 PR #61의 웹 희망 오프 화면에 원본 디자인을 반영했다. 공통 디자인 PR #64는 아직 OPEN이라 병합하지 않고 동일한 Brand·로컬 폰트/마크를 재사용했으며, 전용 스타일은 off-page 아래로 한정했다. styles.css와 다른 페이지는 변경하지 않았다.
+- 브라우저 원본의 L2 신청·이력/예외, L4 웹 취합·판단·대리 입력을 확인했다. 날짜 선택 달력, 상태 요약·색상, 관리자 간호사별 월간 표, 처리 카드 이동·강조, 대리 입력·정책 패널과 반응형 배치를 적용했다. 기존 단건 신청·판단 방식과 서버 권한·한도·마감·불확실 결과 확인을 유지한다. 일괄 처리·여유 인원 추정·미구현 메뉴는 추가하지 않았다.
+- 검증: 전체 웹 테스트 463개 통과·실서버 opt-in 4개 건너뜀. 달력 선택 시 자동 전송 없음/신청 후 단건 전송, 필터와 월간 표 연결의 회귀 2개를 추가했다. 마지막 키보드/시각 패널 순서 정리 후 해당 화면 20개와 타입·Lint·빌드 재확인. api:check 및 git diff --check 통과. 추가 테스트의 미지원 exact 옵션으로 난 타입 오류는 제거 후 통과했다. Store·API 파일 diff 없음.
+- 실제 앱 컴포넌트와 가상 응답을 사용하는 임시 브라우저 페이지에서 360/1024/1440px 가로 넘침 없음, 날짜 선택→신청, 관리자 표→처리 카드→확정, 처리 확인 포커스, 마감 후 예외 제출과 본인 철회 버튼 없음 확인. 임시 페이지는 정식 빌드로 제거했다. 실제 Kakao·실서버·Android·독립 재리뷰는 재실행하지 않았으며 원본과 픽셀 단위 완전 일치를 보증하는 검증은 아니다.
+- API/DB/환경·의존성 변경 없음. 웹 정적 빌드와 로컬 글꼴 자산에만 영향. 같은 브랜치의 PR #61에 디자인 수정만 게시하며 원격 CI는 게시 후 확인한다. PR 병합·수동 배포 없음. 되돌리기는 이번 디자인 커밋 revert·이전 정적 빌드 복원이다. 원본 작업 폴더의 fix/web-figma-ui와 사용자 DB/trace는 보존했다.
+
+
+## B8b 리뷰 수정 푸시·스레드 해결 완료 (2026-11-26, Codex)
+
+- 사용자 명시 요청으로 수정 커밋 aa719ad와 최신 dev 748a0a9 문서 통합을 기존 PR #61 브랜치에 푸시했다. 게시 확인 head 9b4e7c17061b1dccb59bd8df7a5d13480326fdca와 원격 일치. 통합 추가 diff는 docs/holiday-calendar-client-handoff.md와 docs/work-status.md뿐이며 충돌 시 양쪽 현황을 모두 보존했다.
+- GitHub 연결 도구의 스레드 해결은 integration 권한 FORBIDDEN으로 실패해 기존 인증된 gh GraphQL로 처리했다. 해당 리뷰 스레드 5개 모두 해결, 재조회 미해결 0건. PR 기존 본문을 보존하며 수정·검증·제한을 추가했다. 독립 승인·병합과 구분한다.
+- 이 head의 Verify 45761314614 조회 시 Demo/Backend/Android/Web 4개 IN_PROGRESS, Vercel/Preview Comments SUCCESS. PR은 OPEN·MERGEABLE·BLOCKED·autoMergeRequest=null이다. 승인 완료·CI 전체 통과로 표시하지 않는다. 이 게시 기록을 포함하는 최종 문서 head의 CI는 별도다.
+- 제품 코드·테스트는 앞선 검증 스냅샷과 동일함을 SHA256으로 확인했다. 검사를 반복하지 않았고 git diff --check 통과. 이 문서만 후속 커밋·푸시하며 API/DB/환경/배포 영향·롤백은 직전 리뷰 수정 기록과 같다. 같은 worktree·브랜치에서 최종 head CI와 독립 재리뷰/승인 확인으로 인계한다. GitHub PR 병합·자동 병합·수동 배포 없음.
+
+
+## B7b PR #59 최신 dev(#64·#60) 통합 (2026-11-26, Claude)
+
+- 사용자 요청으로 `feat/web-schedule-settings`에 최신 `origin/dev` `3c777e9`(#63 문서, #64 웹 디자인, #60 B7a)를 병합했다. 충돌은 `StaffAdminPage.tsx`와 이 문서였다.
+- `StaffAdminPage.tsx`: #64의 segmented 탭 nav는 탭 버튼만 두고, B7b의 `근무 설정 · 근무 형태` 이동 링크는 nav 바로 위 별도 `actions` 줄로 옮겼다. 문서는 양쪽 기록을 모두 보존했다.
+- 로컬 검증(web): `npm run typecheck`, `npm run lint`, `npm run build`, `npm run api:check` 성공. `npm test -- --run` 464개 통과·opt-in 4개 건너뜀·실패 0. 브라우저 시각 확인·실서버·실제 Kakao 재검증은 하지 않았다. PR 병합·배포하지 않았다.
+
+## B7b PR #59 리뷰 지적 3건 수정 (2026-11-26, Codex)
+
+- 같은 공유 worktree의 기존 `feat/web-schedule-settings`(시작 `1fd0e7b`)에서 리뷰 P2 2건·P3 1건을 수정했다. 400 입력 거절 뒤에는 저장/preview 재조회로 폼을 초기화하지 않아 수요·유형·부재 입력을 유지한다. 409/412 충돌 재조회와 결과 불명 저장의 재전송 차단·권한 상실 시 데이터 폐기는 유지한다.
+- 수요 필요 자격은 제출 직전 trim·빈 항목 제거 후 검증/전송한다. 원문 입력은 유지한다. 기본 대상 월은 브라우저 로컬 연월로 계산하여 한국 월초 새벽의 UTC 전월 선택을 막는다. 같은 패턴 검색에서 B7b의 대상 월 계산·필요 자격 분리는 각각 한 곳이며 시간대 변환 모듈의 의도적인 ISO 변환은 유지했다.
+- 검증: `TZ=Asia/Seoul`의 관련 Store/DOM 테스트 49개 통과 후 전체 `npm test -- --run` **461개 통과·실서버 opt-in 4개 건너뜀·실패 0**(25파일). `npm run typecheck`, `npm run lint`, `npm run api:check`, `npm run build`, `git diff --check` exit 0. 신규 회귀 13건: 거절 후 입력 보존/수정 후 재전송, 유형 preview/저장, 부재, 월초·연초, Store의 400 처리. 기존 수요 회귀는 공백·빈 항목을 포함한 자격 정규화 검증으로 보강했다.
+- 수정 diff 자체 재검토 완료. 별도 에이전트 독립 재리뷰·브라우저 수동 검사·실서버·실제 Kakao·Android/backend 전체 검사는 이번 웹 상태/입력 변경에서 실행하지 않았다. 서버 필수 규칙·API/DB/환경·의존성 변경 없음. 웹 정적 빌드 영향만 있으며 롤백은 수정 커밋 revert 및 이전 빌드 복원이다.
+- 게시 확인: 수정 커밋 `2bbba71a558148c53bb52930eb3c0a56cd866ce3`을 기존 `origin/feat/web-schedule-settings`에 푸시했고 PR #59의 head 일치를 확인했다. Backend tests·Android debug build·Web checks·Demo seed checks는 조회 시 진행 중, Vercel Preview Comments는 success였다. GitHub 연결 도구의 설명 수정이 integration 권한 403으로 실패하여 기존 gh 인증의 `--body-file`로 기존 설명을 보존하고 수정·검증 결과를 추가했다. 리뷰 댓글·승인·대화 해결은 수행하지 않았다.
+- 인계: 같은 B7b 브랜치를 유지한다. 이 게시 기록 커밋의 최종 원격 CI는 별도 확인 대상이다. 사용자 `nurseflow.mv.db`·`nurseflow.trace.db` 보존·커밋 제외. PR 병합·수동 배포 없음.
+
+## B7b 근무 설정 디자인 반영 (2026-11-26, Codex)
+
+- 같은 공유 worktree C:\Users\jjang\IdeaProjects\NurseFlow에서 기존 feat/web-schedule-settings(시작 5ec7892)를 이어갔다. 원래 fix/web-figma-ui 12ca66d의 커밋과 사용자 DB/trace는 보존했다. Figma 디자인 구현 스킬과 사용자가 허용한 브라우저 원본으로 L3 근무 유형·편집·변경 확인, L3W 팀별 필요 인원 구성을 확인했다.
+- 기존 네 화면에 전용 CSS를 적용했다. 데스크톱 병동 메뉴, 근무 유형 목록→편집 배치와 근무 코드 칩, 수요 읽기 전용 표, 입력·확인·오류 카드와 반응형 메뉴를 반영했다. 목록 선택은 기존 편집 상태를 사용하고 변경 확인에 키보드 포커스를 전달한다. 서버가 제공하지 않는 주간 템플릿·휴일 설정·자동 생성·여유 인원 추정은 추가하지 않았다. Store·API·시간 변환 diff 없음.
+- 공통 디자인 최신 기준과 같은 시스템 글꼴을 사용하며 기존 Brand·ShiftChip·Inter 자산을 재사용한다. 스타일은 settings-page 아래로 제한하고 styles.css·다른 페이지는 변경하지 않았다. Noto Sans KR 전체 파일은 추가하지 않았다. API/DB/환경·의존성 변경 없음.
+- 최종 로컬 검증: api:check·typecheck·lint·build·git diff --check 통과. 전체 웹 448개 통과·기존 실서버 opt-in 4개 건너뜀. 새 목록 버튼으로 편집→변경 확인 포커스→취소 시 입력 유지/쓰기 없음 회귀 1개 포함. 처음 타입/Lint 명령은 저장소 루트에서 실행해 package.json 미발견으로 시작하지 못했고 web 경로에서 재실행해 통과했다.
+- 가상 응답과 실제 앱 컴포넌트로 브라우저 확인: 360/1024/1440px 네 탭 모두 가로 넘침 없음, 로컬 마크 40px 로드, 유형 선택→영향 확인→저장, 근무 형태 확인·취소, 수요 교체 확인 전 잠금과 네 탭 이동. 브라우저 도구의 datetime 입력으로 반차 등록은 완료하지 못했으며 부재 입력·시간대·원본 정밀도 보존은 기존 회귀 테스트 결과로 구분한다. 임시 페이지는 정식 빌드로 제거했다. 실서버·실제 Kakao·Android 검사는 재실행하지 않았다.
+- 독립 읽기 전용 리뷰에서 B7b 추가 조치 사항 없음. 별도 B8b 리뷰에서는 달력 상태 접근성과 대리 입력 대상 표시 P3 두 건을 수정하고 시스템 글꼴로 정리했으며, 독립 재리뷰에서 해결을 확인했다(B8b PR #61, 46ef41a). B7b와 B8b 커밋은 각 기존 브랜치에 분리했다.
+- 최신 dev 748a0a9를 89432b5로 통합했다. 추가분은 #63 문서 두 파일뿐이며 작업 현황 충돌에서 양쪽 기록을 모두 보존했다. 통합 전후 web 코드 diff가 없어 위 검증을 재사용한다. 인계: 같은 B7b 브랜치의 기존 PR #59에 디자인 변경 ff8dc90을 게시하고 최종 head CI를 확인한다. PR 병합·수동 배포 없음. 되돌리기는 디자인 수정 커밋 revert 및 이전 웹 정적 빌드 복원이다. 원본과 모든 화면의 픽셀 단위 완전 일치를 보증하는 검증은 아니다.
+
+## B7b PR #59 A13 최신 dev 통합 (2026-11-25, Codex)
+
+- 사용자 요청으로 기존 `feat/web-schedule-settings`의 `b2f5448`에 최신 `origin/dev` `3e30752`(A13 #58)을 통합했다. 충돌 없음. B7b 동작 코드 변경 없이 backend·OpenAPI·웹 생성 타입은 dev와 동일하다. A13 관리 화면은 이번 통합에 추가하지 않는다. 사용자 DB·trace 보존, 새 브랜치/worktree 없음.
+- 웹 api:check·typecheck·lint·build exit 0, Vitest **447개 통과·opt-in 4개 건너뜀·실패 0**(총 451개/25파일), JS gzip 114.84 kB. A13 통합 JAR·가상 웹 OIDC·새 메모리 H2 `b7b_a13_merge_e2e`에서 B7b 실서버 인수 **1개 통과·실패/건너뜀 0**(3.40초). `git diff --cached --check` 통과.
+- backend·OpenAPI·생성 타입은 B7a 통합에서 검증한 dev와 동일함을 diff로 확인했다. 직전 같은 통합 서버의 전체 검사 304개 통과·opt-in 5개 건너뜀·실패/오류 0을 재사용하고 중복 실행하지 않았다. Android 로컬 전체·브라우저·실제 Kakao·기기·운영은 이번 웹 통합에서 반복하지 않았으며 원격 CI에서 Android 빌드를 확인한다.
+- B7a PR #60은 `dc14cd667b2755b86aa08f55706e01154ca42f67`로 통합·푸시·PR 본문 갱신 완료. 해당 head의 Verify Backend tests·Android debug build·Web checks·Demo seed checks 모두 SUCCESS를 gh로 확인했다. OPEN·MERGEABLE·REVIEW_REQUIRED/BLOCKED이므로 병합하지 않았다.
+- B7b 추가 API/DB/환경·서버 규칙 변경 없음(A13 계약/스키마 통합), 웹 빌드 영향·수동 배포 없음. 롤백은 통합 커밋 첫 부모 기준 revert 및 이전 웹 빌드 복원. 기존 독립 리뷰와 실제 인증/기기 검증 제한은 유지한다.
+- 공유 인계: 같은 B7b 브랜치에 통합·검증·PR 초안을 커밋·푸시해 기존 PR #59를 갱신한 뒤 최종 원격 head·dev 포함·CI를 확인한다. 이후 원래 B7a 브랜치로 복귀한다. 병합·자동 병합·수동 배포 없음. 검증용 Java/공급자는 이번 명령행·포트를 확인한 뒤 종료하고 사용자 DB·trace는 커밋 제외한다.
+
+## B7b PR #59 A14 포함 최신 dev 재통합 (2026-11-24, Codex)
+
+- 사용자 요청으로 같은 공유 worktree·`feat/web-schedule-settings`, 시작 head `9e728551f5d4da98b18fe7505f68b8c93fe64e6c`에서 `git fetch origin` 후 최신 dev `db5e4120d04f9cd259bdb4ad509088ebf1598cd6`(A14 #57)을 통합했다. 시작 tracked 변경 없음, 사용자 DB·trace 보존. 충돌은 `docs/work-status.md` 한 곳이며 B7b와 A14 기록을 모두 보존했다. B7b 동작 코드는 바꾸지 않았고 backend·OpenAPI·웹 생성 타입은 dev와 동일하다.
+- 웹 api:check·typecheck·lint·build exit 0, **447개 통과·opt-in 4개 건너뜀·실패 0**(총 451개/25파일), JS gzip 114.84 kB. JDK 21 backend `test bootJar --offline --no-daemon` BUILD SUCCESSFUL(1분 54초), XML **289개 통과·opt-in 5개 건너뜀·실패/오류 0**(총 294개). `git diff --cached --check` 통과.
+- A14 통합 JAR·가상 OIDC·새 메모리 H2 `b7b_a14_merge_e2e`로 B7b 실제 서버 인수 **1개 통과·실패/건너뜀 0**. 검증용 Java·공급자 종료와 18090/18091 포트 해제 확인. 브라우저·실제 Kakao·운영·물리 기기·Android 로컬 전체 검사는 반복하지 않았으며 Android 포함 원격 PR CI로 확인한다.
+- 이전 최종 head `9e72855`의 [Verify 45406922044](https://github.com/gerrmang/NurseFlow/actions/runs/45406922044)는 Backend tests·Android debug build·Web checks·Demo seed checks 모두 success를 확인한 기록이다. 이는 이번 통합 head CI를 대신하지 않는다. A14는 서버 필수 배치 규칙 확장이며 B7b에 지원 허용 관리 화면을 추가하지 않는다.
+- B7b의 추가 API·DB·환경·서버 규칙 변경 없음. 웹 빌드 영향·수동 배포 없음. 되돌리기는 이번 통합 커밋을 첫 부모 기준 revert하고 이전 웹 빌드 복원. 같은 task branch에 통합·검증 문서·PR 초안을 커밋·푸시해 기존 [PR #59](https://github.com/gerrmang/NurseFlow/pull/59)를 갱신하고 최종 원격 head·dev 포함·CI 상태를 확인한다. 사용자 DB·trace는 커밋 제외, dev/main 직접 푸시·PR 병합·자동 병합·수동 배포 없음.
+
+## B7b PR #59 게시 확인 (2026-11-24, Codex)
+
+- CI 후속 확인: 게시 기록 head `17397988a6632ad25e1b09dd32d5a5aa92e3408a`의 [Verify 45406333985](https://github.com/gerrmang/NurseFlow/actions/runs/45406333985)는 completed/success, Backend tests·Android debug build·Web checks·Demo seed checks 모두 success를 gh로 확인했다. PR의 Vercel·Preview Comments도 pass다. 최신 원격 dev는 여전히 `74886b6`이고 HEAD 조상 포함·원격 기능 head 일치를 확인했다. GitHub는 MERGEABLE·REVIEW_REQUIRED/BLOCKED를 유지한다.
+- 이전 구현 head Verify `45406128424`는 Android의 기존 `StaffAdminViewModelTest.modeHttpErrorsRetainAccessChecksWithResponseWrapper` assertion 1건 실패(197개 중 1실패·1건너뜀), 나머지 작업 성공이었다. 두 head의 차이는 문서뿐이며 Android 소스는 동일하고 최신 실행은 통과했다. 간헐적 실패 관찰로 기록하며 원인을 확정하거나 Android 코드를 이번 웹 PR에서 변경하지 않았다. 이 CI 결과 기록만 추가로 커밋·푸시하며 해당 최종 문서 head의 검사 상태도 확인한다.
+
+- 최신 dev `74886b6c9831982acebc80b02f0805b39cf6347b`를 통합한 `deeb6bb6bd740b9e29f279c2e1dde4cfd537e9cc`를 `origin/feat/web-schedule-settings`에 푸시하고 로컬·원격 head 일치를 확인했다. [PR #59](https://github.com/gerrmang/NurseFlow/pull/59)를 `dev` 대상 일반 PR로 게시했으며 OPEN·isDraft=false·MERGEABLE을 확인했다. GitHub는 REVIEW_REQUIRED/BLOCKED이므로 독립 GitHub 승인이나 즉시 병합 가능 상태로 표현하지 않는다.
+- GitHub 연결 도구의 PR 생성이 integration 권한 403으로 실패해 기존 인증된 gh의 `--body-file web/B7b-pr-draft.md`로 게시했다. 승인 리뷰 요청·댓글·병합·자동 병합·수동 배포는 하지 않았다. 기존 Vercel 자동 Preview는 성공으로 표시됐으며 별도 수동 배포를 수행한 것은 아니다.
+- 게시 head의 [Verify 45406128424](https://github.com/gerrmang/NurseFlow/actions/runs/45406128424)는 조회 시 in_progress, Backend tests·Android debug build·Web checks·Demo seed checks가 시작됐다. 이 시점 기록을 CI 통과로 해석하지 않는다. 게시 기록 문서 커밋 이후 최종 head의 검사 상태도 별도로 확인한다.
+- 통합 후 로컬 검증은 아래 절의 웹 447개·백엔드 283개·B7b 실제 서버 1개 통과 결과다. 이번 변경은 게시 기록뿐이라 앱/서버 검사를 반복하지 않았다. `git diff --check` 통과. 같은 공유 worktree·B7b 브랜치에 이 게시 기록을 커밋·푸시하고 최종 원격 CI·dev 포함 여부를 확인한다. 사용자 DB·trace 보존·커밋 제외, PR 병합·자동 병합·수동 배포 없음.
+
+## B7b 최신 dev 통합·PR 게시 준비 (2026-11-24, Codex)
+
+- 사용자 요청으로 B7b 변경 18파일만 `bb6cef2`에 커밋하고 최신 `origin/dev` `74886b6`(A11 #54·B6 #51·A12 #56)을 현재 `feat/web-schedule-settings`에 통합했다. B7b와 dev가 추가한 작업 현황 한 곳의 충돌만 발생했고 양쪽 기록을 전부 보존했다. B6 시연 모드와 B7b 링크가 공존하며 서버·OpenAPI·웹 생성 타입은 dev와 동일하다. 같은 공유 worktree를 유지하고 사용자 DB·trace는 커밋하지 않았다.
+- 통합 후 웹 api:check·typecheck·lint·build exit 0, **447개 통과·opt-in 4개 건너뜀·실패 0**(총 451개/25파일). JS gzip 114.84 kB. JDK 21 backend `test bootJar --offline --no-daemon` BUILD SUCCESSFUL(1분 31초), XML **283개 통과·opt-in 5개 건너뜀·실패/오류 0**(총 288개). `git diff --cached --check` 통과.
+- 통합 JAR·가상 OIDC·새 메모리 H2 `b7b_dev_merge_e2e`로 B7b 인수 **1개 통과·실패/건너뜀 0**. 검증용 Java·공급자 종료와 18090/18091 포트 해제를 확인했다. 실제 Kakao·통합 후 브라우저·물리 기기·운영·Android 로컬 전체 검사는 반복하지 않았으며 Android는 PR CI에서 확인한다. 기존 독립 리뷰·P3 수정 재리뷰 결과는 유지한다.
+- B7b의 추가 API·DB·환경·서버 규칙 변경 없음. 웹 빌드 영향, 배포 없음. 롤백은 B7b 웹 변경 제거와 이전 빌드 복원이며 통합 커밋만 되돌릴 경우 첫 부모 기준 revert다. PR 초안·검증·README의 실연동 기준을 최신 dev로 갱신했다.
+- 인계: 같은 `C:\Users\jjang\IdeaProjects\NurseFlow`·`feat/web-schedule-settings`에 통합·검증 기록을 커밋·푸시하고 dev 대상 일반 PR로 게시한다. 최종 원격 head·PR·CI 상태는 게시 후 확인한다. dev/main 직접 푸시·PR 병합·자동 병합·수동 배포는 하지 않는다.
+
+## B7b 승인 부재 원본 시각 보존 수정·독립 재리뷰 (2026-11-24, Codex)
+
+- 사용자 수정 요청으로 같은 공유 worktree·`feat/web-schedule-settings`, HEAD `00f086c890de19b99c10bf0e3615346bed0e4271`에서 앞선 독립 리뷰 P3를 수정했다. 기존 B7b 변경·사용자 DB/trace를 보존했고 새 브랜치/worktree는 만들지 않았다. 아래 '미수정' 절은 수정 전 시점 기록이다.
+- `AbsenceForm`은 시작/종료 입력을 각각 원래 표시값과 비교해 미변경 endpoint는 `selected.startsAt`·`selected.endsAt` 원본을 그대로 전송한다. 변경한 endpoint만 `toInstant`로 변환한다. 시간 문자열의 직접 비교를 절대 시각 비교로 바꿔 UTC 오프셋이 다른 원본도 검사하며, 같은 밀리초 안의 나노초 정밀도는 별도로 보존한다. 같은 정밀도 패턴을 검색해 승인 부재 API 유효성 검사에도 동일 비교를 적용했다. 새로 입력하거나 실제 변경한 모호한 DST 시각 차단은 유지한다.
+- 수정 전 새 화면 회귀 6개가 초/소수초 손실·DST 저장 거절·미변경 endpoint 정밀도 손실로 실패(exit 1), 나머지 14개 통과를 확인했다. 수정 후 초/소수초·서로 다른 offset·DST 두 회차·같은 현지 분의 1ns 간격·한쪽 endpoint 변경·새 DST 모호 입력 거절·역전 구간과 비교기 순서를 검증했다. 관련 3파일 39개 통과, 최종 전체 웹 **437개 통과·opt-in 4개 건너뜀·실패 0**(총 441개/25파일, 21파일 통과·4파일 건너뜀). typecheck·lint·build exit 0, JS gzip 114.55 kB, `git diff --check` 통과. 계약/생성 타입 미변경으로 기존 api:check 성공 기록을 유지한다.
+- 별도 `b7b_independent_review` 에이전트가 수정 부분을 읽기 전용 재리뷰했다. **원 P3 해결, 새 P1~P5 발견 없음**. 수정 회귀 10개를 독립 실행해 통과·실패 0(exit 0), 필터로 나머지 15개는 선택 제외했음을 구분한다. 전체 검사 성공은 부모 실행 결과다. 이 재리뷰는 GitHub 승인 리뷰나 CI 성공을 뜻하지 않는다.
+- 재리뷰 코드 기준은 위 HEAD의 미커밋 수정 5파일(`web/src/pages/ScheduleSettingsPage.tsx`·같은 이름 test, `web/src/schedule/timeZone.ts`·같은 이름 test, `web/src/api/scheduleSettingsApi.ts`)이다. 5파일 경로 정렬 후 각 줄 `path SHA256`의 LF join UTF-8 manifest SHA256은 `4b6bbab99f355102a80c52efeba3b4fb176f3740fd7ee1c9a7fc6d1002f3d110`이다. 리뷰 뒤 제품 코드는 변경하지 않았다.
+- API·DB·서버 규칙·환경·의존성 변경 없음, backend·OpenAPI diff 0줄. 이번 작은 클라이언트 시각 보존 수정은 실제 페이지/API 직렬화 DOM 회귀로 검증해 실서버·브라우저·Kakao·Android·GitHub CI를 재실행하지 않았다. 최초 실서버 1개·브라우저 인수 기록은 수정 전 검증으로 유지한다. 웹 빌드 영향, 배포 없음. 롤백은 이번 원본 시각 보존 수정 제거 및 이전 웹 빌드 복원이다.
+- 공유 인계: 같은 task branch의 미커밋 코드·검사·README·검증·PR 초안·이 기록을 유지한다. 검증 문서는 최신 437개 결과와 수정 재리뷰 완료를 반영했다. 커밋·푸시·PR 게시·병합·배포 없음. 사용자 DB·trace는 보존·커밋 제외한다. 다음 단계는 변경 파일만 커밋·푸시한 뒤 dev 대상 PR 게시와 최종 원격 CI 확인이다.
+
+## B7b 독립 코드 리뷰 (2026-11-24, Codex 별도 리뷰 에이전트)
+
+- 사용자 요청으로 구현 에이전트와 별도인 `b7b_independent_review`가 읽기 전용 검토했다. 같은 공유 worktree·`feat/web-schedule-settings`, HEAD `00f086c890de19b99c10bf0e3615346bed0e4271`. 상태 문서 제외 tracked diff SHA256 `1571e9e58ac8f623735915c48884043aa15651f9e579fa1b9056fee59aa4c677` (`git diff HEAD -- . ':!docs/work-status.md' | Out-String` UTF-8), web 신규 13파일의 정렬 경로+SHA256 manifest `2607bbc7739e50299e641cbf114ed85a695b1817a81988987d65e1ee94725042` (각 줄 `path hash`, LF join) 기준이다. 사용자 DB·trace는 검토하지 않았다.
+- 결과: P1/P2 발견 없음, **P3·데이터/런타임 1건 미수정**. `web/src/pages/ScheduleSettingsPage.tsx:165~168`은 기존 승인 부재의 시작/종료를 `localTime`으로 분 단위 문자열로 바꾼 뒤 매번 `toInstant`로 저장한다. 서버는 Instant와 date-time 계약으로 초·소수초를 허용하므로 원본 `2026-11-05T00:00:30.250Z`가 Asia/Seoul 표시 `2026-11-05T09:00`을 거쳐 시간 미변경 저장에도 `2026-11-05T00:00:00.000Z`로 바뀐다. America/New_York의 `2026-11-01T05:30:00Z`는 표시 `2026-11-01T01:30` 뒤 DST 중복 시각으로 거절된다. 간호사/구분만 변경해도 유효한 원본 시간 경계를 보존하지 못한다.
+- 소스 변환 함수를 Node에서 직접 실행해 위 두 경우를 재현했다. 수정 방향은 시간 필드가 원래 표시값과 같으면 `selected.startsAt`·`selected.endsAt` 원본을 보내고, 시간 필드 변경 시에만 변환하는 것이다. 초/소수초·DST 반복 구간에서 다른 필드만 바꾸는 회귀 검사가 필요하다. 실행 오류인 P3이므로 병합 전 수정·수정 부분 재리뷰 대상으로 남긴다. 앞선 PR 게시 준비 판정은 이 결함 확인 전의 자체 점검 기록이다.
+- 검증: 독립 리뷰 중 B7b 신규 4파일 43개 검사 통과·실패/건너뜀 0, exit 0. `git diff --check` 통과. A8/A9/A10·부재 서버 계약/구현, 세션/권한 경계·ETag·수요 전체 교체·응답 유실 처리와 테스트를 대조했다. 전체 회귀·실서버·브라우저·실제 Kakao·GitHub CI는 이번 리뷰에서 재실행하지 않았다. 별도 에이전트의 코드 리뷰이며 GitHub 승인 리뷰나 CI 통과를 뜻하지 않는다.
+- 인계: 같은 공유 브랜치의 제품 코드·테스트를 그대로 보존하고 부모가 이 리뷰 기록만 추가했다. 수정·커밋·푸시·PR 게시·병합·배포 없음. 다음 작업은 위 P3 수정과 회귀 검증 후 재리뷰다. API·DB·배포 영향 없음.
+
+## B7b 웹 근무 설정 구현·실연동 검증 (2026-11-24, Codex)
+
+- PR 게시 준비 재확인: 같은 HEAD `00f086c`·미커밋 변경에서 구현/API/상태 관리/화면 진입과 검증·PR 초안을 재대조했다. 기존 검사 이후 제품 코드 변경 없음. 기록된 웹 427개·실서버 1개 통과와 브라우저 인수, API/DB 미변경 근거로 리뷰 요청용 일반 PR 게시 가능 수준으로 판단한다. 구현자 자체 재점검이며 독립 리뷰·최종 원격 CI·병합 승인을 대신하지 않는다. 이번에는 검사를 반복하거나 커밋·푸시·PR 게시를 하지 않았다. 사용자 DB·trace 제외와 같은 task branch 인계를 유지한다.
+
+- 사용자 승인 계획을 구현했다. Git 흐름·breakdown 소유 경로·진행/인계를 확인하고 `git fetch origin` 후 최신 `origin/dev` `00f086c` 기반 `feat/web-schedule-settings`를 같은 공유 worktree에서 만들었다. B6 `chore/demo-seed-script`는 보존했고 별도 worktree는 만들지 않았다. 시작 시 tracked 변경 없음, 기존 미추적 `nurseflow.mv.db`·`nurseflow.trace.db` 보존.
+- 소유 범위 `web/**`에 관리자 근무 설정 네 메뉴를 추가했다. D/E/N 시간·자정 경과·휴게·인정·환산 생성/수정·영향 preview·비활성화·재활성화, 간호사 일반/D·E/N 전담 조회·저장, 월별 초안 명시 생성·팀 수요 전체 교체·선임 칸/미충원 표시, 승인 VY·반차 등록·수정·삭제를 실제 API로 연결했다. 기존 OTHER는 조회·비활성화만 제공한다. 내 병동·팀 관리에서 진입한다.
+- 정책/초안 ETag·쓰기를 직렬 처리하고 저장 후 최신 서버 값을 재조회한다. 부재 조회 전후 초안 ETag가 다르면 혼합 snapshot 편집을 막는다. 412·기존 배치·입력 오류 안내, 응답 유실/5xx/성공 JSON 오류의 재전송 차단·최신 결과 확인, 권한/세션 상실 데이터 폐기·늦은 응답 무시를 적용했다. 근무 형태 조회 실패는 GENERAL로 추정하지 않고, 저장 후 선택한 간호사의 값을 다시 읽는다.
+- 수요 조회 API에 기존 필요 자격이 없어 기존 칸은 읽기 전용으로 표시하고, 모든 날짜·팀·근무·필요 자격을 새 목록으로 작성해 전체 교체함을 체크·확인한다. 배치가 남아 있으면 교체를 막는다. 사유를 수집하지 않고 승인 부재 시각은 초안 병동 시간대로 변환한다. 희망 오프·휴일/월 목표·Night 순환·배치 해제/자동배치/확정은 후속 범위다.
+- 최종 Windows `web/` api:check·typecheck·lint·build exit 0. 전체 Vitest **427개 통과·opt-in 4개 건너뜀·실패 0**(21파일 통과·4파일 건너뜀, 총 431개/25파일). B7b 신규 기본 검사 43개. JS gzip 114.44 kB. `git diff --check` 통과. 중간 타입/린트·Headers 기대값·StrictMode Response 대역 재사용 실패는 정정 후 통과했으며 상세는 `web/B7b-verification.md`에 적었다.
+- JDK 21 backend `bootJar --offline --no-daemon` BUILD SUCCESSFUL, 4개 작업 UP-TO-DATE. 가상 OIDC + 실제 Spring + 별도 메모리 H2에서 B7b opt-in 인수 **1개 통과·실패/건너뜀 0**: 유형 CRUD·자정 경과, 팀 2칸/선임 1칸·미충원, 초안 시각/revision/재검증 갱신, 부재 CRUD·VY, 근무 형태, 새 Store 복원, 412·성공 응답 유실 재전송 차단, 간호사 관리자 API 403. 실제 Kakao 검증과 구분한다.
+- 브라우저 가상 관리자 로그인 후 D 월 환산 420분 preview·저장, D/E 전담 저장, 11월 4일 A팀 D 3명·필요 자격 전체 교체, 11월 5일 09~13시 반차 저장·재조회·reload 유지 확인. 가상 데이터 스크린샷 `web/B7b-browser-verification.jpg` 보존. 이후 간호사 선택 유지 보완은 DOM 회귀로 검증했다. 실제 Kakao·실제 다중 관리자 브라우저 경합·전체 화면 크기·물리 기기·운영·독립 리뷰·CI는 미검증. backend/Android 미변경으로 전체 회귀 생략.
+- API·DB·환경변수 계약·의존성·서버 필수 규칙 변경 없음. backend·OpenAPI diff 0줄. 웹 정적 빌드 영향, 데이터 이전·수동 배포 없음. 롤백은 B7b 웹 변경 revert와 이전 웹 빌드 복원. 검증용 Java·가상 공급자·Vite 종료와 18090/18091/5174 포트 해제를 확인했다.
+- 공유 인계: `C:\Users\jjang\IdeaProjects\NurseFlow`, `feat/web-schedule-settings`, 기준 HEAD `00f086c`의 미커밋 변경으로 유지한다. `web/B7b-verification.md`·`web/B7b-pr-draft.md`에 검증/생략/배포/롤백을 기록했다. 자체 diff·호출 경로 점검 완료, 다음은 B7b 전체 변경 독립 리뷰다. 커밋·푸시·PR 게시·병합·배포 없음. 사용자 DB·trace는 커밋 대상에서 제외한다.
+
 ## B7a PR #60 최신 dev 통합 (2026-11-26, Claude)
 
 - 사용자 요청으로 `feat/android-schedule-settings`에 최신 `origin/dev` `ae24f27`(#63 문서, #64 웹 디자인)을 병합했다. 충돌은 이 문서뿐이며 양쪽 기록을 모두 보존했다(dev 기록을 위에 둠).
@@ -131,6 +252,61 @@
 - 앱/서버 최초 검사는 사용자 Gradle 캐시 잠금 권한으로 시작하지 못해 로컬 검증 권한으로 실행했다. 검증 후 PID·부모 관계·명령행을 확인해 이번 에뮬레이터/가상 공급자/메모리 서버만 종료했고 18090/18091·이번 에뮬레이터 포트의 listen 없음 확인. 사용자 AVD 데이터 초기화·파일 DB 사용 없음. backend·OpenAPI·웹·CI diff는 없고 전체 서버/웹 회귀는 변경 범위가 아니어서 재실행하지 않았다.
 - API/DB/환경/의존성·서버 규칙 변경 및 수동 배포 없음. Android 빌드 영향. 롤백은 B8a 변경 revert와 이전 Android 빌드 복원. 마감 API에 병동 시간대/서버 현재시각이 없어 표시 시간대를 명시한다. 미저장 입력은 재조회/이탈 시 초기화될 수 있고 실시간 구독은 없다.
 - 공유 인계: 같은 `C:\Users\jjang\IdeaProjects\NurseFlow`, `feat/android-off-requests`, HEAD `3e30752`의 미커밋 B8a 코드·검사·문서를 유지한다. 상세 `android/B8a-verification.md`, PR 초안 `android/B8a-pr-draft.md`. 사용자 DB/trace 커밋 제외. 다음은 연결 가능한 기기에서 Compose 4개·두 계정 실서버 1개 실행과 전체 diff 독립 리뷰다. 이번에 커밋·푸시·PR 게시·병합·배포하지 않았다.
+
+## B8b 리뷰 수정 게시 준비 (2026-11-26, Codex)
+
+- 사용자 요청으로 검증된 수정만 기존 PR #61 브랜치에 커밋·푸시하고 해당 리뷰 스레드를 해결한다. 수정 시점 diff 해시와 현재 상태가 일치해 제품 검사를 반복하지 않으며 git diff --check를 확인한다.
+- git fetch origin 후 최신 dev 748a0a9의 추가 변경은 인계 문서·작업 현황뿐이다. 게시 전 동일 작업 브랜치에 통합하고 현황 충돌은 양쪽 기록을 보존해 해결한다. API/DB/환경·제품 코드 추가 변경 없음. PR 병합·자동 병합·수동 배포 없음. 최종 원격 head·스레드·CI는 게시 후 확인한다.
+
+
+## B8b PR #61 리뷰 수정 (2026-11-26, Codex)
+
+- 리뷰 기준점(수정 diff 자체 검토): HEAD 05f83d2af4d1614939659e925625a46a378b38d4, 상태 문서를 제외한 git diff HEAD 원시 바이트 SHA256 74a69ff1384def8ccabff29fe2182d026bc901179774c50aef23ae405ca2819b, 2026-11-26 14:00:02 KST, Codex. 미커밋 8파일; 외부 독립 승인과 구분한다.
+
+- GitHub 리뷰 스레드 5개·리뷰 본문 2개를 확인했다. 중복을 제외한 P3 4건(필터 초기화, 거절 후 신청 입력 소실, 기본 대상 월, 정책 조회 경합)을 수정했다. GitHub 답글·스레드 해결·커밋·푸시·병합·배포는 수행하지 않았다.
+- 신청 날짜·대상과 간호사/상태/예외 필터를 Store 메모리로 옮겼다. 같은 달의 재조회와 확정·반려·철회 후 유지하며, 신청 성공 시 날짜·대상만 비운다. 월 변경·화면 이탈·접근 권한 상실·관리자 역할 변경 때는 폐기한다. 정책 입력은 재조회한 최신 서버 값으로 갱신하므로 STALE_POLICY_REVISION 뒤 덮어쓰기 방지는 유지된다.
+- 양 역할의 기본 대상 월을 다음 달로 바꿨고 12월→다음 해 1월도 확인했다. API에 병동 시간대/현재시각이 없어 기기 시간대 기준이라는 기존 제한은 유지한다. 다음 달 마감도 지났다면 예외 접수 안내를 그대로 표시하며 서버가 최종 판정한다.
+- 관리자 목록·정책의 monthlyLimit이 다르면 조회만 1회 재시도한다. 계속 불일치하면 정책 변경 안내와 편집 차단을 유지한다. 지연된 재시도 응답의 월/세션 격리와 기존 쓰기 자동 재전송 금지는 유지한다.
+- 회귀 15개 추가: 필터 보존(확정·반려·철회), 거절 3종 입력 보존, 정책 stale 최신값, 월/접근/역할/이탈 초기화, 다음 달·연 경계, 조회 재시도 성공/상한/지연 응답 폐기. B8b Store·화면 47개 통과. 전체 웹 461개 통과·실서버 opt-in 4개 건너뜀·실패 0(24파일 중 20개 통과·4개 건너뜀). npm run typecheck, npm run lint, npm run api:check, npm run build 모두 성공; git diff --check 통과. npm ci --offline --no-audit --no-fund 성공. 처음 Python 실행은 설치되지 않아 시작하지 못했고 Node로 편집했다. 첫 npm ci는 루트에서 실행해 lockfile 미발견으로 실패했으며 web 지정 후 성공했다.
+- 자체 diff 재검토 완료. 실제 브라우저·실서버 opt-in·Kakao·물리 기기·backend/Android 전체·수정 후 원격 CI·독립 재리뷰는 미실행이다. 클라이언트 수정 범위라 서버 전체는 반복하지 않았다. API/DB/환경/의존성/CI 변경 없음; 웹 정적 빌드 영향. 롤백은 이번 웹 수정 되돌림·이전 빌드 복원이다.
+- 작업 공간: 원본 C:\Users\jjang\IdeaProjects\NurseFlow의 codex/web-figma-design 미커밋 디자인 작업과 DB/trace를 보존했다. 독립 작업 분리 예외로 관리 도구가 만든 C:\Users\jjang\.codex\worktrees\b8b-review\NurseFlow에서 기존 feat/web-off-requests 브랜치를 이어갔다. 시작 HEAD 05f83d2af4d1614939659e925625a46a378b38d4, tracked 변경 없음 확인. 현재 수정은 이 B8b 작업 폴더의 미커밋 상태로 인계한다. 원본 폴더에서 이 브랜치를 중복 checkout하지 말고 이 경로에서 검토·게시를 이어간다. 다음 단계는 수정 diff 재리뷰와 커밋/푸시 후 PR #61 반영·최종 head CI 확인이다.
+
+
+## B8b PR #61 게시 확인 (2026-11-25, Codex)
+
+- B8b 변경 16파일만 `fe0b44200172cfbf459afb03c8f2297ce8b73e90`에 커밋하고 `origin/feat/web-off-requests`로 푸시했다. 로컬/원격 head 일치 및 최신 dev `3e30752043ed78bf8ab8b74e123bab3e28f2ea3d` 포함을 확인했다. 사용자 DB/trace는 미추적 상태로 보존하고 커밋하지 않았다.
+- [PR #61](https://github.com/gerrmang/NurseFlow/pull/61)을 `dev` 대상 일반 PR로 게시했다. 조회 결과 OPEN·isDraft=false·MERGEABLE·REVIEW_REQUIRED/BLOCKED다. 이는 GitHub 승인 완료·즉시 병합 가능 상태를 뜻하지 않는다. GitHub 연결 도구는 생성 권한 403(`Resource not accessible by integration`)을 반환해 기존 인증된 gh와 `--body-file web/B8b-pr-draft.md`로 게시했다.
+- 구현 head의 [Verify 45529049144](https://github.com/gerrmang/NurseFlow/actions/runs/45529049144)는 조회 시 Demo seed checks·Backend tests·Android debug build·Web checks 모두 IN_PROGRESS, Vercel·Vercel Preview Comments는 SUCCESS였다. Verify 전체 통과로 해석하지 않는다. 게시 기록 커밋의 최종 원격 head/검사는 푸시 뒤 별도 조회한다.
+- 독립 리뷰 뒤 제품 코드 변경 없음. 게시 준비와 이번 기록은 문서만 정리해 기존 로컬/실서버/브라우저 검사 결과를 유지하고 `git diff --check`를 확인한다. API/DB/환경 추가 변경·수동 배포 없음. 롤백은 기능 커밋 revert와 이전 웹 빌드 복원이다.
+- 같은 공유 worktree·`feat/web-off-requests`에서 이 게시 기록만 커밋/푸시한다. 사용자 DB/trace 보존, 병합·자동 병합·리뷰 요청/댓글·수동 배포 없음. 남은 원격 CI·GitHub 승인과 기존 실제 Kakao/물리 기기 등 제한은 유지한다.
+
+## B8b PR 게시 준비 (2026-11-25, Codex)
+
+- 사용자 요청으로 같은 `feat/web-off-requests`의 B8b 변경만 커밋·푸시하고 `dev` 대상 일반 PR로 게시한다. `git fetch origin` 후 최신 dev는 여전히 `3e30752043ed78bf8ab8b74e123bab3e28f2ea3d`로 현재 HEAD에 포함된다. 같은 head 브랜치의 기존 PR 0건을 확인했다. 추가 dev 통합 없음.
+- 직전 독립 리뷰에서 조치 가능한 P1~P5 없음, 리뷰어 전체 446개 통과·opt-in 4개 건너뜀·실패 0을 확인했다. 구현 최종 api:check·typecheck·lint·build와 실서버 opt-in 1개·가상 2계정 브라우저 결과도 보존한다. 독립 리뷰 이후 제품 코드 변경이 없어 검사를 반복하지 않고 게시 문서·대상 diff·`git diff --check`를 확인한다.
+- 게시 대상은 웹 15파일과 이 현황 문서뿐이다. 사용자 `nurseflow.mv.db`·`nurseflow.trace.db`는 보존하고 스테이징/커밋에서 제외한다. API/DB/환경/의존성 추가 변경 없음, 웹 빌드 영향, 수동 배포 없음. 롤백은 B8b 커밋 revert와 이전 웹 빌드 복원이다.
+- 게시 결과·최종 원격 head·PR CI는 후속 확인한다. GitHub 승인·실제 Kakao 등 기존 미검증 범위는 유지하며 병합·자동 병합·리뷰 요청/댓글·수동 배포는 하지 않는다. 같은 공유 worktree/브랜치에서 인계한다.
+
+## B8b 독립 코드 리뷰 (2026-11-25 10:50 KST, Codex)
+
+- 사용자 요청으로 구현에 참여하지 않은 별도 리뷰 에이전트 `b8b_independent_review`가 같은 공유 worktree의 미커밋 B8b 변경을 읽기 전용으로 검토했다. **조치 가능한 P1~P5 발견 사항 없음.** 이는 GitHub 승인 리뷰·CI 통과·무결함 보장을 뜻하지 않는다. 아래 구현 시점의 '독립 리뷰 미검증/다음은 독립 리뷰' 상태는 이 기록으로 갱신한다.
+- 범위: tracked diff와 미추적 B8b 웹 코드·테스트·fixture·문서 전체(웹 15파일), 공유 현황, 라우팅·공통 세션 경로. 실제 서버 Service/Controller/Repository·OpenAPI와 권한·상태 전이·마감·월 한도·예외 접수·ETag·쓰기 직렬화·응답 유실·늦은 응답 폐기를 대조했다. 화면 완전 이탈 시 새 Store로 이전 미확인 상태가 사라지는 점은 확인했으나 서버 중복·상태 전이·정책 ETag가 후속 쓰기를 방어하므로 데이터 결함으로 단정하지 않았다.
+- 리뷰어 직접 실행: Windows `web`의 `npm test -- --run` exit 0, **446개 통과·실서버 opt-in 4개 건너뜀·실패 0**(20파일 통과·4파일 건너뜀, 14.48초). `git diff --check` 통과. 기존 실제 서버/브라우저 기록과 이번 직접 재실행을 구분했다.
+- 이번 리뷰에서는 브라우저·실제 Kakao·실서버 opt-in·실제 다중 관리자 브라우저 경합·물리망 단절·backend/Android 전체·GitHub PR/CI·운영 설정을 재검증하지 않았다. 기존 미검증 제한은 유지한다. 리뷰어는 어떤 파일도 변경하지 않았고 서버 기동·Git 변경·커밋·푸시를 하지 않았다. 부모는 이 리뷰 기록만 추가한다.
+- 리뷰 기준점: `C:\Users\jjang\IdeaProjects\NurseFlow`, `feat/web-off-requests`, HEAD `3e30752043ed78bf8ab8b74e123bab3e28f2ea3d`. 기록 추가 직전 tracked `git diff HEAD --no-ext-diff`의 줄을 LF로 연결(마지막 개행 없음)한 SHA256 `7d220e1016616fe4efd2f77f6ba1d07cdfd1c7934350aeaa7302d27843c84447`. 미추적 파일을 포함한 웹 15파일의 경로순 `path SHA256` 목록을 LF로 연결한 manifest SHA256 `3f432cf619499cb21f54eb8c0b1fab3351876b4e87557a1b757659857880444c`. 검토 완료 시각 2026-11-25 10:50 KST.
+- 공유 인계: 같은 브랜치와 미커밋 구현을 유지하고 사용자 DB/trace를 보존한다. 제품 코드 수정 없음, 추가 API/DB/환경/배포 영향 없음. 다음 단계는 커밋·PR 준비와 최종 원격 CI 확인이다. 이번에 커밋·푸시·PR 게시·병합·배포하지 않았다.
+
+## B8b 웹 희망 오프 구현·검증 (2026-11-25, Codex)
+
+- 사용자 승인 계획에 따라 같은 공유 worktree에서 `git fetch origin` 후 최신 `origin/dev` `3e30752`(A13 #58) 기반 `feat/web-off-requests`를 만들었다. A12 #56과 B3b를 소비하며 B7a/B7b 미병합 코드를 쌓지 않았다. 기존 브랜치와 미추적 사용자 `nurseflow.mv.db`·`nurseflow.trace.db`를 보존했다.
+- 병동 카드→희망 오프: 간호사 본인 신청/월별 상태·이력/마감 전 미확정 철회, 관리자 취합·간호사/상태/예외 필터·대리 입력·확정·반려·확정분 철회, 월 한도·마감일 정책/ETag를 연결했다. 최신 결정 15와 A12에 따라 마감 뒤에도 간호사 예외 요청은 제출할 수 있지만 본인 철회와 확정 전 편성 선호 반영은 불가다. 관리자 본인 일정·사유 입력·공식 결재·주말 최적화·초안 편집/공개는 추가하지 않는다.
+- 세션/병동별 메모리와 늦은 응답 폐기, 쓰기 직전 소속/역할 확인, 쓰기 직렬화·저장 후 재조회, 무본문/비정상 응답·5xx·응답 유실 시 자동 재전송 차단·최신 목록 사용자 확인, 409/412 안내를 구현했다. 자체 검토에서 응답 출처·혼합 한도·화면 종료/재활성 중 쓰기 재조회·확인 패널 포커스를 보완했다. 필수 규칙은 서버가 최종 판정한다.
+- 최종 Windows web `api:check`·`typecheck`·`lint`·`build` 모두 성공. Vitest **446개 통과·실서버 opt-in 4개 건너뜀·실패 0**(총 450개/24파일). 신규 기본 52개(API 20·Store 21·화면 11). JS gzip 111.25 kB. backend JDK 21 `bootJar --offline --no-daemon` BUILD SUCCESSFUL(15초, 4작업 UP-TO-DATE). `git diff --check` 통과. backend·OpenAPI·생성 타입·Android diff 0줄이라 backend/Android 전체 회귀는 반복하지 않았다.
+- 실제 Spring JAR·새 메모리 H2·가상 서명 신원의 opt-in **1개 통과·실패/건너뜀 0**(최종 12.81초). 본인 한도·철회/재신청·관리자 대리 입력·확정/철회·정책 412·권한 403/404·마감 후 예외/철회 거부, 확정 후 초안 revision 증가·충돌 초안 확정 거부·공개본 동일을 확인했다. 최초 실행은 샌드박스 Java 루프백 차단으로 시작 실패했고 로컬 검증 권한으로 실행 후 통과했다.
+- 실제 in-app browser·가상 웹 OIDC의 관리자/간호사 2계정에서 확정 상태 공유·판단 시각, 정책 4→3 저장/재조회, 로그아웃 후 간호사 관리 기능 비노출·마감 후 예외 제출·한도 2/3 표시를 확인했다. 390×844/1280×900 배치·가로 넘침 없음. 날짜 fill이 React 활성 상태를 반영하지 않아 AX setValue로 입력 후 실제 저장/재조회를 확인했다. 브라우저 후 자체 보완은 최종 회귀/실서버로 확인했으며 브라우저는 반복하지 않았다.
+- 검증 Java/가상 공급자/Vite의 PID·명령행을 확인해 이번 프로세스만 종료했고 18090/18091/5174 listen 없음 확인. opt-in 서버는 finally 종료한다. 실제 Kakao·물리 기기·실제 다중 관리자 브라우저 경합·물리망 단절·운영·독립 리뷰·GitHub PR/CI는 미검증이다. 상세는 `web/B8b-verification.md`, PR 초안은 `web/B8b-pr-draft.md`다.
+- API/DB/환경/의존성/CI·서버 규칙 변경·수동 배포 없음. 웹 정적 빌드 영향, 롤백은 B8b 웹 변경 revert와 이전 웹 빌드 복원. 마감 API에 병동 시간대/서버 현재시각이 없어 기기 시간대를 명시하며 서버가 최종 판정한다. 입력은 재조회/이탈 때 초기화되고 실시간 구독은 없다.
+- 공유 인계: 같은 `C:\Users\jjang\IdeaProjects\NurseFlow`, `feat/web-off-requests`, HEAD `3e30752`의 미커밋 B8b 코드/검사/문서를 유지한다. 사용자 DB/trace 보존·커밋 제외. 다음은 전체 diff 독립 리뷰와 필요한 수정 후 커밋·PR/최종 CI 확인이다. 이번에 커밋·푸시·PR 게시·병합·배포하지 않았다.
 
 ## B7a PR #60 A13 최신 dev 통합 (2026-11-25, Codex)
 

@@ -45,6 +45,7 @@ export function StaffAdminPage({ wardId }: { wardId: string }) {
       <div className="actions"><button onClick={() => { const action = confirmation; setConfirmation(null); void run(action.label, action.operation) }}>확인하고 실행</button><button className="secondary" onClick={() => setConfirmation(null)}>취소</button></div>
     </section>}
     {data && !state.forbidden && <>
+      <div className="actions"><Link className="button secondary" to={`/wards/${encodeURIComponent(wardId)}/schedule-settings`}>근무 설정 · 근무 형태</Link></div>
       <nav className="actions segmented" aria-label="관리 화면">
         <button className={tab === 'staff' ? '' : 'secondary'} disabled={!!confirmation} aria-pressed={tab === 'staff'} onClick={() => setTab('staff')}>팀·간호사</button>
         <button className={tab === 'detail' ? '' : 'secondary'} disabled={!!confirmation} aria-pressed={tab === 'detail'} onClick={() => setTab('detail')}>간호사 상세</button>

@@ -105,11 +105,17 @@ export function WardsPage({ user }: { user: SessionUser }) {
               </div>
               <span className="roles">
                 <Link className="button secondary" to={`/wards/${encodeURIComponent(ward.wardId)}/published-roster`}>공개 근무표</Link>
+                <Link className="button secondary" to={`/wards/${encodeURIComponent(ward.wardId)}/off-requests`}>희망 오프</Link>
                 {ward.roles.map((role) => (
                   <span key={role} className="badge">
                     {roleLabel(role)}
                   </span>
                 ))}
+                {ward.roles.includes('WARD_ADMIN') && (
+                  <Link className="button secondary" to={`/wards/${encodeURIComponent(ward.wardId)}/schedule-settings`}>
+                    근무 설정
+                  </Link>
+                )}
                 {ward.roles.includes('WARD_ADMIN') && (
                   <Link className="button secondary" to={`/wards/${encodeURIComponent(ward.wardId)}/staff`}>
                     팀·구성원 관리
