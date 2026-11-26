@@ -396,6 +396,13 @@ class RosterService(
             )
             return
         }
+        // A18: a required setting can disappear while the job waits (e.g. the last rosterable nurse deactivated).
+        // Checked again under the ward lock, before any assignment is cleared, so the draft stays as it was.
+        val setupMissing = setupReadiness.blockingDiagnostics(roster)
+        if (setupMissing.isNotEmpty()) {
+            finishFailedUnlessCancelled(jobId, setupMissing)
+            return
+        }
         val allSlots = repo.slots(roster.id)
         val preserveLocked = repo.preserveLocked(jobId)
         val preserved = allSlots.filter { it.nurseId != null && it.locked && preserveLocked }

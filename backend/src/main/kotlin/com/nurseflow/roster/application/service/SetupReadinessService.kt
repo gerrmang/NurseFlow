@@ -59,13 +59,17 @@ class SetupReadinessService(
         return evaluate(roster)
     }
 
+    /** One HARD SETUP_<key> diagnostic per missing required item; empty when generation may run. */
+    fun blockingDiagnostics(roster: DbRoster): List<RuleDiagnostic> =
+        evaluate(roster).items.filter { it.blocking }.map { RuleDiagnostic("SETUP_${it.key.name}", "HARD", it.message) }
+
     /** Throws SETUP_INCOMPLETE listing each missing required item. Caller has already authorized the admin. */
     fun requireReadyForGeneration(roster: DbRoster) {
-        val blocking = evaluate(roster).items.filter { it.blocking }
+        val blocking = blockingDiagnostics(roster)
         if (blocking.isNotEmpty()) {
             throw BusinessException(
                 ErrorCode.SETUP_INCOMPLETE,
-                ruleViolations = blocking.map { RuleDiagnostic("SETUP_${it.key.name}", "HARD", it.message) },
+                ruleViolations = blocking,
                 safeDetail = "필수 설정이 빠져 자동배치를 시작할 수 없습니다: ${blocking.joinToString(" / ") { it.message }}",
             )
         }
@@ -76,7 +80,7 @@ class SetupReadinessService(
         val ward = wardInput(roster.wardId)
         val rosterInput = RosterSetupInput(
             month,
-            rosters.slots(roster.id).map { ReadinessSlot(it.date, it.kind, it.teamId, it.seniorRequired) },
+            rosters.slots(roster.id).map { ReadinessSlot(it.date, it.kind, it.teamId, it.seniorRequired, it.startsAt, it.endsAt) },
             roster.needsRevalidation,
             hours.publicHolidayFetchedAt(month) != null || hours.calendar(roster.wardId, month).isNotEmpty(),
             readiness.pendingOffRequests(roster.wardId, month),

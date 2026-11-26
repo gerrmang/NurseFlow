@@ -27,6 +27,7 @@ data class SeniorCoverageResponse(
     val requiredSeniorSlots: Int,
     val availableSeniors: Int,
     val seniorShiftCapacity: Int,
+    val requiredSeniorDays: Int,
     val shortage: Boolean,
     val reasons: List<String>,
     val firstShortDate: LocalDate?,

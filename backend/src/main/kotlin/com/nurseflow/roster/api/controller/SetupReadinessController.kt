@@ -37,7 +37,7 @@ class SetupReadinessController(private val service: SetupReadinessService) {
                 p.seniorCoverage.map {
                     SeniorCoverageResponse(
                         it.teamId, it.teamName, it.shiftKind?.name, it.requiredSeniorSlots, it.availableSeniors,
-                        it.seniorShiftCapacity, it.shortage, it.reasons.map { r -> r.name }, it.firstShortDate,
+                        it.seniorShiftCapacity, it.requiredSeniorDays, it.shortage, it.reasons.map { r -> r.name }, it.firstShortDate,
                     )
                 },
             ),

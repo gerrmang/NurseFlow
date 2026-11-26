@@ -1419,8 +1419,11 @@ export interface paths {
          *     PENDING_OFF_REQUESTS(확정하지 않은 희망 오프가 있으면 WARNING. 자동배치에서 선호로만 반영).
          *     seniorCoverage는 팀별 선임 필수 칸 수요와 가용 선임 공급을 근무 종류별(shiftKind)과 팀 전체(shiftKind=null)로 비교한다.
          *     가용 선임은 그 팀의 편성 가능한 선임 자격자 중 근무 형태가 그 종류를 허용하는 사람이다. 팀 간 지원 허용은 공급에 넣지 않는다.
-         *     seniorShiftCapacity = availableSeniors × maxShiftsPerNurse이며, maxShiftsPerNurse = 월 일수 - floor(월 일수 / (최대 연속 근무일 + 1))이다.
-         *     부족 사유: NO_SENIOR(가용 선임 0명), MONTHLY_CAPACITY(필요 칸 > 공급 상한), SAME_DAY(팀 전체 행에서 하루 선임 칸 수 > 선임 수, firstShortDate 표시).
+         *     배치 규칙과 같게, 한 간호사는 시간이 겹치지 않는(반열린 구간) 여러 칸을 같은 날 맡을 수 있고 연속근무 상한은 근무일 수로 센다.
+         *     requiredSeniorDays는 날짜마다 동시에 겹치는 선임 칸의 최대 수를 더한 값(필요한 최소 선임 근무일)이다.
+         *     seniorShiftCapacity = availableSeniors × maxShiftsPerNurse(선임 근무일 상한)이며, maxShiftsPerNurse = 월 일수 - floor(월 일수 / (최대 연속 근무일 + 1))이다.
+         *     부족 사유: NO_SENIOR(가용 선임 0명), MONTHLY_CAPACITY(requiredSeniorDays > seniorShiftCapacity),
+         *     SAME_DAY(어느 시각에 동시에 겹치는 선임 칸 수 > 선임 수. 자정을 넘는 Night와 다음 날 근무의 겹침 포함, firstShortDate에 처음 넘는 칸의 날짜).
          *     상한 계산이어서 부족이 없어도 휴식·연차·Night 규칙 때문에 선임 칸이 비어 남을 수 있다. 부족은 알림이며 생성을 막지 않는다.
          *     확정된 근무표는 NOT_DRAFT로 거부한다.
          */
@@ -1450,6 +1453,8 @@ export interface paths {
          *     생성 전 점검(A18)의 필수 항목이 빠졌으면 422 SETUP_INCOMPLETE로 거부하고 작업을 만들지 않는다.
          *     ruleViolations에 빠진 항목마다 SETUP_<항목 키>(예: SETUP_SHIFT_TYPES, SETUP_STAFF, SETUP_REQUIREMENTS) 진단이 하나씩 들어간다.
          *     선임 부족 등 알림 항목은 생성을 막지 않는다.
+         *     작업이 대기하는 동안 필수 항목이 사라지면(예: 마지막 편성 대상 간호사 비활성화) 실행 단계에서 병동 잠금 아래 다시 검사해
+         *     작업을 FAILED로 끝내고(diagnostics에 SETUP_<항목 키>) 기존 배정을 지우지 않는다.
          */
         post: operations["startGeneration"];
         delete?: never;
@@ -2361,7 +2366,10 @@ export interface components {
             shiftKind?: "DAY" | "EVENING" | "NIGHT" | null;
             requiredSeniorSlots: number;
             availableSeniors: number;
+            /** @description 가용 선임이 이 달에 일할 수 있는 근무일 상한 */
             seniorShiftCapacity: number;
+            /** @description 날짜별로 동시에 겹치는 선임 칸 최대 수의 합 */
+            requiredSeniorDays: number;
             shortage: boolean;
             reasons: ("NO_SENIOR" | "MONTHLY_CAPACITY" | "SAME_DAY")[];
             /** Format: date */

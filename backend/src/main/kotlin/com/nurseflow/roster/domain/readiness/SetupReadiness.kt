@@ -2,6 +2,7 @@ package com.nurseflow.roster.domain.readiness
 
 import com.nurseflow.roster.domain.model.ShiftKind
 import com.nurseflow.roster.domain.model.WorkPattern
+import java.time.Instant
 import java.time.LocalDate
 import java.time.YearMonth
 import java.util.UUID
@@ -39,9 +40,13 @@ data class ReadinessItem(
 enum class SeniorShortageReason {
     /** No rosterable senior in the team can take this shift kind at all. */
     NO_SENIOR,
-    /** More senior slots than the team's seniors can work in the month under the consecutive-work limit. */
+    /**
+     * The team needs more senior working days than its seniors have in the month under the consecutive-work
+     * limit. A day's need is the most senior slots of that day running at the same time: one nurse may take
+     * several slots of a day as long as they do not overlap, and they count as one working day.
+     */
     MONTHLY_CAPACITY,
-    /** On some date the team needs more senior slots than it has seniors (one shift per nurse per day). */
+    /** At some moment more of the team's senior slots run at once than it has seniors (overlapping slots need different nurses). */
     SAME_DAY,
 }
 
@@ -52,10 +57,12 @@ data class SeniorCoverage(
     val shiftKind: ShiftKind?,
     val requiredSeniorSlots: Int,
     val availableSeniors: Int,
-    /** Upper bound of senior shifts the available seniors can work this month: seniors × [maxShiftsPerNurse]. */
+    /** Upper bound of senior working days this month: seniors × [SetupReadinessEvaluator.maxShiftsPerNurse]. */
     val seniorShiftCapacity: Int,
+    /** Fewest senior working days the slots need: per date, the most of its senior slots overlapping at once, summed. */
+    val requiredSeniorDays: Int,
     val reasons: List<SeniorShortageReason>,
-    /** For SAME_DAY: the first date whose senior slots exceed the seniors. */
+    /** For SAME_DAY: the date of the first slot at which overlapping senior slots exceed the seniors. */
     val firstShortDate: LocalDate? = null,
 ) {
     val shortage: Boolean get() = reasons.isNotEmpty()
@@ -65,7 +72,14 @@ data class ReadinessTeam(val id: UUID, val name: String)
 
 data class ReadinessNurse(val id: UUID, val teamId: UUID?, val seniorEligible: Boolean, val workPattern: WorkPattern)
 
-data class ReadinessSlot(val date: LocalDate, val kind: ShiftKind, val teamId: UUID?, val seniorRequired: Boolean)
+data class ReadinessSlot(
+    val date: LocalDate,
+    val kind: ShiftKind,
+    val teamId: UUID?,
+    val seniorRequired: Boolean,
+    val startsAt: Instant,
+    val endsAt: Instant,
+)
 
 data class WardSetupInput(
     val activeShiftKinds: Set<ShiftKind>,
@@ -123,12 +137,14 @@ object SetupReadinessEvaluator {
     )
 
     /**
-     * Senior demand against supply per team and shift kind, plus the team as a whole. A lower bound only: a
-     * team with no shortage here can still end with unfilled senior slots once leave, rest and night rules apply.
-     * Cross-team support is not counted as supply, so the warning errs towards showing a shortage.
+     * Senior demand against supply per team and shift kind, plus the team as a whole. It follows the placement
+     * rules: a nurse may hold several slots of one day if they do not overlap (half-open intervals), and the
+     * consecutive-work limit counts working days, not slots. A lower bound only: a team with no shortage here can
+     * still end with unfilled senior slots once leave, rest and night rules apply. Cross-team support is not
+     * counted as supply, so the notice errs towards showing a shortage.
      */
     fun seniorCoverage(ward: WardSetupInput, roster: RosterSetupInput): List<SeniorCoverage> {
-        val maxShifts = maxShiftsPerNurse(roster.month, ward.maxConsecutiveWorkDays)
+        val maxDays = maxShiftsPerNurse(roster.month, ward.maxConsecutiveWorkDays)
         val seniorSlots = roster.slots.filter { it.seniorRequired && it.teamId != null }
         val seniors = ward.nurses.filter { it.seniorEligible && it.teamId != null }
         return ward.teams.flatMap { team ->
@@ -136,37 +152,57 @@ object SetupReadinessEvaluator {
             if (teamSlots.isEmpty()) return@flatMap emptyList()
             val teamSeniors = seniors.filter { it.teamId == team.id }
             val perKind = rosterKinds.mapNotNull { kind ->
-                val required = teamSlots.count { it.kind == kind }
-                if (required == 0) return@mapNotNull null
-                val available = teamSeniors.count { it.workPattern.allows(kind) }
-                SeniorCoverage(
-                    team.id, team.name, kind, required, available, available * maxShifts,
-                    buildList {
-                        if (available == 0) add(SeniorShortageReason.NO_SENIOR)
-                        else if (required > available * maxShifts) add(SeniorShortageReason.MONTHLY_CAPACITY)
-                    },
-                )
+                val slots = teamSlots.filter { it.kind == kind }
+                if (slots.isEmpty()) return@mapNotNull null
+                coverage(team, kind, slots, teamSeniors.count { it.workPattern.allows(kind) }, maxDays)
             }
-            val available = teamSeniors.size
-            val shortDate = teamSlots.groupingBy { it.date }.eachCount().filter { it.value > available }.keys.minOrNull()
-            val total = SeniorCoverage(
-                team.id, team.name, null, teamSlots.size, available, available * maxShifts,
-                buildList {
-                    if (available == 0) add(SeniorShortageReason.NO_SENIOR)
-                    else {
-                        if (teamSlots.size > available * maxShifts) add(SeniorShortageReason.MONTHLY_CAPACITY)
-                        if (shortDate != null) add(SeniorShortageReason.SAME_DAY)
-                    }
-                },
-                shortDate,
-            )
-            perKind + total
+            perKind + coverage(team, null, teamSlots, teamSeniors.size, maxDays)
         }
     }
 
+    private fun coverage(team: ReadinessTeam, kind: ShiftKind?, slots: List<ReadinessSlot>, available: Int, maxDays: Int): SeniorCoverage {
+        val days = slots.groupBy { it.date }.values.sumOf { maxConcurrent(it) }
+        val peak = maxConcurrent(slots)
+        return SeniorCoverage(
+            team.id, team.name, kind, slots.size, available, available * maxDays, days,
+            buildList {
+                if (available == 0) add(SeniorShortageReason.NO_SENIOR)
+                else {
+                    if (days > available * maxDays) add(SeniorShortageReason.MONTHLY_CAPACITY)
+                    if (peak > available) add(SeniorShortageReason.SAME_DAY)
+                }
+            },
+            if (available > 0 && peak > available) firstDateAbove(slots, available) else null,
+        )
+    }
+
+    /** Most slots running at one instant: the fewest nurses that can hold them all. Ends sort before starts at equal times. */
+    private fun maxConcurrent(slots: List<ReadinessSlot>): Int {
+        var current = 0
+        var peak = 0
+        events(slots).forEach { (_, delta, _) ->
+            current += delta
+            peak = maxOf(peak, current)
+        }
+        return peak
+    }
+
+    private fun firstDateAbove(slots: List<ReadinessSlot>, limit: Int): LocalDate? {
+        var current = 0
+        events(slots).forEach { (_, delta, slot) ->
+            current += delta
+            if (current > limit) return slot.date
+        }
+        return null
+    }
+
+    private fun events(slots: List<ReadinessSlot>): List<Triple<Instant, Int, ReadinessSlot>> =
+        slots.flatMap { listOf(Triple(it.startsAt, 1, it), Triple(it.endsAt, -1, it)) }
+            .sortedWith(compareBy({ it.first }, { it.second }))
+
     /**
-     * Most shifts one nurse can work in the month with at most one shift a day and a day off after every
-     * [maxConsecutive] working days. Rest days, leave and night rest make the real number smaller.
+     * Most working days one nurse can have in the month with a day off after every [maxConsecutive] working
+     * days. Rest days, leave and night rest make the real number smaller.
      */
     fun maxShiftsPerNurse(month: YearMonth, maxConsecutive: Int): Int {
         val days = month.lengthOfMonth()

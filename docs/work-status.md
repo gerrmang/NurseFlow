@@ -1,5 +1,11 @@
 # 공유 작업 현황
 
+## A18 PR #66 리뷰 수정 (2026-11-26, Claude)
+
+- P2: 자동배치 실행(`processGeneration`) 단계에서 병동 잠금 아래 준비 상태를 다시 검사한다. 대기 중 필수 항목이 사라지면(예: 마지막 편성 대상 간호사 비활성화) 작업을 FAILED(`SETUP_<항목>` 진단)로 끝내고 기존 배정·revision을 그대로 둔다.
+- P3: 선임 수요·공급 판정을 배치 규칙과 맞췄다. 한 간호사가 시간이 겹치지 않는 같은 날 여러 칸을 맡을 수 있으므로, SAME_DAY는 동시에 겹치는 선임 칸 수(자정 넘는 Night 포함)로, MONTHLY_CAPACITY는 날짜별 최대 겹침의 합(`requiredSeniorDays`)과 근무일 상한으로 비교한다. 응답에 `requiredSeniorDays`를 추가했다.
+- 검증: `LC_ALL=C.UTF-8 ./gradlew test` 321개 중 316 통과·5 건너뜀·실패 0. 새 테스트: 실행 단계 재검사(배정 보존), D·E 비겹침 1명 충족, 겹침 부족, Night-다음 날 겹침. `npm run api:check` 통과.
+
 ## A18 설정 준비 상태·생성 전 점검 구현 (2026-11-26, Claude)
 
 - `origin/dev` `d6f69de`에서 `claude/project-thread-1tgx42`로 분기했다. 새 API: `GET /api/v1/wards/{wardId}/setup-readiness`(병동 준비 상태), `GET /api/v1/rosters/{rosterId}/generation-precheck`(초안 생성 전 점검). 둘 다 관리자 전용·조회 전용이며 `Cache-Control: private, no-store`, ETag 없음.

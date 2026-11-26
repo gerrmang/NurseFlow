@@ -8,6 +8,8 @@ import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import java.time.LocalDate
+import java.time.LocalTime
+import java.time.ZoneId
 import java.time.YearMonth
 import java.util.UUID
 
@@ -29,7 +31,22 @@ class SetupReadinessEvaluatorTest {
     private fun roster(slots: List<ReadinessSlot> = listOf(seniorSlot(teamA, 1, ShiftKind.DAY)), holidays: Boolean = true, pending: Int = 0) =
         RosterSetupInput(month, slots, false, holidays, pending)
 
-    private fun seniorSlot(team: ReadinessTeam, day: Int, kind: ShiftKind) = ReadinessSlot(month.atDay(day), kind, team.id, true)
+    private val zone = ZoneId.of("Asia/Seoul")
+
+    /** Adjacent, non-overlapping D 07–15, E 15–23, N 23–07. */
+    private fun seniorSlot(team: ReadinessTeam, day: Int, kind: ShiftKind) = when (kind) {
+        ShiftKind.DAY -> slot(team, day, kind, "07:00", "15:00")
+        ShiftKind.EVENING -> slot(team, day, kind, "15:00", "23:00")
+        else -> slot(team, day, kind, "23:00", "07:00")
+    }
+
+    private fun slot(team: ReadinessTeam, day: Int, kind: ShiftKind, start: String, end: String): ReadinessSlot {
+        val date = month.atDay(day)
+        val s = LocalTime.parse(start)
+        val e = LocalTime.parse(end)
+        val endDate = if (e <= s) date.plusDays(1) else date
+        return ReadinessSlot(date, kind, team.id, true, date.atTime(s).atZone(zone).toInstant(), endDate.atTime(e).atZone(zone).toInstant())
+    }
 
     private fun List<ReadinessItem>.of(key: ReadinessKey) = single { it.key == key }
 
@@ -103,16 +120,33 @@ class SetupReadinessEvaluatorTest {
     }
 
     @Test
-    fun `more senior slots on one date than seniors is a same-day shortage`() {
-        val slots = listOf(ShiftKind.DAY, ShiftKind.EVENING, ShiftKind.NIGHT).map { seniorSlot(teamA, 3, it) } +
+    fun `one senior can hold non-overlapping day and evening slots of one date`() {
+        val slots = listOf(seniorSlot(teamA, 3, ShiftKind.DAY), seniorSlot(teamA, 3, ShiftKind.EVENING))
+        val coverage = SetupReadinessEvaluator.seniorCoverage(ward(nurses = listOf(nurse(teamA, senior = true))), roster(slots))
+        assertTrue(coverage.none { it.shortage }, coverage.toString())
+        val total = coverage.single { it.shiftKind == null }
+        assertEquals(2, total.requiredSeniorSlots)
+        assertEquals(1, total.requiredSeniorDays)
+    }
+
+    @Test
+    fun `overlapping senior slots need more seniors than the team has`() {
+        // D 07:00–15:30 and E 15:00–23:30 overlap for half an hour, so one senior cannot hold both.
+        val slots = listOf(slot(teamA, 3, ShiftKind.DAY, "07:00", "15:30"), slot(teamA, 3, ShiftKind.EVENING, "15:00", "23:30")) +
             seniorSlot(teamA, 4, ShiftKind.DAY)
-        val coverage = SetupReadinessEvaluator.seniorCoverage(
-            ward(nurses = listOf(nurse(teamA, senior = true), nurse(teamA, senior = true))), roster(slots),
-        )
+        val coverage = SetupReadinessEvaluator.seniorCoverage(ward(nurses = listOf(nurse(teamA, senior = true))), roster(slots))
         val total = coverage.single { it.shiftKind == null }
         assertEquals(listOf(SeniorShortageReason.SAME_DAY), total.reasons)
         assertEquals(LocalDate.of(2027, 1, 3), total.firstShortDate)
+        assertEquals(3, total.requiredSeniorDays) // 2 on the 3rd + 1 on the 4th
         assertTrue(coverage.filter { it.shiftKind != null }.none { it.shortage })
         assertNull(coverage.first { it.shiftKind != null }.firstShortDate)
+    }
+
+    @Test
+    fun `a night running into the next day overlaps that day's early slot`() {
+        val slots = listOf(slot(teamA, 3, ShiftKind.NIGHT, "22:00", "07:30"), slot(teamA, 4, ShiftKind.DAY, "07:00", "15:30"))
+        val coverage = SetupReadinessEvaluator.seniorCoverage(ward(nurses = listOf(nurse(teamA, senior = true))), roster(slots))
+        assertEquals(listOf(SeniorShortageReason.SAME_DAY), coverage.single { it.shiftKind == null }.reasons)
     }
 }
