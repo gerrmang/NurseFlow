@@ -81,4 +81,31 @@ class ConfirmAcknowledgementHttpTest : ApiTestBase() {
         val calendar = http.get("/api/v1/wards/$wardId/published-rosters?month=2026-12", nurse)
         assertTrue(!calendar.body.contains("shortfall") && !calendar.body.contains("acknowledg"), calendar.body)
     }
+
+    @Test
+    fun `a draft with more than 2000 unfilled slots can be confirmed by echoing its check`() {
+        val created = http.post("/api/v1/wards/$wardId/rosters", mapOf("month" to "2026-12"), admin, idem())
+        val rosterId = created.json!!.get("rosterId").asString()
+        val shiftTypeId = jdbc.queryForObject("SELECT shift_type_id FROM shift_types WHERE ward_id=?", String::class.java, wardId)
+        // 21 days x 100 = 2100 empty slots, within the 10000-slot draft limit.
+        val items = (1..21).map { day ->
+            mapOf("date" to "2026-12-%02d".format(day), "shiftTypeId" to shiftTypeId, "requiredCount" to 100, "requiredQualifications" to emptyList<String>())
+        }
+        val requirements = http.put("/api/v1/rosters/$rosterId/requirements", mapOf("items" to items), admin,
+            mapOf("If-Match" to created.header("ETag")!!))
+        assertTrue(requirements.status in 200..299, requirements.body)
+        val etag = http.get("/api/v1/rosters/$rosterId", admin).header("ETag")!!
+
+        val check = http.get("/api/v1/rosters/$rosterId/confirmation-check", admin).json!!
+        val slotIds = check.get("generalUnfilled").get("items").toList().map { it.get("slotId").asString() }
+        assertEquals(2100, slotIds.size)
+        val shortfalls = check.get("hourShortfalls").get("items").toList().map {
+            mapOf("nurseId" to it.get("nurseId").asString(), "shortfallMinutes" to it.get("shortfallMinutes").asInt())
+        }
+        val confirmed = http.post("/api/v1/rosters/$rosterId/confirm",
+            mapOf("acknowledgements" to mapOf("generalUnfilledSlotIds" to slotIds, "hourShortfalls" to shortfalls)),
+            admin, idem() + ("If-Match" to etag))
+        assertEquals(200, confirmed.status, confirmed.body)
+        assertEquals(2100, http.get("/api/v1/rosters/$rosterId/confirmation", admin).json!!.get("generalUnfilled").get("count").asInt())
+    }
 }

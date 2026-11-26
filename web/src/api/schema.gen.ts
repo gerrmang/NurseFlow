@@ -2389,7 +2389,7 @@ export interface components {
         ConfirmRosterRequest: {
             acknowledgements?: components["schemas"]["ConfirmAcknowledgements"];
         };
-        /** @description confirmation-check의 각 분류 항목을 그대로 되돌려 보낸다. 순서는 상관없다. */
+        /** @description confirmation-check의 각 분류 항목을 그대로 되돌려 보낸다. 순서는 상관없다. 목록 한도는 초안 최대 칸 수(10000)와 같다. */
         ConfirmAcknowledgements: {
             generalUnfilledSlotIds?: string[];
             seniorUnfilledSlotIds?: string[];

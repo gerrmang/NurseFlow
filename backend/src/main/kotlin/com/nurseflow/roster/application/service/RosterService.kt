@@ -6,6 +6,7 @@ import tools.jackson.databind.json.JsonMapper
 import tools.jackson.databind.node.ObjectNode
 import com.nurseflow.common.error.BusinessException
 import com.nurseflow.common.error.ErrorCode
+import com.nurseflow.roster.api.dto.request.MAX_ROSTER_SLOTS
 import com.nurseflow.roster.application.model.*
 import com.nurseflow.roster.domain.model.ApprovedAbsence
 import com.nurseflow.roster.domain.model.ApprovedAbsenceKind
@@ -109,7 +110,7 @@ class RosterService(
         if (request.items.map { Triple(it.date, it.shiftTypeId, it.teamId) }.toSet().size != request.items.size) {
             throw BusinessException(ErrorCode.DUPLICATE_REQUIREMENT)
         }
-        if (request.items.sumOf { it.requiredCount } > 10000) {
+        if (request.items.sumOf { it.requiredCount } > MAX_ROSTER_SLOTS) {
             throw BusinessException(ErrorCode.TOO_MANY_SLOTS)
         }
         if (repo.slots(roster.id).any { it.nurseId != null }) {

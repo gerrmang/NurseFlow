@@ -61,11 +61,12 @@ data class ConfirmRosterRequest(
 )
 
 data class ConfirmAcknowledgements(
-    @field:Size(max = 2000)
+    @field:Size(max = MAX_ROSTER_SLOTS)
     val generalUnfilledSlotIds: List<UUID>? = null,
-    @field:Size(max = 2000)
+    @field:Size(max = MAX_ROSTER_SLOTS)
     val seniorUnfilledSlotIds: List<UUID>? = null,
-    @field:Size(max = 500) @field:Valid
+    // A ward has no nurse limit of its own; one slot per nurse is the largest shortfall list a valid draft yields.
+    @field:Size(max = MAX_ROSTER_SLOTS) @field:Valid
     val hourShortfalls: List<HourShortfallAcknowledgement>? = null,
 )
 
@@ -81,5 +82,8 @@ data class StartGenerationRequest(
     @field:Min(1) @field:Max(600)
     val timeLimitSeconds: Int = 120,
 )
+
+/** Largest draft the server creates (sum of required counts), so every acknowledgement list of one fits. */
+const val MAX_ROSTER_SLOTS = 10_000
 
 const val MONTH_PATTERN = "^\\d{4}-(0[1-9]|1[0-2])$"

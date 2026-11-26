@@ -4971,19 +4971,19 @@ components:
     ConfirmAcknowledgements:
       type: object
       additionalProperties: false
-      description: confirmation-check의 각 분류 항목을 그대로 되돌려 보낸다. 순서는 상관없다.
+      description: confirmation-check의 각 분류 항목을 그대로 되돌려 보낸다. 순서는 상관없다. 목록 한도는 초안 최대 칸 수(10000)와 같다.
       properties:
         generalUnfilledSlotIds:
           type: array
-          maxItems: 2000
+          maxItems: 10000
           items: { type: string, format: uuid }
         seniorUnfilledSlotIds:
           type: array
-          maxItems: 2000
+          maxItems: 10000
           items: { type: string, format: uuid }
         hourShortfalls:
           type: array
-          maxItems: 500
+          maxItems: 10000
           items:
             type: object
             additionalProperties: false
