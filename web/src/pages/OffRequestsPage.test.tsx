@@ -178,3 +178,26 @@ it('refreshes stale policy values while keeping the request draft', async () => 
   expect(screen.getByLabelText('전달 마감일 (1~28일)')).toHaveValue(15)
   expect(screen.getByLabelText('희망 날짜')).toHaveValue(date)
 })
+
+it('selects a calendar date without sending a request until the nurse submits', async () => {
+  const app = setup({ empty: true })
+  await screen.findByRole('form', { name: '본인 신청' })
+  const month = (screen.getByLabelText('대상 월') as HTMLInputElement).value
+  await userEvent.click(screen.getByRole('button', { name: `${month}-02 선택` }))
+  expect(screen.getByLabelText('희망 날짜')).toHaveValue(`${month}-02`)
+  expect(app.writes).toHaveLength(0)
+  await userEvent.click(screen.getByRole('button', { name: '신청' }))
+  await waitFor(() => expect(app.writes).toHaveLength(1))
+  expect(app.writes[0]?.body).toEqual({ date: `${month}-02` })
+})
+
+it('links a filtered admin grid request to its existing decision card without writing', async () => {
+  const app = setup({ admin: true })
+  const grid = await screen.findByRole('region', { name: '병동 희망 오프 월간 표' })
+  const link = within(grid).getByRole('link')
+  const href = link.getAttribute('href')!
+  expect(document.getElementById(href.slice(1))).toHaveTextContent('신청됨')
+  expect(app.writes).toHaveLength(0)
+  await userEvent.selectOptions(screen.getByLabelText('상태 필터'), 'CONFIRMED')
+  expect(within(screen.getByRole('region', { name: '병동 희망 오프 월간 표' })).queryByRole('link')).not.toBeInTheDocument()
+})
