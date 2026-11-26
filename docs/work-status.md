@@ -1,5 +1,12 @@
 # 공유 작업 현황
 
+## 공휴일·휴일 달력 클라이언트 인수인계 문서 (2026-11-26, Claude)
+
+- 브랜치 `claude/project-thread-0nhhfg`(최신 `dev` `3e30752`에서 분기). 문서만 추가: `docs/holiday-calendar-client-handoff.md`.
+- 내용: A13 휴일 달력·공휴일·목표시간 API, 달력 표시 우선순위(병동 항목 > 국가 공휴일 > 주말), 관리자 설정 화면 요구, 정책 ETag 공유, 오류 코드별 화면 처리, 알려진 공백(자동배치 미반영·간호사용 표시 API 없음·운영 키 미확인), B 쪽 권장 순서.
+- 확인: `origin/dev`와 열린 PR #59~#62의 `web/src`·`android`에 휴일 달력 사용 코드 없음(`schema.gen.ts` 타입만). 문서의 응답 예시 수치는 `TargetHourCalculator.monthTarget` 규칙으로 손계산했다. 빌드·테스트는 문서 변경이라 실행하지 않았다.
+- API/DB/환경 변경 없음. 공유 인계: B7a·B7b 병합 후 휴일 달력 화면을 별도 행으로 둘지 B10에 포함할지 `docs/feature-breakdown.md`에서 정한다.
+
 ## B8b 리뷰 수정 게시 준비 (2026-11-26, Codex)
 
 - 사용자 요청으로 검증된 수정만 기존 PR #61 브랜치에 커밋·푸시하고 해당 리뷰 스레드를 해결한다. 수정 시점 diff 해시와 현재 상태가 일치해 제품 검사를 반복하지 않으며 git diff --check를 확인한다.
