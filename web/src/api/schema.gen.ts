@@ -1373,6 +1373,66 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/wards/{wardId}/setup-readiness": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                wardId: components["parameters"]["WardId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * 관리자용 병동 설정 준비 상태 (A18)
+         * @description 설정 안내(설정 홈) 화면이 쓰는 항목별 준비 상태다. 조회 때 현재 설정으로 계산하며 저장하지 않는다.
+         *     status는 COMPLETE(설정됨), DEFAULT(관리자가 입력하지 않아 기본값 사용. 병원 정책으로 확정된 값이 아님),
+         *     WARNING(사용할 수 있지만 미충원·검토가 생길 수 있음), MISSING(필수 설정 없음) 중 하나다.
+         *     blocking=true는 MISSING 항목뿐이며, 이 항목이 하나라도 있으면 ready=false이고 자동배치 시작이 SETUP_INCOMPLETE로 거부된다.
+         *     필수 항목: SHIFT_TYPES(활성 D/E/N 근무 유형이 하나도 없으면 MISSING, 일부 종류만 없으면 WARNING),
+         *     STAFF(편성 가능한 간호사가 없으면 MISSING, 팀이 있는 병동에서 팀 미지정 간호사가 있으면 WARNING).
+         *     알림 항목: TEAM_SENIORS(선임 가능자가 없는 팀), WORK_RULES, OFF_REQUEST_POLICY, TARGET_HOURS(정책 미입력이면 DEFAULT).
+         *     규칙을 완화하지 않고 알리기만 한다. 결과가 여러 설정에 달려 있어 ETag를 주지 않는다.
+         */
+        get: operations["getWardSetupReadiness"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/rosters/{rosterId}/generation-precheck": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                rosterId: components["parameters"]["RosterId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * 관리자용 자동배치 생성 전 점검 (A18)
+         * @description 초안 하나에 대해 병동 준비 상태 항목과 이 달 항목을 함께 돌려준다.
+         *     이 달 항목: REQUIREMENTS(필요 인원 칸이 없으면 MISSING, 설정 변경으로 재검증이 필요하면 WARNING),
+         *     HOLIDAY_CALENDAR(이 달 공휴일을 불러오지 않았고 병동 달력 입력도 없으면 WARNING),
+         *     PENDING_OFF_REQUESTS(확정하지 않은 희망 오프가 있으면 WARNING. 자동배치에서 선호로만 반영).
+         *     seniorCoverage는 팀별 선임 필수 칸 수요와 가용 선임 공급을 근무 종류별(shiftKind)과 팀 전체(shiftKind=null)로 비교한다.
+         *     가용 선임은 그 팀의 편성 가능한 선임 자격자 중 근무 형태가 그 종류를 허용하는 사람이다. 팀 간 지원 허용은 공급에 넣지 않는다.
+         *     seniorShiftCapacity = availableSeniors × maxShiftsPerNurse이며, maxShiftsPerNurse = 월 일수 - floor(월 일수 / (최대 연속 근무일 + 1))이다.
+         *     부족 사유: NO_SENIOR(가용 선임 0명), MONTHLY_CAPACITY(필요 칸 > 공급 상한), SAME_DAY(팀 전체 행에서 하루 선임 칸 수 > 선임 수, firstShortDate 표시).
+         *     상한 계산이어서 부족이 없어도 휴식·연차·Night 규칙 때문에 선임 칸이 비어 남을 수 있다. 부족은 알림이며 생성을 막지 않는다.
+         *     확정된 근무표는 NOT_DRAFT로 거부한다.
+         */
+        get: operations["getGenerationPrecheck"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/rosters/{rosterId}/generation-jobs": {
         parameters: {
             query?: never;
@@ -1387,6 +1447,9 @@ export interface paths {
         /**
          * 월간 자동 배치 시작
          * @description 비동기 작업으로 실행한다. 결과는 비공개 draft이며 자동 확정/공개되지 않는다.
+         *     생성 전 점검(A18)의 필수 항목이 빠졌으면 422 SETUP_INCOMPLETE로 거부하고 작업을 만들지 않는다.
+         *     ruleViolations에 빠진 항목마다 SETUP_<항목 키>(예: SETUP_SHIFT_TYPES, SETUP_STAFF, SETUP_REQUIREMENTS) 진단이 하나씩 들어간다.
+         *     선임 부족 등 알림 항목은 생성을 막지 않는다.
          */
         post: operations["startGeneration"];
         delete?: never;
@@ -2265,6 +2328,57 @@ export interface components {
             status: "SHORTFALL" | "MET" | "OVER";
             carriedInShifts: number;
             carriedOutShifts: number;
+        };
+        ReadinessItem: {
+            /** @enum {string} */
+            key: "SHIFT_TYPES" | "STAFF" | "TEAM_SENIORS" | "WORK_RULES" | "OFF_REQUEST_POLICY" | "TARGET_HOURS" | "REQUIREMENTS" | "HOLIDAY_CALENDAR" | "PENDING_OFF_REQUESTS";
+            /** @enum {string} */
+            status: "COMPLETE" | "DEFAULT" | "WARNING" | "MISSING";
+            /** @description true면 자동배치 시작이 거부된다(MISSING). */
+            blocking: boolean;
+            /** @description 화면 표시용 한 줄 요약. 개인 정보와 부재 사유를 담지 않는다. */
+            message: string;
+            /** @description 빠진 대상. SHIFT_TYPES는 근무 종류, STAFF는 팀 미지정 간호사 id, TEAM_SENIORS는 팀 id. */
+            missing: string[];
+        };
+        WardSetupReadiness: {
+            /** Format: uuid */
+            wardId: string;
+            ready: boolean;
+            /** @description status가 COMPLETE인 항목 수 */
+            completedCount: number;
+            totalCount: number;
+            items: components["schemas"]["ReadinessItem"][];
+        };
+        SeniorCoverage: {
+            /** Format: uuid */
+            teamId: string;
+            teamName: string;
+            /**
+             * @description null이면 팀 전체
+             * @enum {string|null}
+             */
+            shiftKind?: "DAY" | "EVENING" | "NIGHT" | null;
+            requiredSeniorSlots: number;
+            availableSeniors: number;
+            seniorShiftCapacity: number;
+            shortage: boolean;
+            reasons: ("NO_SENIOR" | "MONTHLY_CAPACITY" | "SAME_DAY")[];
+            /** Format: date */
+            firstShortDate?: string | null;
+        };
+        GenerationPrecheck: {
+            /** Format: uuid */
+            rosterId: string;
+            /** Format: uuid */
+            wardId: string;
+            /** @example 2027-01 */
+            month: string;
+            revision: number;
+            ready: boolean;
+            items: components["schemas"]["ReadinessItem"][];
+            maxShiftsPerNurse: number;
+            seniorCoverage: components["schemas"]["SeniorCoverage"][];
         };
         RosterHourDiagnostics: {
             /** Format: uuid */
@@ -5835,6 +5949,57 @@ export interface operations {
             412: components["responses"]["PreconditionFailed"];
         };
     };
+    getWardSetupReadiness: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                wardId: components["parameters"]["WardId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 항목별 준비 상태 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WardSetupReadiness"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    getGenerationPrecheck: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                rosterId: components["parameters"]["RosterId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 생성 전 점검 결과 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GenerationPrecheck"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
     startGeneration: {
         parameters: {
             query?: never;
@@ -5870,6 +6035,7 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             412: components["responses"]["PreconditionFailed"];
+            422: components["responses"]["RuleViolation"];
             429: components["responses"]["TooManyRequests"];
         };
     };
