@@ -11,6 +11,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.liveRegion
@@ -28,11 +29,16 @@ import java.time.format.DateTimeFormatter
 @Composable
 fun OffRequestScreen(wardName: String, model: OffRequestViewModel, onBack: () -> Unit) {
     val state by model.state.collectAsStateWithLifecycle()
-    DisposableEffect(model) { model.activate(); onDispose { model.deactivate() } }
+    val activity = generateSequence(LocalContext.current) { (it as? android.content.ContextWrapper)?.baseContext }
+        .filterIsInstance<android.app.Activity>().firstOrNull()
+    DisposableEffect(model) {
+        model.activate()
+        onDispose { if (activity?.isChangingConfigurations != true) model.deactivate() }
+    }
     BackHandler(onBack = onBack)
     var now by remember { mutableStateOf(Instant.now()) }
     LaunchedEffect(model) { while (true) { now = Instant.now(); delay(1_000) } }
-    // Every authoritative reload drops old input. A rotation preserves only the current form.
+    // Reloads drop old input. Configuration changes retain the form and in-flight ViewModel work.
     var date by rememberSaveable(state.version) { mutableStateOf("") }
     var target by rememberSaveable(state.version) { mutableStateOf<String?>(null) }
     var limit by rememberSaveable(state.version) { mutableStateOf(state.data?.policy?.value?.monthlyLimit?.toString() ?: "") }

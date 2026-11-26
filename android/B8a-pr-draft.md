@@ -10,6 +10,11 @@
 ## 관련 이슈
 - 없음
 
+## 2026-11-26 리뷰 수정
+- P2 구성 변경 중 POST 취소를 막고, P3 정책 조회 경합(조회 1회 재시도)과 NURSE_IDENTITY_REQUIRED 전용 안내/재조회 복구를 수정했다. 실제 화면 이탈·권한 상실과 불확실 응답 처리·서버 규칙은 유지한다.
+- ViewModel 회귀 5개는 수정 전 전부 실패, 수정 후 전체 JVM 243개 통과·실서버 opt-in 2개 건너뜀·실패/오류 0. 최종 앱·계측 APK·lint 빌드 성공, lint 오류 0·기존 경고 27.
+- 실제 Activity 재생성 중 신청·확정 응답 지연 검사 2개와 미연결 간호사 안내/복구 Compose 1개를 추가했다. 화면 8개 통과, 초기 관리자 회전 검사의 로딩 대기를 보완한 뒤 회전 2개 재실행 OK(43.907초). 최종 통합 10개 재실행은 생략했다. 상세는 B8a-verification.md의 리뷰 수정 절을 따른다. 수정 후 독립 재리뷰·원격 CI·실서버 opt-in·Kakao/물리 기기는 미실행이다. 아래 최초 구현 인수 결과와 구분한다.
+
 ## 검증
 - JDK 21 `:app:testDebugUnitTest :app:assembleDebug :app:assembleDebugAndroidTest :app:lintDebug --offline --no-daemon` 수정 후 **BUILD SUCCESSFUL(1분 29초)**. 기본 단위 238개 통과·실서버 선택 2개 건너뜀·실패/오류 0, Lint 오류 0·기존 경고 27. 초기 B8a opt-in 포함 239개 통과·기존 선택 1개 건너뜀 기록과 구분한다.
 - 신규 API 11개·ViewModel 31개·실제 Spring/H2 인수 1개 모두 통과. 가상 OIDC로 관리자·간호사·비소속 권한, 한도/중복/상태 전이/마감 후 예외/정책 ETag/소속 상실 검사.

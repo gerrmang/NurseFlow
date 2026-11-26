@@ -1,5 +1,27 @@
 # 공유 작업 현황
 
+## B8a 리뷰 수정 게시 준비 (2026-11-26, Codex)
+
+- 사용자 요청으로 검증된 수정만 기존 PR #62 브랜치에 커밋·푸시하고 해당 리뷰 스레드를 해결한다. 수정 시점 diff 해시와 현재 상태가 일치해 제품 검사를 반복하지 않으며 git diff --check를 확인한다.
+- git fetch origin 후 최신 dev 748a0a9의 추가 변경은 인계 문서·작업 현황뿐이다. 게시 전 동일 작업 브랜치에 통합하고 현황 충돌은 양쪽 기록을 보존해 해결한다. API/DB/환경·제품 코드 추가 변경 없음. PR 병합·자동 병합·수동 배포 없음. 최종 원격 head·스레드·CI는 게시 후 확인한다.
+
+
+## B8a PR #62 리뷰 수정 (2026-11-26, Codex)
+
+- 수정 diff 자체 검토 기준: 2026-11-26 14:20:59 KST, Codex, HEAD 4971b3b00847292b30129a639e60d4fb96db4e3f, git diff HEAD(상태 문서 제외) 원시 바이트 SHA256 5489896029555fcca5d4fb3f2460c2a6a4d0b09c554eacaaa1796293a2a000d5. 미추적 android/app/src/androidTest/kotlin/com/nurseflow/app/feature/offrequest/OffRequestRotationDeviceTest.kt SHA256 75861fd0ffa910ef1057923213a8da76d7d89f7b236cccebadbbc43fe61a310b. 외부 독립 승인과 구분한다.
+
+- GitHub 리뷰 스레드 3개와 리뷰 본문을 확인해 P2 1건·P3 2건을 수정했다. 기준 head 4971b3b00847292b30129a639e60d4fb96db4e3f는 로컬 feat/android-off-requests와 일치했다. 커밋·푸시·GitHub 답글/스레드 해결·병합·배포는 수행하지 않았다.
+- P2: OffRequestScreen의 DisposableEffect 정리에 기존 StaffAdminScreen과 같은 Activity.isChangingConfigurations 가드를 적용했다. 구성 변경은 retained ViewModel의 읽기·쓰기와 입력을 보존하고 실제 화면 이탈은 기존 deactivate로 취소/불확실 결과 보호를 유지한다. 같은 패턴 검색 결과 StaffAdminScreen은 이미 가드가 있으며 이번 수정은 offrequest 경로뿐이다.
+- P3: 목록·정책 monthlyLimit 불일치 시 조회만 1회 재시도한다. 계속 바뀌면 정책 변경 안내와 stale 편집 차단을 유지한다. 지연된 재시도 응답도 ticket/월/세션 검사로 폐기한다. POST·PUT 자동 재전송은 추가하지 않았다.
+- P3: 403 NURSE_IDENTITY_REQUIRED는 이전 데이터 폐기·관리자 문의 안내·재조회로 분리했다. 다른 403/401/소속·역할 상실은 기존 deny/세션 처리를 유지하며 간호사 기록 미연결을 역할 상실로 표시하지 않는다.
+- ViewModel 회귀 5개(조회 재시도 성공·상한·지연 응답 폐기, 초기 미연결과 기존 데이터 조회 후 미연결)를 추가했다. HEAD ViewModel로만 일시 복원한 수정 전 검사에서는 신규 5개 모두 실패(exit 1); finally로 수정본을 복원한 뒤 전체 JVM **245개 중 243개 통과·실서버 opt-in 2개 건너뜀·실패/오류 0**. JDK 21, ANDROID_HOME 기존 SDK, GRADLE_USER_HOME 기존 사용자 캐시, :app:testDebugUnitTest :app:assembleDebug :app:assembleDebugAndroidTest :app:lintDebug --offline --no-daemon 최종 BUILD SUCCESSFUL(1분 40초). Lint 오류 0·기존 경고 27. git diff --check 통과.
+- 기기 회귀 3개 추가: 미연결 안내·복구 Compose 1개, 실제 MainActivity/Compose/root/retained ViewModel/Retrofit/MockWebServer의 신청·확정 POST 응답 지연 중 ActivityScenario.recreate 2개. CountDownLatch로 POST 도착·서버 상태 변경→회전→응답 허용 순서를 강제하고 재조회/중복 POST 없음·원래 성공 응답 반영·불확실 잠금 없음 확인. 새로운 회전 보호를 제거한 기기 변이 검사는 실행하지 않았다.
+- 기기 초기 통합: 화면 8개 통과·신청 회전 통과, 관리자 회전은 조회 완료 전 버튼을 찾는 테스트 대기 누락으로 실패(9/10 통과, 153.7초). 계측 테스트만 목록 로딩 대기를 추가해 재빌드한 뒤 회전 클래스 **2/2 통과·실패/건너뜀 0(43.907초)**. 현재 운영 코드의 화면 8개·회전 2개를 검증했으며 최종 통합 10개 재실행은 생략했다. 마지막 :app:assembleDebugAndroidTest :app:lintDebug --offline --no-daemon BUILD SUCCESSFUL(1분 11초), lint 오류 0·기존 경고 27. 스크립트는 기본 10개, WithServer 11개를 기대하도록 갱신했다. 결과는 android/app/build/b8a-device-results/instrumentation.txt(초기 실패 이력)와 rotation-final.txt(최종 회전 성공)다.
+- 기기 환경: 새 build 전용 AVD는 offline으로 종료했다. 이전 B8a 인수의 가상 B8aVerification AVD를 -read-only -no-snapshot -no-window, 18082/18083으로 재사용했다. 부팅 후 콘솔 화면으로 이번 연결의 USB 디버깅만 허용했으며 항상 허용 옵션은 선택하지 않았다. 사용자 Pixel_10·사용자 DB·디자인·B8b 변경은 보존했다. 이번 에뮬레이터를 adb emu kill로 종료하고 임시 ADB TCP 연결도 해제했다. 종료 후 18082/18083 LISTEN 없음 확인.
+- 자체 diff 재검토 완료. 수정 후 실서버 opt-in(2개)·두 계정 Spring 기기 인수·실제 Kakao·물리 기기·backend/웹 전체·독립 재리뷰·최종 원격 CI는 미실행. 클라이언트 수정 범위라 서버/웹 전체는 반복하지 않았다. API/DB/환경/의존성/CI·서버 규칙 변경 없음. Android 빌드 영향, 수동 배포 없음; 롤백은 이번 수정 되돌림과 이전 앱 복원이다.
+- 공유 인계: 기존 디자인 작업 폴더와 B8b 미커밋 8파일을 보존하기 위해 독립 Android 작업을 관리 도구의 C:\Users\jjang\.codex\worktrees\b8a-review\NurseFlow로 분리하고 기존 feat/android-off-requests 브랜치를 이어갔다(새 작업 브랜치 없음). 수정은 이 폴더의 미커밋 10파일이며 같은 경로에서 재리뷰/커밋/게시를 이어간다. B8b는 C:\Users\jjang\.codex\worktrees\b8b-review\NurseFlow에 그대로 남아 있고 서로의 현황 문서 기록은 후속 통합 때 모두 보존한다. 다음 단계는 수정 diff 재리뷰와 커밋/푸시 후 PR #62 반영·최종 head CI 확인이다.
+
+
 ## B8a PR #62 일반 PR 전환 확인 (2026-11-25, Codex)
 
 - 기기 인수 보완 7파일을 `3b8cd345b547666aa5bc3a7d8193a95a1a10f485`에 커밋·푸시했다. PR #62 본문을 실제 Android **8/8 성공·실패/건너뜀 0**, 두 계정 실서버 인수·Windows 예약 포트 해결·재현 명령으로 갱신하고 **Draft를 해제했다**. GitHub 재조회로 OPEN·isDraft=false·dev 대상·MERGEABLE·REVIEW_REQUIRED/BLOCKED를 확인했다. 병합이나 승인 완료를 뜻하지 않는다.

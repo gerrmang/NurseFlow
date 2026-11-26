@@ -17,11 +17,13 @@ internal class FakeOffApi : OffRequestApi {
     var lastInput: OffRequestInput? = null
     var lastEtag: String? = null
     var listRead: suspend (String) -> Unit = {}
+    var policyRead: suspend () -> Unit = {}
+    var reads = 0
     var write: suspend () -> Unit = {}
     var brokenResult = false
     var deadline = "2026-11-16T00:00:00Z"
     override suspend fun list(ward: String, month: String): OffRequestList {
-        listRead(month)
+        reads++; listRead(month)
         return OffRequestList(rows.filter { it.date.startsWith(month) }, deadline, limit)
     }
     override suspend fun submit(ward: String, input: OffRequestInput): OffRequest {
@@ -40,7 +42,10 @@ internal class FakeOffApi : OffRequestApi {
     override suspend fun confirm(ward: String, id: String) = decide(id, "CONFIRMED")
     override suspend fun reject(ward: String, id: String) = decide(id, "REJECTED")
     override suspend fun withdraw(ward: String, id: String) = decide(id, "WITHDRAWN")
-    override suspend fun policy(ward: String) = Response.success(OffRequestPolicy(limit, day, revision), mapOf("ETag" to "\"policy-$revision\"").toHeaders())
+    override suspend fun policy(ward: String): Response<OffRequestPolicy> {
+        policyRead()
+        return Response.success(OffRequestPolicy(limit, day, revision), mapOf("ETag" to "\"policy-$revision\"").toHeaders())
+    }
     override suspend fun savePolicy(ward: String, etag: String, input: OffRequestPolicyInput): Response<OffRequestPolicy> {
         writes++; lastEtag = etag; write(); limit = input.monthlyLimit; day = input.deadlineDay; revision++
         return policy(ward)
@@ -202,6 +207,49 @@ class OffRequestViewModelTest {
     @Test fun lookupFailureBeforeSendDoesNotClaimUnknownWrite() {
         val vm = open(); accessRead = { throw java.io.IOException() }; vm.submit("2026-12-10")
         assertEquals(0, api.writes); assertFalse(vm.state.value.uncertain); assertTrue(vm.state.value.stale)
+    }
+    @Test fun mixedPolicySnapshotRetriesReadsOnceWithoutMutation() {
+        var policies = 0
+        api.policyRead = { if (++policies == 1) api.limit = 3 }
+        val vm = open(true)
+        assertEquals(2, api.reads); assertEquals(2, policies); assertEquals(0, api.writes)
+        assertEquals(3, vm.state.value.data!!.list.monthlyLimit)
+        assertEquals(3, vm.state.value.data!!.policy!!.value.monthlyLimit)
+    }
+    @Test fun repeatedPolicyChangesFailClosedWithSpecificNotice() {
+        api.policyRead = { api.limit = if (api.limit == 4) 3 else 4 }
+        val vm = model(true); vm.activate()
+        assertEquals(2, api.reads); assertEquals(0, api.writes)
+        assertFalse(vm.state.value.editable); assertNull(vm.state.value.data)
+        assertTrue(vm.state.value.notice!!.contains("조회 중 정책이 다시 변경"))
+    }
+    @Test fun cancelledPolicyRetryCannotReplaceNewMonth() = runBlocking {
+        val vm = open(true); val gate = CompletableDeferred<Unit>(); var policies = 0
+        api.policyRead = { if (++policies == 1) api.limit = 3 }
+        api.listRead = { month -> if (month == "2026-12" && policies == 1) withContext(NonCancellable) { gate.await() } }
+        vm.reload(); assertTrue(vm.state.value.loading)
+        vm.changeMonth(1)
+        val fresh = vm.state.value
+        gate.complete(Unit); yield()
+        assertEquals(YearMonth.of(2027, 1), vm.state.value.month)
+        assertEquals(fresh, vm.state.value); assertTrue(vm.state.value.editable)
+    }
+    @Test fun missingNurseIdentityShowsActionableNoticeAndCanRecover() {
+        val vm = model()
+        api.listRead = { throw ApiException(403, "NURSE_IDENTITY_REQUIRED", "fixed") }
+        vm.activate()
+        assertFalse(vm.state.value.forbidden); assertNull(vm.state.value.data)
+        assertEquals(0, expired); assertFalse(vm.state.value.editable)
+        assertEquals(offRequestError("NURSE_IDENTITY_REQUIRED"), vm.state.value.notice)
+        api.listRead = {}; vm.reload()
+        assertTrue(vm.state.value.editable)
+    }
+    @Test fun identityLossClearsPreviouslyLoadedDataWithoutClaimingRoleLoss() {
+        val vm = open()
+        api.listRead = { throw ApiException(403, "NURSE_IDENTITY_REQUIRED", "fixed") }
+        vm.reload()
+        assertNull(vm.state.value.data); assertFalse(vm.state.value.forbidden)
+        vm.submit("2026-12-10"); assertEquals(0, api.writes)
     }
     @Test fun mixedMonthAndDuplicateIdsFailClosed() {
         api.rows = listOf(FakeOffApi.row(), FakeOffApi.row()); val vm = model(); vm.activate(); assertTrue(vm.state.value.stale); assertNull(vm.state.value.data)

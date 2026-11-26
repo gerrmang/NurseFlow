@@ -24,15 +24,15 @@ Invoke-DeviceAdb @('install', '-r', (Join-Path $androidRoot 'app/build/outputs/a
 Invoke-DeviceAdb @('shell', 'input', 'keyevent', 'KEYCODE_WAKEUP')
 Invoke-DeviceAdb @('shell', 'wm', 'dismiss-keyguard')
 
-$classes = 'com.nurseflow.app.feature.offrequest.OffRequestScreenUiTest'
-$expected = 7
+$classes = 'com.nurseflow.app.feature.offrequest.OffRequestScreenUiTest,com.nurseflow.app.feature.offrequest.OffRequestRotationDeviceTest'
+$expected = 10
 $instrumentation = @('shell', 'am', 'instrument', '-w', '-r')
 if ($WithServer) {
     Invoke-DeviceAdb @('reverse', 'tcp:18090', 'tcp:18090')
     Invoke-DeviceAdb @('reverse', 'tcp:18091', 'tcp:18091')
     $classes += ',com.nurseflow.app.feature.offrequest.OffRequestRealServerDeviceTest'
     $instrumentation += @('-e', 'b8aE2e', 'true')
-    $expected = 8
+    $expected = 11
 }
 $instrumentation += @('-e', 'class', $classes, 'com.nurseflow.app.test/com.nurseflow.app.test.IsolatedSessionTestRunner')
 $result = @(Invoke-DeviceAdb $instrumentation)

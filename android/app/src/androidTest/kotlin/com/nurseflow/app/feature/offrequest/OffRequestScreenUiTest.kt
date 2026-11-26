@@ -23,8 +23,12 @@ class OffRequestScreenUiTest {
     private var limit = 4
     private var revision = 0
     private var loseWriteResponse = false
+    private var identityMissing = false
     private val api = object : OffRequestApi {
-        override suspend fun list(ward: String, month: String) = OffRequestList(rows, deadline, limit)
+        override suspend fun list(ward: String, month: String): OffRequestList {
+            if (identityMissing) throw ApiException(403, "NURSE_IDENTITY_REQUIRED", "Fictional missing identity")
+            return OffRequestList(rows, deadline, limit)
+        }
         override suspend fun submit(ward: String, input: OffRequestInput): OffRequest {
             writes++
             return OffRequest("r$writes", input.nurseId ?: "n1", input.date, "SUBMITTED", if (input.nurseId == null) "NURSE" else "ADMIN", "2026-11-01T00:00:00Z", afterDeadline = deadline.startsWith("2000")).also { rows = rows + it }
@@ -124,6 +128,16 @@ class OffRequestScreenUiTest {
         rule.onNodeWithText("최신 목록 확인 후 계속").assertIsDisplayed().assertIsEnabled().performClick()
         rule.runOnIdle { assertEquals(1, writes) }
         rule.onNodeWithText("정책 저장", substring = false).assertIsEnabled()
+    }
+    @Test fun missingIdentityOffersRetryWithoutRoleLossMessage() {
+        identityMissing = true; show()
+        rule.onNodeWithText(offRequestError("NURSE_IDENTITY_REQUIRED")).assertIsDisplayed()
+        rule.onNodeWithText("병동 목록으로 돌아가 소속과 역할을 다시 확인해 주세요.").assertDoesNotExist()
+        rule.onNodeWithText("최신 목록 다시 조회").assertIsEnabled()
+        rule.runOnIdle { identityMissing = false }
+        rule.onNodeWithText("최신 목록 다시 조회").performClick()
+        rule.onNodeWithTag("off-list").performScrollToNode(hasText("선택 날짜: 없음"))
+        rule.onNodeWithText("선택 날짜: 없음").assertIsDisplayed()
     }
     @Test fun weekdaysUseTheSameColumnCentersAsDates() {
         show()

@@ -163,3 +163,7 @@ adb devices -l
 ```
 
 콘솔 18082·ADB 18083이 비어 있는지 먼저 확인하고, 표시된 USB 디버깅 허용을 처리합니다. `adb devices -l`에서 실제 `device` 상태인 serial을 사용하세요. 같은 기기가 TCP 별칭으로도 표시되면 미인증 별칭 대신 인증된 `emulator-18082`를 선택합니다. `offline`·`unauthorized` 상태나 APK 컴파일만으로 기기 인수를 완료 처리하지 않습니다.
+
+## B8a 리뷰 회귀 검사
+
+희망 오프는 화면 회전 등 구성 변경 중 전송을 유지하고 실제 이탈 때 취소합니다. 정책과 목록의 한도가 조회 중 바뀌면 조회만 한 번 다시 시도하며, 간호사 기록 미연결은 역할 상실과 구분해 관리자 문의와 재조회를 안내합니다. `scripts/verify-off-requests.ps1 -Serial <serial> -Adb <adb>`는 Compose 화면 8개와 실제 Activity 재생성 중 신청·확정 응답 지연 2개를 실행합니다. `-WithServer`는 기존 두 계정 Spring 인수 1개를 추가합니다. 이번 수정의 실행 결과와 생략 검사는 `B8a-verification.md`의 2026-11-26 절을 따릅니다.

@@ -66,6 +66,8 @@ class OffRequestViewModel(
     private fun failure(e: Exception): String {
         val p = e as? ApiException
         if (p?.status == 401 || p?.code == "USER_NOT_FOUND") { deny(); onSessionInvalid() }
+        else if (p?.status == 403 && p.code == "NURSE_IDENTITY_REQUIRED")
+            mutable.value = mutable.value.copy(data = null, stale = true, forbidden = false)
         else if (p?.status == 403 || p?.code == "WARD_NOT_FOUND") deny()
         return offRequestError(p?.code)
     }
@@ -88,11 +90,18 @@ class OffRequestViewModel(
         return try {
             if (!checkAccess()) return false
             val data = apiCall {
-                val list = api.list(wardId, month.toString()).checked(month)
-                val policy = if (admin) api.policy(wardId).checkedPolicy() else null
-                val eligible = if (admin) api.eligibility(wardId).checked() else null
-                require(policy == null || policy.value.monthlyLimit == list.monthlyLimit)
-                OffRequestData(list, policy, eligible)
+                suspend fun snapshot(): OffRequestData {
+                    val list = api.list(wardId, month.toString()).checked(month)
+                    val policy = if (admin) api.policy(wardId).checkedPolicy() else null
+                    val eligible = if (admin) api.eligibility(wardId).checked() else null
+                    return OffRequestData(list, policy, eligible)
+                }
+                var data = snapshot()
+                // Another administrator may save between these reads. Retry reads only, once.
+                if (data.policy != null && data.policy.value.monthlyLimit != data.list.monthlyLimit) data = snapshot()
+                if (data.policy != null && data.policy.value.monthlyLimit != data.list.monthlyLimit)
+                    throw ApiException(409, "POLICY_SNAPSHOT_CHANGED", "Policy changed during read")
+                data
             }
             if (!valid() || mine != ticket || !checkAccess()) return false
             if (!valid() || mine != ticket) return false
@@ -102,7 +111,7 @@ class OffRequestViewModel(
         catch (e: Exception) {
             if (valid() && mine == ticket) {
                 val text = failure(e)
-                mutable.value = mutable.value.copy(loading = false, stale = true, notice = text + " 최신 목록을 다시 불러와 주세요.")
+                mutable.value = mutable.value.copy(loading = false, stale = true, notice = text + if ((e as? ApiException)?.code == "NURSE_IDENTITY_REQUIRED") "" else " 최신 목록을 다시 불러와 주세요.")
             }
             false
         }
@@ -192,6 +201,7 @@ fun offRequestError(code: String?): String = when (code) {
     "OFF_REQUEST_DEADLINE_PASSED" -> "마감 뒤에는 본인이 철회할 수 없어요. 관리자에게 문의해 주세요."
     "OFF_REQUEST_STATE_CONFLICT", "OFF_REQUEST_NOT_FOUND" -> "신청 상태가 변경됐어요. 최신 목록을 확인하고 다시 선택해 주세요."
     "STALE_POLICY_REVISION" -> "다른 관리자가 정책을 변경했어요. 최신 설정을 확인하고 다시 저장해 주세요."
+    "POLICY_SNAPSHOT_CHANGED" -> "조회 중 정책이 다시 변경됐어요. 새로고침해 최신 설정을 확인해 주세요."
     "NURSE_IDENTITY_REQUIRED" -> "연결된 간호사 기록이 없어 희망 오프를 이용할 수 없어요. 관리자에게 문의해 주세요."
     "NURSE_NOT_FOUND" -> "간호사 기록이 변경됐어요. 최신 대상을 확인해 주세요."
     "NETWORK" -> "서버에 연결할 수 없어요. 연결 상태를 확인해 주세요."

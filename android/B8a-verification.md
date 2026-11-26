@@ -1,5 +1,13 @@
 # B8a Android 희망 오프 검증
 
+## 리뷰 수정 검증 (2026-11-26)
+
+- PR #62의 P2 회전 중 전송 취소와 P3 정책 조회 경합·간호사 기록 미연결 안내를 수정했다. Activity의 isChangingConfigurations 동안에는 ViewModel 작업을 유지하고 실제 이탈은 기존 deactivate 처리를 따른다. 정책·목록 한도 불일치는 조회만 1회 재시도하며 계속 불일치하면 정책 변경 안내와 편집 차단을 유지한다. NURSE_IDENTITY_REQUIRED는 데이터 폐기·관리자 문의·재조회로 처리하고 일반 권한 상실과 구분한다.
+- ViewModel 회귀 5개 추가. 수정 전 5개 모두 실패(exit 1), 수정 후 전체 JVM 245개 중 243개 통과·실서버 opt-in 2개 건너뜀·실패/오류 0. JDK 21 :app:testDebugUnitTest :app:assembleDebug :app:assembleDebugAndroidTest :app:lintDebug --offline --no-daemon BUILD SUCCESSFUL(최종 1분 40초), lint 오류 0·기존 경고 27.
+- 추가 기기 검사: 실제 MainActivity/Compose/Retained ViewModel/Retrofit와 MockWebServer에서 POST 도착·서버 상태 변경 뒤 응답을 latch로 멈춘 상태에서 ActivityScenario.recreate를 실행한다. 간호사 신청·관리자 확정 각각 중복 POST 없음·재조회 없음·원래 성공 응답과 상태 반영을 검사한다. Compose 간호사 미연결 안내/복구 1개도 추가했다. 결과는 아래 후속 기록에 남긴다.
+- 최종 기기 결과: Compose 화면 8개 모두 통과. 최초 통합 10개 실행은 9개 통과·관리자 회전 1개가 초기 조회 완료 전 버튼을 찾아 실패했다(153.7초). 테스트만 목록 로딩 대기를 보완한 뒤 회전 클래스 2개를 재실행하여 **OK (2 tests), 43.907초, 실패/건너뜀 0**. 따라서 현재 운영 코드에서 화면 8개와 신청·확정 회전 2개를 검증했으며, 수정 후 통합 10개를 한 번에 재실행한 것은 아니다. 마지막 대기 수정은 계측 코드뿐이며 :app:assembleDebugAndroidTest :app:lintDebug --offline --no-daemon BUILD SUCCESSFUL(1분 11초), lint 오류 0·기존 경고 27.
+- API/DB/환경/의존성·서버 규칙 변경 없음. Android 빌드 영향, 수동 배포 없음. 롤백은 이번 수정 revert와 이전 앱 복원. GitHub 승인·수정 후 원격 CI·실제 Kakao·물리 기기·운영은 미검증이다.
+
 ## 기기 인수 완료 (2026-11-25 20:44 KST)
 
 - 사용자 요청에 따라 미완료였던 실제 Android 화면·두 계정 실서버 인수를 끝냈다. 아래 절의 '기기 미완료/Draft 대기'는 당시 기록이며, 현재 상태는 이 절을 따른다.
