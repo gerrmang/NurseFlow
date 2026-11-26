@@ -20,6 +20,8 @@ fun WardListScreen(
     onCreateWard: () -> Unit,
     onLogout: () -> Unit,
     onManageStaff: (MembershipDto) -> Unit = {},
+    onOffRequests: (MembershipDto) -> Unit = {},
+    onScheduleSettings: (MembershipDto) -> Unit = {},
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     Column(Modifier.fillMaxSize().padding(20.dp)) {
@@ -59,8 +61,10 @@ fun WardListScreen(
                                 when (it) { "WARD_ADMIN" -> "관리자"; "WARD_MEMBER" -> "간호사"; else -> "기타 역할" }
                             })
                             Text("눌러서 공개된 근무표 보기")
+                            if (ward.isAdmin || "WARD_MEMBER" in ward.roles) OutlinedButton(onClick = { onOffRequests(ward) }) { Text("희망 오프") }
                             if (ward.isAdmin) OutlinedButton(onClick = { onManageInvitations(ward) }) { Text("초대 관리") }
                             if (ward.isAdmin) OutlinedButton(onClick = { onManageStaff(ward) }) { Text("팀·간호사·구성원 관리") }
+                            if (ward.isAdmin) OutlinedButton(onClick = { onScheduleSettings(ward) }) { Text("근무 설정") }
                         }
                     }
                 }

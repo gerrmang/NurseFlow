@@ -864,6 +864,284 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/wards/{wardId}/off-requests": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                wardId: components["parameters"]["WardId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * 월별 희망 오프 목록
+         * @description 관리자는 병동 전체, 간호사는 본인 요청만 본다. 철회·반려된 요청도 이력으로 포함한다.
+         *     `deadline`(배타적)과 `monthlyLimit`은 화면의 마감·한도 표시에 쓴다.
+         */
+        get: operations["listOffRequests"];
+        put?: never;
+        /**
+         * 희망 오프 제출(본인) 또는 대리 입력(관리자)
+         * @description 간호사는 `nurseId`를 생략하거나 본인 기록을 보낸다. 관리자는 대상 간호사의 `nurseId`가 필요하며 입력 주체는 `source`로 기록한다.
+         *     제출 직후 상태는 SUBMITTED이고 선호로만 쓰인다. 관리자가 확정해야 배치 금지(CONFIRMED_OFF_REQUEST)가 된다.
+         *     간호사 본인 제출만 병동의 월 한도(간호사 본인이 입력한 SUBMITTED·CONFIRMED 합계)를 넘을 수 없다. 관리자 입력은 한도를 받지 않고 개수에도 들어가지 않는다.
+         *     간호사는 병동 현지 날짜 기준 지난 날짜를 선택할 수 없다(400).
+         *     마감(대상 월 전달의 설정일이 끝나는 병동 현지 자정) 이후의 제출은 `afterDeadline: true` 예외 요청으로 저장되며,
+         *     관리자가 확정해야 효력이 생긴다. 그 전에는 자동배치 선호에도 반영하지 않는다. 관리자의 마감 뒤 입력은 예외 접수로 보고 선호에 반영한다.
+         */
+        post: operations["submitOffRequest"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/wards/{wardId}/off-requests/{requestId}/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                wardId: components["parameters"]["WardId"];
+                requestId: components["parameters"]["OffRequestId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 희망 오프 확정
+         * @description SUBMITTED만 확정할 수 있다. 확정하면 해당 월의 비공개 초안 revision을 올리고 재검증 대상으로 표시한다.
+         *     이미 그날 배정된 초안은 후보·수동·자동·확정 모두에서 CONFIRMED_OFF_REQUEST로 거부된다. 공개본은 재확정 전까지 유지한다.
+         */
+        post: operations["confirmOffRequest"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/wards/{wardId}/off-requests/{requestId}/reject": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                wardId: components["parameters"]["WardId"];
+                requestId: components["parameters"]["OffRequestId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 희망 오프 반려
+         * @description SUBMITTED만 반려할 수 있다. 반려된 날짜는 고정 오프가 아니며 같은 날짜를 다시 요청할 수 있다. 초안 revision은 바뀌지 않는다.
+         */
+        post: operations["rejectOffRequest"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/wards/{wardId}/off-requests/{requestId}/withdraw": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                wardId: components["parameters"]["WardId"];
+                requestId: components["parameters"]["OffRequestId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 희망 오프 철회
+         * @description 간호사는 마감 전에 본인의 SUBMITTED 요청만 철회한다. 마감 뒤에는 OFF_REQUEST_DEADLINE_PASSED이며 관리자에게 요청한다.
+         *     관리자는 SUBMITTED와 CONFIRMED를 철회할 수 있고, CONFIRMED 철회는 해당 월 초안을 재검증 대상으로 표시한다.
+         */
+        post: operations["withdrawOffRequest"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/wards/{wardId}/off-requests/policy": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                wardId: components["parameters"]["WardId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * 병동 희망 오프 한도·마감일 조회
+         * @description 기본값은 월 4일, 대상 월 전달 15일 마감이다. 응답 ETag는 병동 공통 정책 revision이다.
+         */
+        get: operations["getOffRequestPolicy"];
+        /**
+         * 병동 희망 오프 한도·마감일 변경
+         * @description 이후의 간호사 제출·철회에만 적용한다. 기존 요청과 초안 revision은 바꾸지 않는다.
+         *     변경하면 병동 정책 revision을 올린다. 현재 값과 같은 요청은 revision을 올리지 않는다. 정수 JSON 숫자만 받는다.
+         */
+        put: operations["replaceOffRequestPolicy"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/wards/{wardId}/support-allowances": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                wardId: components["parameters"]["WardId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * 팀 간 지원 허용 기록 조회
+         * @description 기본은 철회되지 않은 기록만 반환한다. includeRevoked=true면 철회된 기록도 함께 반환한다. 시작일·종료일 순.
+         */
+        get: operations["listSupportAllowances"];
+        put?: never;
+        /**
+         * 팀 간 지원 허용
+         * @description 간호사가 소속 팀이 아닌 배치 팀의 근무 칸에 배치될 수 있는 범위를 허용한다. 범위는 시작일~종료일(포함, 최대 366일)과
+         *     근무 유형 목록이다. 근무 유형 목록이 비어 있으면 그 기간의 모든 근무 유형을 허용한다. 날짜는 근무 칸의 근무일이며
+         *     자정을 넘는 Night는 시작한 날로 본다. 허용은 팀 조건만 완화하고 휴가·반차·휴식·중복·연속근무 등 다른 필수 규칙은 그대로 적용한다.
+         *     허용된 지원 배치는 실제 배치 팀의 충원에 계산된다. 허용 범위만 넓히므로 기존 초안의 revision은 바꾸지 않는다.
+         *     같은 `Idempotency-Key`로 재시도하면(응답 유실 등) 처음 요청의 결과를 같은 상태 코드로 돌려주되 기록은 현재 상태로 보여준다.
+         *     그 사이 철회됐다면 REVOKED로 보이며 다시 허용하지 않는다. 같은 범위를 다시 허용하려면 새 키로 요청한다.
+         *     새 키로 같은 간호사·배치 팀·기간·근무 유형의 활성 기록을 다시 요청하면 새로 만들지 않고 그 기록을 200으로 반환한다.
+         */
+        post: operations["createSupportAllowance"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/wards/{wardId}/support-allowances/{allowanceId}/revoke": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                wardId: components["parameters"]["WardId"];
+                allowanceId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 팀 간 지원 허용 철회
+         * @description 기록은 이력으로 남고 상태가 REVOKED가 된다. 그 간호사가 허용 기간 안에 배치 팀 칸에 배치된 비공개 초안은
+         *     revision을 올리고 재검증 대상으로 표시하며, 다른 허용이 없으면 확정에서 CROSS_TEAM_NOT_ALLOWED로 거부된다.
+         *     공개본은 바꾸지 않는다. 이미 철회된 기록을 다시 철회하면 변경 없이 현재 기록을 반환한다.
+         */
+        post: operations["revokeSupportAllowance"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/wards/{wardId}/target-hour-policy": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                wardId: components["parameters"]["WardId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * 병동 월 목표시간 정책 조회
+         * @description 설정이 없으면 시연 기본값(하루 기준 480분, 연차·SOF 480분, 반차 240분)을 반환한다.
+         *     법정 상한이 아니라 병원·병동이 바꿀 수 있는 설정값이다. 응답 ETag는 병동 공통 정책 revision이다.
+         */
+        get: operations["getTargetHourPolicy"];
+        /**
+         * 병동 월 목표시간 정책 변경
+         * @description 전체 교체한다. 일반 월 목표 = (월 일수 - 기준 휴식일수) × dailyStandardMinutes.
+         *     Night 전담 값이 null이면 일반 목표와 근무 유형의 환산시간을 그대로 쓴다.
+         *     시간 진단은 조회할 때 계산하므로 초안 revision을 올리거나 재검증 표시를 하지 않는다.
+         *     현재 값과 같은 요청도 정책 ETag를 확인하며 revision은 올리지 않는다.
+         */
+        put: operations["replaceTargetHourPolicy"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/wards/{wardId}/holiday-calendar": {
+        parameters: {
+            query: {
+                month: string;
+            };
+            header?: never;
+            path: {
+                wardId: components["parameters"]["WardId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * 병동 휴일 달력과 월 목표 조회
+         * @description 해당 월에 병동이 등록한 날짜(days), 서버 DB에 저장된 국가 공휴일(publicHolidays), 계산된 월 목표를 반환한다.
+         *     토·일은 저장하지 않고 자동으로 센다. 주말과 겹친 공휴일은 한 번만 센다. 같은 날짜에 병동 항목이 있으면 병동 항목이 우선한다.
+         *     국가 공휴일은 한국천문연구원 특일 정보(data.go.kr 15012690)에서 가져와 DB에 저장하며, 조회·계산은 외부 API를 부르지 않고 DB만 읽는다.
+         *     키가 없거나 가져오지 못한 달은 저장된 값(없으면 빈 목록)과 병동 입력으로 계산한다.
+         */
+        get: operations["getHolidayCalendar"];
+        /**
+         * 병동 휴일 달력의 한 달 전체 교체
+         * @description 해당 월의 항목을 모두 교체한다. 빈 배열은 그 달의 등록 항목을 모두 지운다. 날짜당 한 항목만 넣는다.
+         *     PUBLIC_HOLIDAY·SUBSTITUTE_HOLIDAY·WARD_REST_DAY는 평일이면 기준 휴식일을 하나 늘리고, 주말이면 중복으로 세지 않는다.
+         *     WARD_WORKDAY는 주말이나 가져온 공휴일을 이 병동에서만 목표일로 센다. 공휴일 API가 빠뜨린 날은 PUBLIC_HOLIDAY로 직접 넣는다.
+         *     내용이 같으면 ETag 확인 후 revision을 유지한다.
+         */
+        put: operations["replaceHolidayCalendar"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/wards/{wardId}/holiday-calendar/refresh": {
+        parameters: {
+            query: {
+                month: string;
+            };
+            header?: never;
+            path: {
+                wardId: components["parameters"]["WardId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 국가 공휴일 지금 가져오기
+         * @description 해당 월의 국가 공휴일을 공휴일 API에서 바로 가져와 DB의 그 달을 통째로 바꾼다(모든 병동 공통).
+         *     서버는 키가 있으면 매일 이번 달부터 12개월 뒤까지 자동으로 갱신하므로 임시공휴일 발표 직후 등에만 쓴다.
+         *     작년부터 내년까지의 달만 가져올 수 있고, 10분 안에 이미 가져왔거나 시도한(실패 포함) 달은 다시 호출하지 않고 저장된 값을 돌려준다(공용 호출 한도 보호).
+         *     실패하면 저장된 값을 그대로 두고 503을 반환한다. 병동 항목과 정책 revision은 바꾸지 않는다.
+         */
+        post: operations["refreshPublicHolidays"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/wards/{wardId}/rosters": {
         parameters: {
             query?: never;
@@ -928,6 +1206,38 @@ export interface paths {
          *     팀이 없는 병동과 기존 팀 미지정 근무표는 기존 배치를 유지한다.
          */
         put: operations["replaceRosterRequirements"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/rosters/{rosterId}/hour-diagnostics": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                rosterId: components["parameters"]["RosterId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * 관리자용 개인별 월 시간 진단
+         * @description 활성 편성 대상 간호사와, 이 근무표에 배정·부재·휴식일이 남은 그 밖의 간호사별로
+         *     실제(인정) 시간, 환산시간, 목표, 잔여(환산 - 목표), 부족·초과를 계산한다. 조회 때 현재 정책으로 계산하며 저장하지 않는다.
+         *     환산시간 = 배정 근무의 환산시간 + 승인 연차 일수 × leaveCreditMinutes + 반차 × halfDayCreditMinutes + SOF × sofCreditMinutes.
+         *     연차·SOF·반차는 목표일에만 더한다(주말·공휴일·병동 휴무일은 목표에서 이미 빠졌다). 한 날짜에는 연차, SOF, 반차 순으로 하나만 더한다. OF는 0이다.
+         *     연차는 하루의 절반 이상을 덮은 날짜만 센다(22:00~07:00 Night 연차는 1일). 고정 Night 전담 목표에는 주말·공휴일 휴가도 더한다.
+         *     다른 달 공개본에 저장된 연차도 이 달과 겹치면(기간 길이와 무관) 이 달 날짜만 센다.
+         *     자정을 넘는 근무는 끝나는 날짜의 월에 전부 귀속한다(결정 사항 14 잠정안, nightAttribution=END_DATE_MONTH).
+         *     그래서 이 달 말일 Night는 다음 달로 넘어가고(carriedOutShifts), 공개된 전월 말일 Night는 이 달에 들어온다(carriedInShifts).
+         *     전월 공개본이 없으면 previousMonthPublished=false이며 넘어오는 근무를 세지 않는다.
+         *     근무 칸은 시간 값을 따로 저장하지 않으므로 공개본도 근무 유형의 현재 인정·환산시간으로 계산한다.
+         *     간호사에게는 노출하지 않는다. 결과가 근무표 외에 정책·달력·앞뒤 달 공개본에도 달려 있어 ETag를 주지 않는다.
+         */
+        get: operations["getRosterHourDiagnostics"];
+        put?: never;
         post?: never;
         delete?: never;
         options?: never;
@@ -1745,10 +2055,231 @@ export interface components {
             /** @example 5 */
             maxConsecutiveWorkDays: number;
         };
+        OffRequestInput: {
+            /** Format: date */
+            date: string;
+            /**
+             * Format: uuid
+             * @description 관리자 대리 입력에서 필수. 간호사는 생략하거나 본인 기록만 보낼 수 있다.
+             */
+            nurseId?: string;
+        };
+        OffRequest: {
+            /** Format: uuid */
+            requestId: string;
+            /** Format: uuid */
+            nurseId: string;
+            /** Format: date */
+            date: string;
+            /**
+             * @description SUBMITTED는 선호, CONFIRMED는 배치 금지, REJECTED·WITHDRAWN은 이력이다.
+             * @enum {string}
+             */
+            status: "SUBMITTED" | "CONFIRMED" | "REJECTED" | "WITHDRAWN";
+            /**
+             * @description 입력 주체. 계정 식별자는 응답에 포함하지 않는다.
+             * @enum {string}
+             */
+            source: "NURSE" | "ADMIN";
+            /** Format: date-time */
+            submittedAt: string;
+            /**
+             * Format: date-time
+             * @description 확정·반려·철회 시각
+             */
+            decidedAt?: string | null;
+            /** @description 마감 뒤 접수된 예외 요청 */
+            afterDeadline: boolean;
+        };
+        OffRequestList: {
+            items: components["schemas"]["OffRequest"][];
+            /**
+             * Format: date-time
+             * @description 이 시각부터의 간호사 제출은 예외 요청이 되고 본인 철회는 막힌다.
+             */
+            deadline: string;
+            monthlyLimit: number;
+        };
+        OffRequestPolicy: {
+            /** @example 4 */
+            monthlyLimit: number;
+            /**
+             * @description 대상 월 전달의 이 날짜가 끝날 때(병동 현지 자정) 마감한다.
+             * @example 15
+             */
+            deadlineDay: number;
+            policyRevision: number;
+        };
+        OffRequestPolicyInput: {
+            monthlyLimit: number;
+            deadlineDay: number;
+        };
         ConsecutiveWorkPolicy: {
             /** @example 5 */
             maxConsecutiveWorkDays: number;
             policyRevision: number;
+        };
+        SupportAllowanceInput: {
+            /** Format: uuid */
+            nurseId: string;
+            /**
+             * Format: uuid
+             * @description 배치 팀. 간호사의 소속 팀이 아니어야 한다.
+             */
+            teamId: string;
+            /** Format: date */
+            startDate: string;
+            /**
+             * Format: date
+             * @description 포함. 시작일부터 최대 366일.
+             */
+            endDate: string;
+            /** @description 비우거나 생략하면 모든 근무 유형. */
+            shiftTypeIds?: string[];
+        };
+        SupportAllowance: {
+            /** Format: uuid */
+            allowanceId: string;
+            /** Format: uuid */
+            nurseId: string;
+            /** Format: uuid */
+            teamId: string;
+            /** Format: date */
+            startDate: string;
+            /** Format: date */
+            endDate: string;
+            /** @description 빈 배열 = 모든 근무 유형. */
+            shiftTypeIds: string[];
+            /** @enum {string} */
+            status: "ACTIVE" | "REVOKED";
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            revokedAt?: string | null;
+        };
+        SupportAllowanceItems: {
+            items: components["schemas"]["SupportAllowance"][];
+        };
+        SupportAllowanceRevocation: {
+            allowance: components["schemas"]["SupportAllowance"];
+            flaggedDraftCount: number;
+        };
+        TargetHourPolicyInput: {
+            /** @example 480 */
+            dailyStandardMinutes: number;
+            /** @example 480 */
+            leaveCreditMinutes: number;
+            /** @example 240 */
+            halfDayCreditMinutes: number;
+            /** @example 480 */
+            sofCreditMinutes: number;
+            /** @description Night 전담 월 목표. null이면 일반 월 목표를 쓴다. */
+            nightDedicatedTargetMinutes?: number | null;
+            /** @description Night 전담의 Night 1회 환산시간. null이면 근무 유형의 환산시간을 쓴다. */
+            nightDedicatedNightCreditMinutes?: number | null;
+        };
+        TargetHourPolicy: {
+            dailyStandardMinutes: number;
+            leaveCreditMinutes: number;
+            halfDayCreditMinutes: number;
+            sofCreditMinutes: number;
+            nightDedicatedTargetMinutes: number | null;
+            nightDedicatedNightCreditMinutes: number | null;
+            policyRevision: number;
+        };
+        HolidayCalendarDay: {
+            /** Format: date */
+            date: string;
+            /** @enum {string} */
+            kind: "PUBLIC_HOLIDAY" | "SUBSTITUTE_HOLIDAY" | "WARD_REST_DAY" | "WARD_WORKDAY";
+            /** @description 공휴일 이름 등 공개 정보만 넣는다. 개인 사유는 넣지 않는다. */
+            name?: string | null;
+        };
+        HolidayCalendarInput: {
+            days: components["schemas"]["HolidayCalendarDay"][];
+        };
+        MonthTarget: {
+            /** @example 2026-11 */
+            month: string;
+            /** @example 30 */
+            daysInMonth: number;
+            /** @example 9 */
+            weekendDays: number;
+            /** @description 평일에 놓인 공휴일·대체휴일 수. 주말과 겹친 날은 빼고 센다. */
+            holidayDays: number;
+            /** @description 평일에 놓인 병동 휴무일 수 */
+            wardRestDays: number;
+            /** @description 병동이 목표일로 바꾼 주말·국가 공휴일 수 */
+            wardWorkdays: number;
+            /** @example 9 */
+            restDays: number;
+            /** @example 21 */
+            targetDays: number;
+            /** @example 480 */
+            dailyStandardMinutes: number;
+            /** @example 10080 */
+            generalTargetMinutes: number;
+        };
+        HolidayCalendar: {
+            month: string;
+            /** @description 이 병동이 등록한 항목. 같은 날짜의 국가 공휴일보다 우선한다. */
+            days: components["schemas"]["HolidayCalendarDay"][];
+            /** @description DB에 저장된 국가 공휴일(PUBLIC_HOLIDAY·SUBSTITUTE_HOLIDAY) */
+            publicHolidays: components["schemas"]["HolidayCalendarDay"][];
+            holidaySource: {
+                /** @description 서버에 공휴일 API 키가 있는지 */
+                configured: boolean;
+                /**
+                 * Format: date-time
+                 * @description 이 달을 마지막으로 가져온 시각. null이면 가져온 적 없음
+                 */
+                fetchedAt: string | null;
+            };
+            target: components["schemas"]["MonthTarget"];
+            policyRevision: number;
+        };
+        NurseHourDiagnostic: {
+            /** Format: uuid */
+            nurseId: string;
+            displayName: string;
+            /** @enum {string} */
+            workPattern: "GENERAL" | "DAY_EVENING_ONLY" | "NIGHT_ONLY";
+            /** @description false면 현재 편성 대상이 아니지만 이 근무표에 시간이 남은 간호사다. */
+            rosterable: boolean;
+            shiftCount: number;
+            /** @description 귀속된 근무의 인정시간 합계 */
+            actualMinutes: number;
+            shiftCreditMinutes: number;
+            leaveDays: number;
+            halfDays: number;
+            sofDays: number;
+            absenceCreditMinutes: number;
+            /** @description 월간 환산시간 */
+            creditMinutes: number;
+            targetMinutes: number;
+            /** @description creditMinutes - targetMinutes. 음수는 부족, 양수는 초과다. */
+            remainingMinutes: number;
+            shortfallMinutes: number;
+            overtimeMinutes: number;
+            /** @enum {string} */
+            status: "SHORTFALL" | "MET" | "OVER";
+            carriedInShifts: number;
+            carriedOutShifts: number;
+        };
+        RosterHourDiagnostics: {
+            /** Format: uuid */
+            rosterId: string;
+            month: string;
+            /** @enum {string} */
+            status: "DRAFT" | "PUBLISHED";
+            revision: number;
+            policyRevision: number;
+            target: components["schemas"]["MonthTarget"];
+            nightDedicatedTargetMinutes: number;
+            /** @enum {string} */
+            nightAttribution: "END_DATE_MONTH";
+            previousMonthPublished: boolean;
+            items: components["schemas"]["NurseHourDiagnostic"][];
         };
         RosterRestDay: {
             /** Format: uuid */
@@ -1767,7 +2298,10 @@ export interface components {
         RuleDiagnostic: {
             /**
              * @description 연속근무 상한 위반은 CONSECUTIVE_WORK_LIMIT, 명시 휴식일 배치는 REST_DAY_ASSIGNMENT_CONFLICT,
-             *     명시 휴식일과 승인 연차의 겹침은 REST_DAY_CONFLICT이며 모두 HARD이다.
+             *     명시 휴식일과 승인 연차의 겹침은 REST_DAY_CONFLICT, 관리자 허용 범위 밖의 다른 팀 칸 배치는
+             *     CROSS_TEAM_NOT_ALLOWED이며 모두 HARD이다.
+             *     관리자가 확정한 희망 오프 날짜의 배치는 CONFIRMED_OFF_REQUEST(HARD)이다.
+             *     자동배치가 직접 배정하면서 미확정 희망 오프를 지키지 못한 날짜는 날짜별 건수와 함께 OFF_REQUEST_NOT_HONORED(SOFT)로 알린다. 고정 배치는 제외한다.
              */
             code: string;
             /** @enum {string} */
@@ -1958,6 +2492,24 @@ export interface components {
                 "application/problem+json": components["schemas"]["ApiProblem"];
             };
         };
+        /** @description 변경된 희망 오프 */
+        OffRequestDecided: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["OffRequest"];
+            };
+        };
+        /** @description OFF_REQUEST_STATE_CONFLICT. 현재 상태에서는 허용되지 않는 전이다. 목록을 다시 조회한다. */
+        OffRequestStateConflict: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/problem+json": components["schemas"]["ApiProblem"];
+            };
+        };
         /** @description 내부 오류. 민감정보는 응답에 포함하지 않는다. */
         InternalError: {
             headers: {
@@ -1979,6 +2531,7 @@ export interface components {
          */
         WebClientHeader: "web";
         WardId: string;
+        OffRequestId: string;
         RosterId: string;
         AbsenceId: string;
         NurseId: string;
@@ -4175,6 +4728,585 @@ export interface operations {
             };
         };
     };
+    listOffRequests: {
+        parameters: {
+            query: {
+                /** @description 희망 오프 날짜가 속한 월 */
+                month: string;
+            };
+            header?: never;
+            path: {
+                wardId: components["parameters"]["WardId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 해당 월 요청과 마감·한도 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OffRequestList"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            /** @description NURSE_IDENTITY_REQUIRED. 관리자가 아니고 연결된 간호사 기록도 없다. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+        };
+    };
+    submitOffRequest: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                wardId: components["parameters"]["WardId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OffRequestInput"];
+            };
+        };
+        responses: {
+            /** @description 제출된 희망 오프 */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OffRequest"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            /** @description WARD_ADMIN_REQUIRED(간호사가 다른 간호사를 지정) 또는 NURSE_IDENTITY_REQUIRED. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description WARD_NOT_FOUND 또는 NURSE_NOT_FOUND(다른 병동·편성 대상이 아닌 간호사). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description OFF_REQUEST_DUPLICATE(같은 날짜에 SUBMITTED·CONFIRMED 요청이 있음) 또는 OFF_REQUEST_LIMIT_REACHED. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+        };
+    };
+    confirmOffRequest: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                wardId: components["parameters"]["WardId"];
+                requestId: components["parameters"]["OffRequestId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["OffRequestDecided"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["OffRequestStateConflict"];
+        };
+    };
+    rejectOffRequest: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                wardId: components["parameters"]["WardId"];
+                requestId: components["parameters"]["OffRequestId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["OffRequestDecided"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["OffRequestStateConflict"];
+        };
+    };
+    withdrawOffRequest: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                wardId: components["parameters"]["WardId"];
+                requestId: components["parameters"]["OffRequestId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["OffRequestDecided"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            /** @description OFF_REQUEST_STATE_CONFLICT 또는 OFF_REQUEST_DEADLINE_PASSED. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+        };
+    };
+    getOffRequestPolicy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                wardId: components["parameters"]["WardId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 희망 오프 정책과 병동 정책 revision */
+            200: {
+                headers: {
+                    ETag: components["headers"]["PolicyETag"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OffRequestPolicy"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    replaceOffRequestPolicy: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description 마지막으로 받은 병동 공통 정책 ETag.
+                 * @example "policy-3"
+                 */
+                "If-Match": components["parameters"]["PolicyIfMatch"];
+            };
+            path: {
+                wardId: components["parameters"]["WardId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OffRequestPolicyInput"];
+            };
+        };
+        responses: {
+            /** @description 적용된 정책과 병동 정책 revision */
+            200: {
+                headers: {
+                    ETag: components["headers"]["PolicyETag"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OffRequestPolicy"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            /** @description STALE_POLICY_REVISION. 최신 정책을 조회한 뒤 다시 저장한다. */
+            412: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+        };
+    };
+    listSupportAllowances: {
+        parameters: {
+            query?: {
+                includeRevoked?: boolean;
+            };
+            header?: never;
+            path: {
+                wardId: components["parameters"]["WardId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 허용 기록 목록 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupportAllowanceItems"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    createSupportAllowance: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Unique UUID per logical mutation; retrying the same key must not duplicate the operation. */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                wardId: components["parameters"]["WardId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SupportAllowanceInput"];
+            };
+        };
+        responses: {
+            /** @description 같은 범위의 기존 활성 기록 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupportAllowance"];
+                };
+            };
+            /** @description 생성된 허용 기록 */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupportAllowance"];
+                };
+            };
+            /**
+             * @description INVALID_SUPPORT_ALLOWANCE(종료일이 시작일보다 앞섬, 366일 초과, 배치 팀이 소속 팀과 같음),
+             *     SHIFT_TYPE_NOT_FOUND(병동의 활성 근무 유형이 아님), INVALID_REQUEST(필수값·Idempotency-Key 누락, 근무 유형 20개 초과, null 원소).
+             */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            /** @description WARD_NOT_FOUND, NURSE_NOT_FOUND, TEAM_NOT_FOUND(병동의 활성 팀이 아님) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description IDEMPOTENCY_KEY_REUSED(같은 키를 다른 요청에 사용) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+        };
+    };
+    revokeSupportAllowance: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                wardId: components["parameters"]["WardId"];
+                allowanceId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 철회된 기록과 재검증 표시한 초안 수 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupportAllowanceRevocation"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            /** @description WARD_NOT_FOUND, SUPPORT_ALLOWANCE_NOT_FOUND(이 병동의 기록이 아님) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+        };
+    };
+    getTargetHourPolicy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                wardId: components["parameters"]["WardId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 목표시간 정책과 병동 정책 revision */
+            200: {
+                headers: {
+                    ETag: components["headers"]["PolicyETag"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TargetHourPolicy"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    replaceTargetHourPolicy: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description 마지막으로 받은 병동 공통 정책 ETag.
+                 * @example "policy-3"
+                 */
+                "If-Match": components["parameters"]["PolicyIfMatch"];
+            };
+            path: {
+                wardId: components["parameters"]["WardId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TargetHourPolicyInput"];
+            };
+        };
+        responses: {
+            /** @description 적용된 목표시간 정책과 병동 정책 revision */
+            200: {
+                headers: {
+                    ETag: components["headers"]["PolicyETag"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TargetHourPolicy"];
+                };
+            };
+            /** @description INVALID_TARGET_HOUR_POLICY(필수 값 누락·null, 범위 밖·소수·문자열 값) 또는 INVALID_REQUEST */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            /** @description STALE_POLICY_REVISION. 최신 정책을 조회한 뒤 다시 저장한다. */
+            412: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+        };
+    };
+    getHolidayCalendar: {
+        parameters: {
+            query: {
+                month: string;
+            };
+            header?: never;
+            path: {
+                wardId: components["parameters"]["WardId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 달력 항목, 월 목표, 병동 정책 revision */
+            200: {
+                headers: {
+                    ETag: components["headers"]["PolicyETag"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HolidayCalendar"];
+                };
+            };
+            /** @description INVALID_MONTH */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    replaceHolidayCalendar: {
+        parameters: {
+            query: {
+                month: string;
+            };
+            header: {
+                /**
+                 * @description 마지막으로 받은 병동 공통 정책 ETag.
+                 * @example "policy-3"
+                 */
+                "If-Match": components["parameters"]["PolicyIfMatch"];
+            };
+            path: {
+                wardId: components["parameters"]["WardId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["HolidayCalendarInput"];
+            };
+        };
+        responses: {
+            /** @description 적용된 달력, 월 목표, 병동 정책 revision */
+            200: {
+                headers: {
+                    ETag: components["headers"]["PolicyETag"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HolidayCalendar"];
+                };
+            };
+            /** @description INVALID_MONTH 또는 INVALID_HOLIDAY_CALENDAR(다른 달 날짜, 중복 날짜, 알 수 없는 종류) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            /** @description STALE_POLICY_REVISION. 최신 정책을 조회한 뒤 다시 저장한다. */
+            412: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+        };
+    };
+    refreshPublicHolidays: {
+        parameters: {
+            query: {
+                month: string;
+            };
+            header?: never;
+            path: {
+                wardId: components["parameters"]["WardId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 갱신 후 달력과 월 목표 */
+            200: {
+                headers: {
+                    ETag: components["headers"]["PolicyETag"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HolidayCalendar"];
+                };
+            };
+            /** @description INVALID_MONTH 또는 HOLIDAY_MONTH_OUT_OF_RANGE */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            /** @description HOLIDAY_SOURCE_NOT_CONFIGURED(키 없음) 또는 HOLIDAY_SOURCE_UNAVAILABLE(호출·응답 실패). 저장된 공휴일은 유지된다. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+        };
+    };
     listWardRosters: {
         parameters: {
             query: {
@@ -4317,6 +5449,31 @@ export interface operations {
             };
             412: components["responses"]["PreconditionFailed"];
             422: components["responses"]["RuleViolation"];
+        };
+    };
+    getRosterHourDiagnostics: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                rosterId: components["parameters"]["RosterId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 월 목표와 간호사별 시간 진단 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RosterHourDiagnostics"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
         };
     };
     listRosterRestDays: {

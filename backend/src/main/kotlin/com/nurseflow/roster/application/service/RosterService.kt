@@ -13,7 +13,9 @@ import com.nurseflow.roster.domain.model.RosterRestDay
 import com.nurseflow.roster.domain.model.RuleSeverity
 import com.nurseflow.roster.domain.model.ShiftAssignment
 import com.nurseflow.roster.domain.model.ShiftKind
+import com.nurseflow.roster.domain.rule.ConfirmedOffRequestRule
 import com.nurseflow.roster.domain.rule.ConsecutiveWorkRule
+import com.nurseflow.roster.domain.rule.CrossTeamSupportRule
 import com.nurseflow.roster.domain.rule.RosterRuleValidator
 import com.nurseflow.roster.persistence.entity.DbAbsence
 import com.nurseflow.roster.persistence.entity.DbGenerationJob
@@ -22,6 +24,7 @@ import com.nurseflow.roster.persistence.entity.DbRoster
 import com.nurseflow.roster.persistence.entity.DbSlot
 import com.nurseflow.roster.persistence.entity.NewSlot
 import com.nurseflow.roster.persistence.repository.RosterJdbcRepository
+import com.nurseflow.roster.persistence.repository.SupportAllowanceJdbcRepository
 import com.nurseflow.common.idempotency.IdempotencyKeyRaceException
 import com.nurseflow.common.idempotency.MutationReplayRepository
 import com.nurseflow.common.idempotency.ReplayLookup
@@ -40,6 +43,7 @@ class RosterService(
     private val repo: RosterJdbcRepository,
     private val mapper: JsonMapper,
     private val replays: MutationReplayRepository,
+    private val supportAllowances: SupportAllowanceJdbcRepository,
 ) {
     private val validator = RosterRuleValidator()
     private val diagnosticList = object : TypeReference<List<RuleDiagnostic>>() {}
@@ -403,8 +407,8 @@ class RosterService(
             if (nurse == null || !nurse.qualifications.containsAll(slot.requiredQualifications)) {
                 listOf(RuleDiagnostic("LOCKED_ASSIGNMENT_INVALID", "HARD", "고정 배치가 현재 자격 또는 활성 상태와 맞지 않습니다.", slot.date))
             } else {
-                teamViolations(slot, nurse) + validator.validate(
-                    candidate, assignments, context.absences, nurse.workPattern, context.consecutiveWork,
+                teamViolations(slot, nurse, context.crossTeam) + validator.validate(
+                    candidate, assignments, context.absences, nurse.workPattern, context.consecutiveWork, context.confirmedOffs,
                 ).map(RuleDiagnostic::from)
             }
         }
@@ -418,6 +422,8 @@ class RosterService(
         val deadline = System.nanoTime() + repo.timeLimitNanos(jobId)
         var timedOut = false
         var cancelled = false
+        // Per slot, own-team nurses are tried first and support only when none of them can take it. Slots are still
+        // filled greedily in date order, so an earlier support placement can use up a nurse a later own-team slot needed.
         generationLoop@ for (slot in allSlots.filter { it !in preserved }.sortedWith(
             compareBy<DbSlot>({ it.date }, { it.startsAt }, { !it.seniorRequired }, { it.id.toString() }),
         )) {
@@ -425,6 +431,9 @@ class RosterService(
             if (System.nanoTime() >= deadline) { timedOut = true; break }
             val ordered = nurses.sortedWith(
                 compareBy<DbNurse>(
+                    { slot.teamId != null && it.teamId != slot.teamId },
+                    // Unconfirmed off requests are preferences: such a nurse is tried only after everyone else.
+                    { (it.id to slot.date) in context.requestedOffs },
                     { counts[it.id] ?: 0 },
                     { nightCounts[it.id] ?: 0 },
                     { it.id.toString() },
@@ -432,9 +441,9 @@ class RosterService(
             )
             for (nurse in ordered) {
                 if (System.nanoTime() >= deadline) { timedOut = true; break@generationLoop }
-                if (!nurse.qualifications.containsAll(slot.requiredQualifications) || teamViolations(slot, nurse).isNotEmpty()) continue
+                if (!nurse.qualifications.containsAll(slot.requiredQualifications) || teamViolations(slot, nurse, context.crossTeam).isNotEmpty()) continue
                 val candidate = ShiftAssignment(slot.id, nurse.id, slot.date, slot.kind, slot.startsAt, slot.endsAt)
-                if (validator.validate(candidate, assignments, context.absences, nurse.workPattern, context.consecutiveWork).isNotEmpty()) continue
+                if (validator.validate(candidate, assignments, context.absences, nurse.workPattern, context.consecutiveWork, context.confirmedOffs).isNotEmpty()) continue
                 selected[slot.id] = nurse.id
                 assignments += candidate
                 counts[nurse.id] = (counts[nurse.id] ?: 0) + 1
@@ -462,7 +471,7 @@ class RosterService(
         val diagnostics = finalSlots.filter { it.nurseId == null }.map {
             if (it.seniorRequired) RuleDiagnostic("SENIOR_UNFILLED", "SOFT", "선임 필수 칸이 비어 있습니다.", it.date)
             else RuleDiagnostic("UNFILLED_SLOT", "SOFT", "현재 배치 순서와 필수 규칙으로 채우지 못한 칸입니다.", it.date)
-        }.distinctBy { it.code to it.affectedDate } + if (timedOut) {
+        }.distinctBy { it.code to it.affectedDate } + unmetOffRequests(selected, finalSlots, finalContext) + if (timedOut) {
             listOf(RuleDiagnostic("TIME_LIMIT_REACHED", "SOFT", "제한 시간에 도달해 남은 칸은 검토가 필요합니다."))
         } else {
             emptyList()
@@ -509,21 +518,20 @@ class RosterService(
     ): List<RuleDiagnostic> {
         val nurse = nursesById.getOrPut(nurseId) { repo.findNurse(nurseId, roster.wardId) }
             ?: throw BusinessException(ErrorCode.NURSE_NOT_FOUND)
-        val extra = teamViolations(slot, nurse).toMutableList()
+        val extra = teamViolations(slot, nurse, context.crossTeam).toMutableList()
         if (!nurse.active) extra += RuleDiagnostic("NURSE_INACTIVE", "HARD", "활성화되지 않은 간호사입니다.", slot.date)
         if (!nurse.qualifications.containsAll(slot.requiredQualifications)) {
             extra += RuleDiagnostic("QUALIFICATION_MISSING", "HARD", "필수 자격이 부족합니다.", slot.date)
         }
         val candidate = ShiftAssignment(slot.id, nurseId, slot.date, slot.kind, slot.startsAt, slot.endsAt)
         return extra + validator.validate(
-            candidate, context.assignments, context.absences, nurse.workPattern, context.consecutiveWork,
+            candidate, context.assignments, context.absences, nurse.workPattern, context.consecutiveWork, context.confirmedOffs,
         ).map(RuleDiagnostic::from)
     }
 
-    private fun teamViolations(slot: DbSlot, nurse: DbNurse): List<RuleDiagnostic> = buildList {
-        if (slot.teamId != null && slot.teamId != nurse.teamId) {
-            add(RuleDiagnostic("TEAM_MISMATCH", "HARD", "이 근무 칸과 간호사의 소속 팀이 다릅니다.", slot.date))
-        }
+    private fun teamViolations(slot: DbSlot, nurse: DbNurse, crossTeam: CrossTeamSupportRule): List<RuleDiagnostic> = buildList {
+        crossTeam.validate(nurse.id, nurse.teamId, slot.teamId, slot.date, slot.shiftTypeId)
+            ?.let { add(RuleDiagnostic.from(it)) }
         if (slot.seniorRequired && !nurse.seniorEligible) {
             add(RuleDiagnostic("SENIOR_REQUIRED", "HARD", "선임 자격이 필요한 근무 칸입니다.", slot.date))
         }
@@ -556,7 +564,10 @@ class RosterService(
         val consecutiveWork = ConsecutiveWorkRule(policy, covered, effectiveRests)
         val restConflicts = restLeaveConflicts(rests, ownAbsences + adjacentAbsences, roster.zone) +
             restLeaveConflicts(adjacentRests, ownAbsences, roster.zone)
-        return ValidationContext(existing, approved, consecutiveWork, restConflicts)
+        val confirmedOffs = ConfirmedOffRequestRule(repo.offRequestDays(roster.wardId, month, "CONFIRMED"))
+        val requestedOffs = repo.offRequestDays(roster.wardId, month, "SUBMITTED", onTimeOnly = true).toSet()
+        val crossTeam = CrossTeamSupportRule(supportAllowances.activeOverlapping(roster.wardId, month.atDay(1), month.atEndOfMonth()))
+        return ValidationContext(existing, approved, consecutiveWork, restConflicts, confirmedOffs, requestedOffs, crossTeam)
     }
 
     private fun validateAbsence(roster: DbRoster, input: ApprovedAbsenceInput) {
@@ -617,6 +628,20 @@ class RosterService(
         val month = YearMonth.parse(roster.month)
         val bridge = context.consecutiveWork.bridgedViolation(month.atDay(1)..month.atEndOfMonth(), context.assignments)
         return context.restConflicts + listOfNotNull(bridge?.let(RuleDiagnostic::from))
+    }
+
+    /**
+     * One SOFT diagnostic per date where generation itself assigned nurses against their submitted off requests
+     * (preference, A12), with how many. Preserved locked assignments were the admin's choice, not generation's.
+     */
+    private fun unmetOffRequests(selected: Map<UUID, UUID>, slots: List<DbSlot>, context: ValidationContext): List<RuleDiagnostic> {
+        val dates = slots.associate { it.id to it.date }
+        return selected.mapNotNull { (slotId, nurseId) -> dates[slotId]?.let { nurseId to it } }
+            .filter { it in context.requestedOffs }.distinct()
+            .groupingBy { it.second }.eachCount().toSortedMap()
+            .map { (date, count) ->
+                RuleDiagnostic("OFF_REQUEST_NOT_HONORED", "SOFT", "필요 인원과 필수 규칙 때문에 희망 오프 ${count}건을 반영하지 못했습니다.", date)
+            }
     }
 
     private fun view(roster: DbRoster): RosterView {
@@ -799,5 +824,9 @@ class RosterService(
         val absences: List<ApprovedAbsence>,
         val consecutiveWork: ConsecutiveWorkRule,
         val restConflicts: List<RuleDiagnostic>,
+        val confirmedOffs: ConfirmedOffRequestRule,
+        /** Submitted, not yet decided requests: preferences that generation tries to keep free (A12). */
+        val requestedOffs: Set<Pair<UUID, LocalDate>>,
+        val crossTeam: CrossTeamSupportRule,
     )
 }

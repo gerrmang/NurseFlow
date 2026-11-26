@@ -21,6 +21,7 @@ import { cookiesDisabledMessage, errorMessage, noticeMessage } from '../messages
 import { useSessionManager, useSessionState } from '../session/SessionContext'
 import type { SessionUser } from '../session/SessionManager'
 import { SessionStatusView } from './SessionStatusView'
+import { Brand } from '../ui/Brand'
 
 /**
  * `/invite`. Steps are kept apart so React StrictMode (double initialization, effects run twice)
@@ -61,7 +62,7 @@ export function JoinInvitePage() {
 function NoInvite({ linkInvalid, signedIn }: { linkInvalid: boolean; signedIn: boolean }) {
   const navigate = useNavigate()
   return (
-    <main className="page">
+    <main className="page invite-page">
       <section className="card">
         <h1>초대로 가입</h1>
         <RestoreNotice />
@@ -111,7 +112,8 @@ function AnonymousInvite({ notice }: { notice?: string }) {
   }
 
   return (
-    <main className="page">
+    <main className="page invite-page invite-anonymous">
+      <div className="invite-brand"><Brand compact /></div>
       <section className="card">
         <h1>초대를 받았어요</h1>
         <RestoreNotice />
@@ -291,7 +293,7 @@ function JoinFlow({ invite, user, linkBusy }: { invite: PendingInvite; user: Ses
   }
 
   return (
-    <main className="page">
+    <main className="page invite-page join-page">
       <section className="card" aria-busy={phase.kind === 'previewing' || phase.kind === 'submitting'}>
         <h1>초대로 가입</h1>
         <p className="notice">{user.displayName}님으로 로그인되어 있어요.</p>
@@ -413,7 +415,7 @@ function PreviewSummary({ preview }: { preview: InvitationPreview }) {
       <dt>병동</dt>
       <dd>{preview.wardName}</dd>
       <dt>역할</dt>
-      <dd>{invitationRoleLabel(preview.role)}</dd>
+      <dd><span className="badge">{invitationRoleLabel(preview.role)}</span></dd>
       <dt>만료</dt>
       <dd>{formatInviteTime(preview.expiresAt)}</dd>
       {preview.linksExistingNurse && (

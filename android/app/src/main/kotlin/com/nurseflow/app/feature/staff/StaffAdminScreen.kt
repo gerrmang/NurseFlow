@@ -21,7 +21,7 @@ import com.nurseflow.app.core.network.*
 import kotlin.math.abs
 
 @Composable
-fun StaffAdminScreen(wardName: String, model: StaffAdminViewModel, onBack: () -> Unit, onForbidden: () -> Unit) {
+fun StaffAdminScreen(wardName: String, model: StaffAdminViewModel, onBack: () -> Unit, onForbidden: () -> Unit, onScheduleSettings: (() -> Unit)? = null) {
     val state by model.state.collectAsStateWithLifecycle()
     var tab by rememberSaveable { mutableStateOf(0) }
     var selectedId by rememberSaveable { mutableStateOf<String?>(null) }
@@ -62,6 +62,7 @@ fun StaffAdminScreen(wardName: String, model: StaffAdminViewModel, onBack: () ->
         }
         Text(wardName, style = MaterialTheme.typography.titleLarge)
         Text("팀·간호사·구성원 관리", style = MaterialTheme.typography.titleMedium)
+        if (onScheduleSettings != null) OutlinedButton(onClick = onScheduleSettings, enabled = !state.busy) { Text("근무 설정") }
         if (state.loading || state.busy) LinearProgressIndicator(Modifier.fillMaxWidth())
         state.notice?.let { Text(it, Modifier.testTag("staff-notice")) }
         if (state.uncertain) {

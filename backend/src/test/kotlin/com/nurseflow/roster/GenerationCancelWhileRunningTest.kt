@@ -85,7 +85,7 @@ class GenerationCancelWhileRunningTest @Autowired constructor(
     @BeforeEach
     fun setup() {
         listOf("mutation_replays", "generation_jobs", "approved_absences", "roster_slots", "rosters",
-            "shift_types", "nurses", "ward_memberships", "wards").forEach { jdbc.update("DELETE FROM $it") }
+            "shift_types", "off_requests", "nurses", "ward_memberships", "wards").forEach { jdbc.update("DELETE FROM $it") }
         wardId = UUID.randomUUID()
         jdbc.update("INSERT INTO wards(ward_id,name,time_zone) VALUES(?,?,?)", wardId, "가상 병동", "Asia/Seoul")
         jdbc.update("INSERT INTO ward_memberships(ward_id,subject,role,can_view_ward_calendar) VALUES(?,?,'WARD_ADMIN',TRUE)", wardId, admin)

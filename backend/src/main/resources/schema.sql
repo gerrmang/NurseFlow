@@ -17,6 +17,11 @@ ALTER TABLE wards ADD COLUMN IF NOT EXISTS created_at VARCHAR(40);
 ALTER TABLE wards ADD COLUMN IF NOT EXISTS demo_mode BOOLEAN DEFAULT FALSE NOT NULL;
 ALTER TABLE wards ADD COLUMN IF NOT EXISTS max_consecutive_work_days INT DEFAULT 5 NOT NULL
     CHECK (max_consecutive_work_days BETWEEN 1 AND 31);
+-- A12 (decision 15): per-nurse monthly preferred-day-off limit and the day of the previous month that closes requests.
+ALTER TABLE wards ADD COLUMN IF NOT EXISTS max_off_requests_per_month INT DEFAULT 4 NOT NULL
+    CHECK (max_off_requests_per_month BETWEEN 0 AND 31);
+ALTER TABLE wards ADD COLUMN IF NOT EXISTS off_request_deadline_day INT DEFAULT 15 NOT NULL
+    CHECK (off_request_deadline_day BETWEEN 1 AND 28);
 CREATE INDEX IF NOT EXISTS ix_wards_created_by ON wards(created_by);
 
 CREATE TABLE IF NOT EXISTS ward_memberships (
@@ -71,6 +76,24 @@ CREATE TABLE IF NOT EXISTS roster_rest_days (
     kind VARCHAR(3) NOT NULL CHECK (kind IN ('OF','SOF')),
     PRIMARY KEY (roster_id, nurse_id, rest_date)
 );
+
+-- A12: preferred days off. Ward-scoped (not per draft) so every draft and generation of the month reads them.
+-- Only CONFIRMED rows block assignment; SUBMITTED rows are preferences. Decided or withdrawn rows stay as history.
+CREATE TABLE IF NOT EXISTS off_requests (
+    request_id UUID PRIMARY KEY,
+    ward_id UUID NOT NULL REFERENCES wards(ward_id),
+    nurse_id UUID NOT NULL REFERENCES nurses(nurse_id),
+    off_date DATE NOT NULL,
+    status VARCHAR(10) NOT NULL CHECK (status IN ('SUBMITTED','CONFIRMED','REJECTED','WITHDRAWN')),
+    source VARCHAR(10) NOT NULL CHECK (source IN ('NURSE','ADMIN')),
+    submitted_by VARCHAR(255) NOT NULL,
+    submitted_at VARCHAR(40) NOT NULL,
+    decided_by VARCHAR(255),
+    decided_at VARCHAR(40),
+    -- Entered after the month's deadline: a nurse's exception request or an admin's exception entry.
+    after_deadline BOOLEAN NOT NULL DEFAULT FALSE
+);
+CREATE INDEX IF NOT EXISTS ix_off_requests_ward_date ON off_requests(ward_id, off_date);
 
 CREATE TABLE IF NOT EXISTS roster_slots (
     slot_id UUID PRIMARY KEY,
@@ -293,3 +316,63 @@ ALTER TABLE roster_slots ADD COLUMN IF NOT EXISTS team_id UUID;
 ALTER TABLE roster_slots ADD COLUMN IF NOT EXISTS senior_required BOOLEAN DEFAULT FALSE NOT NULL;
 
 ALTER TABLE nurses ADD COLUMN IF NOT EXISTS work_pattern VARCHAR(32) DEFAULT 'GENERAL' NOT NULL;
+
+-- A13: monthly target hours. Absent row = demo defaults (8h a day, leave/SOF 8h, half-day 4h). Values are ward
+-- settings, never legal limits. NULL Night-dedicated values follow the general target and each shift type's credit.
+CREATE TABLE IF NOT EXISTS ward_target_hour_policies (
+    ward_id UUID PRIMARY KEY REFERENCES wards(ward_id),
+    daily_standard_minutes INT NOT NULL CHECK (daily_standard_minutes BETWEEN 1 AND 1440),
+    leave_credit_minutes INT NOT NULL CHECK (leave_credit_minutes BETWEEN 0 AND 1440),
+    half_day_credit_minutes INT NOT NULL CHECK (half_day_credit_minutes BETWEEN 0 AND 1440),
+    sof_credit_minutes INT NOT NULL CHECK (sof_credit_minutes BETWEEN 0 AND 1440),
+    night_dedicated_target_minutes INT CHECK (night_dedicated_target_minutes BETWEEN 0 AND 44640),
+    night_dedicated_night_credit_minutes INT CHECK (night_dedicated_night_credit_minutes BETWEEN 0 AND 1440),
+    updated_by VARCHAR(255) NOT NULL,
+    updated_at VARCHAR(40) NOT NULL
+);
+
+-- A13: ward holiday calendar, one row per date. Weekends are not stored; holidays on a weekend count once.
+-- Entered by the ward admin; an entry wins over the imported public_holidays row of the same date.
+-- Names are public holiday names, never personal data.
+CREATE TABLE IF NOT EXISTS ward_calendar_days (
+    ward_id UUID NOT NULL REFERENCES wards(ward_id),
+    calendar_date DATE NOT NULL,
+    kind VARCHAR(20) NOT NULL CHECK (kind IN ('PUBLIC_HOLIDAY','SUBSTITUTE_HOLIDAY','WARD_REST_DAY','WARD_WORKDAY')),
+    name VARCHAR(50),
+    updated_by VARCHAR(255) NOT NULL,
+    updated_at VARCHAR(40) NOT NULL,
+    PRIMARY KEY (ward_id, calendar_date)
+);
+
+-- A13: national public holidays imported from 한국천문연구원 특일 정보 (data.go.kr 15012690). Shared by every ward;
+-- a ward entry on the same date in ward_calendar_days wins. Each fetched month is replaced as a whole, so a holiday
+-- withdrawn by the source disappears; a failed fetch keeps the stored month.
+CREATE TABLE IF NOT EXISTS public_holidays (
+    holiday_date DATE PRIMARY KEY,
+    kind VARCHAR(20) NOT NULL CHECK (kind IN ('PUBLIC_HOLIDAY','SUBSTITUTE_HOLIDAY')),
+    name VARCHAR(50)
+);
+
+CREATE TABLE IF NOT EXISTS public_holiday_imports (
+    holiday_month VARCHAR(7) PRIMARY KEY,
+    fetched_at VARCHAR(40) NOT NULL,
+    holiday_count INT NOT NULL
+);
+
+-- A14: admin-granted cross-team support. start/end are inclusive work dates; shift_type_ids is a JSON array of
+-- the ward's shift type ids ('[]' = every shift type). Revocation keeps the row: revoked_at set = permits nothing.
+CREATE TABLE IF NOT EXISTS cross_team_support_allowances (
+    allowance_id UUID PRIMARY KEY,
+    ward_id UUID NOT NULL REFERENCES wards(ward_id),
+    nurse_id UUID NOT NULL REFERENCES nurses(nurse_id),
+    team_id UUID NOT NULL REFERENCES ward_teams(team_id),
+    start_date DATE NOT NULL,
+    end_date DATE NOT NULL,
+    shift_type_ids VARCHAR(4000) NOT NULL DEFAULT '[]',
+    created_at VARCHAR(40) NOT NULL,
+    created_by VARCHAR(255) NOT NULL,
+    revoked_at VARCHAR(40),
+    revoked_by VARCHAR(255),
+    CHECK (start_date <= end_date)
+);
+CREATE INDEX IF NOT EXISTS ix_support_allowances_ward ON cross_team_support_allowances(ward_id, start_date, end_date);

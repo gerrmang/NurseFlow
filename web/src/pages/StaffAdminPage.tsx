@@ -25,15 +25,13 @@ export function StaffAdminPage({ wardId }: { wardId: string }) {
   const nurse = data?.staff.find((item) => item.nurseId === selected)
   const session = manager.getState()
   return <main className="page staff-page">
-    <header className="toolbar"><h1>팀·구성원 관리{data && ` · ${data.wardName}`}</h1><Link to="/wards">내 병동</Link></header>
+    <header className="toolbar"><div><h1>구성원</h1>{data && <p className="notice">{data.wardName} · 간호사 {data.staff.length}명</p>}</div><div className="actions"><button className="secondary compact-button" aria-label="최신 목록 불러오기" title="최신 목록 불러오기" disabled={state.busy || state.loading || !!confirmation} onClick={() => void store.reload()}><span aria-hidden="true">↻</span></button><Link to="/wards">내 병동</Link></div></header>
     {!state.forbidden && <p role="status" className={data?.eligibility?.demoMode && !state.stale ? 'error' : 'notice'}>
       {state.stale || !data ? '시연 모드 상태를 확인하고 있어요. 최신 목록을 불러와 주세요.' : !data.eligibility
         ? '시연 모드 확인 불가 · 새로고침해 다시 확인해 주세요.' : data.eligibility.demoMode
         ? '시연 모드 · 계정이 연결되지 않은 가상 간호사도 편성에 포함돼요. 실제 근무표로 사용하지 마세요.'
         : '일반 모드 · 초대를 수락한 활성 간호사만 편성에 포함돼요.'}
     </p>}
-    <p className="notice">저장 후 서버의 최신 목록을 다시 불러와요. 새로고침하면 미저장 입력과 순서는 초기화돼요.</p>
-    <div className="actions"><button className="secondary" disabled={state.busy || state.loading || !!confirmation} onClick={() => void store.reload()}>최신 목록 불러오기</button></div>
     {state.loading && <p role="status">최신 정보를 불러오고 있어요…</p>}
     {state.busy && <p role="status">변경 결과를 확인하고 있어요…</p>}
     {state.notice && !state.forbidden && <p role={state.noticeTone === 'error' ? 'alert' : 'status'} className={state.noticeTone === 'error' ? 'error' : 'notice'}>{state.notice}</p>}
@@ -47,7 +45,8 @@ export function StaffAdminPage({ wardId }: { wardId: string }) {
       <div className="actions"><button onClick={() => { const action = confirmation; setConfirmation(null); void run(action.label, action.operation) }}>확인하고 실행</button><button className="secondary" onClick={() => setConfirmation(null)}>취소</button></div>
     </section>}
     {data && !state.forbidden && <>
-      <nav className="actions" aria-label="관리 화면">
+      <div className="actions"><Link className="button secondary" to={`/wards/${encodeURIComponent(wardId)}/schedule-settings`}>근무 설정 · 근무 형태</Link></div>
+      <nav className="actions segmented" aria-label="관리 화면">
         <button className={tab === 'staff' ? '' : 'secondary'} disabled={!!confirmation} aria-pressed={tab === 'staff'} onClick={() => setTab('staff')}>팀·간호사</button>
         <button className={tab === 'detail' ? '' : 'secondary'} disabled={!!confirmation} aria-pressed={tab === 'detail'} onClick={() => setTab('detail')}>간호사 상세</button>
         <button className={tab === 'members' ? '' : 'secondary'} disabled={!!confirmation} aria-pressed={tab === 'members'} onClick={() => setTab('members')}>구성원</button>
@@ -55,8 +54,8 @@ export function StaffAdminPage({ wardId }: { wardId: string }) {
       <fieldset className="admin-fields" disabled={locked}>
         <legend className="sr-only">병동 관리 입력</legend>
         {tab === 'staff' && <>
-          <Teams key={`teams:${state.version}`} data={data} store={store} run={run} confirm={confirm} />
           <StaffList key={`list:${state.version}`} data={data} store={store} run={run} onSelect={(id) => { setSelected(id); setTab('detail') }} />
+          <Teams key={`teams:${state.version}`} data={data} store={store} run={run} confirm={confirm} />
         </>}
         {tab === 'detail' && <>
           <label className="field">간호사 선택<select value={selected} onChange={(event) => setSelected(event.target.value)}><option value="">선택해 주세요</option>{data.staff.map((item) => <option value={item.nurseId} key={item.nurseId}>{item.displayName}{item.active ? '' : ' · 기록 비활성'}</option>)}</select></label>
@@ -65,6 +64,7 @@ export function StaffAdminPage({ wardId }: { wardId: string }) {
         {tab === 'members' && <Members data={data} selfId={session.status === 'signedIn' ? session.user.userId : ''} store={store} confirm={confirm} />}
       </fieldset>
       <p className="notice">팀 구성 변경은 서버에서 충돌을 확인해요. 일반 정보의 동시 수정은 마지막 저장이 반영될 수 있어요.</p>
+      <p className="notice">저장 후 서버의 최신 목록을 다시 불러와요. 새로고침하면 미저장 입력과 순서는 초기화돼요.</p>
     </>}
   </main>
 }
@@ -100,21 +100,34 @@ function StaffList({ data, store, run, onSelect }: { data: StaffData; store: Sta
   const [name, setName] = useState('')
   const [teamId, setTeamId] = useState('')
   const visible = data.staff.filter((item) => (includeInactive || item.active) && item.displayName.includes(query.trim()))
-  return <section className="card" aria-label="간호사 목록"><h2>간호사 기록</h2>
-    <p className="notice">로그인 계정과 연결되지 않은 기록도 보여요. 편성 대상 여부는 서버가 판단해요.</p>
+  const groups = [...new Set(visible.map((item) => item.team?.teamId ?? ''))].sort((a, b) => {
+    if (!a) return 1
+    if (!b) return -1
+    return (data.teams.find((team) => team.teamId === a)?.sortOrder ?? 0) - (data.teams.find((team) => team.teamId === b)?.sortOrder ?? 0)
+  })
+  return <section className="staff-directory" aria-label="간호사 목록"><h2 className="sr-only">간호사 기록</h2>
+    <div className="staff-grid"><label className="field"><span className="sr-only">간호사 이름 찾기</span><input placeholder="이름으로 찾기" value={query} onChange={(event) => setQuery(event.target.value)} /></label>
+      <label className="check"><input type="checkbox" checked={includeInactive} onChange={(event) => setIncludeInactive(event.target.checked)} />비활성 기록 포함</label></div>
+    {visible.length === 0 && <p>표시할 간호사 기록이 없어요.</p>}
+    {groups.map((teamId) => {
+      const nurses = visible.filter((item) => (item.team?.teamId ?? '') === teamId)
+      return <section className="staff-team" key={teamId}>
+        <h3>{nurses[0]?.team?.name ?? '팀 미지정'} · {nurses.length}명 · 선임 {nurses.filter((item) => item.seniorEligible).length}</h3>
+        <ul className="staff-list">{nurses.map((item) => <li key={item.nurseId}>
+          <button className="staff-row" aria-label={item.displayName} aria-describedby={`staff-info-${item.nurseId} staff-account-${item.nurseId}`} onClick={() => onSelect(item.nurseId)}>
+            <span className="staff-order" aria-hidden="true">{item.teamOrder ?? '—'}</span>
+            <span className="staff-row-copy"><strong>{item.displayName}{item.seniorEligible && <span className="senior-mark" aria-hidden="true"> ★</span>}</strong><span id={`staff-info-${item.nurseId}`}>{item.team?.name ?? '미배정'} · 팀 안 순서 {item.teamOrder ?? '미지정'} · 편성 {stage(item.rosterStage)} · {item.active ? '기록 활성' : '기록 비활성'}{item.seniorEligible && <span className="sr-only"> · 선임 자격 있음</span>}</span></span>
+            <span id={`staff-account-${item.nurseId}`} className={`badge ${item.linkedAccount ? '' : 'badge-muted'}`}>{item.linkedAccount ? '계정 연결됨' : '계정 미연결'}</span>
+            <span className="row-chevron" aria-hidden="true">›</span>
+          </button>
+        </li>)}</ul>
+      </section>
+    })}
     <form onSubmit={(event) => { event.preventDefault(); void run('간호사 기록 등록', () => store.api.createStaff({ displayName: name.trim(), qualifications: [], active: true, ...(teamId ? { teamId } : {}) })) }}>
       <div className="staff-grid"><label className="field">새 간호사 이름<input value={name} maxLength={100} onChange={(event) => setName(event.target.value)} /></label>
         <TeamPicker label="등록할 팀" teams={data.teams} value={teamId} onChange={setTeamId} /></div>
       <button disabled={!name.trim()}>계정 연결 전 기록 등록</button>
     </form>
-    <div className="staff-grid"><label className="field">간호사 이름 찾기<input value={query} onChange={(event) => setQuery(event.target.value)} /></label>
-      <label className="check"><input type="checkbox" checked={includeInactive} onChange={(event) => setIncludeInactive(event.target.checked)} />비활성 기록 포함</label></div>
-    {visible.length === 0 && <p>표시할 간호사 기록이 없어요.</p>}
-    <ul className="staff-list">{visible.map((item) => <li key={item.nurseId}>
-      <button className="link" onClick={() => onSelect(item.nurseId)}>{item.displayName}</button>
-      <span>{item.team?.name ?? '미배정'} · {item.active ? '기록 활성' : '기록 비활성'} · {item.linkedAccount ? '계정 연결됨' : '계정 미연결'}</span>
-      <span>팀 내 순서 {item.teamOrder ?? '미지정'} · {item.seniorEligible ? '선임 자격 있음' : '선임 자격 없음'} · 편성 {stage(item.rosterStage)}</span>
-    </li>)}</ul>
     <Link to={`/wards/${encodeURIComponent(store.wardId)}/invitations`}>초대 관리에서 기록과 계정 연결</Link>
     <h3>팀 안 경력순</h3><p className="notice">위가 더 선임이에요. 검색과 관계없이 팀의 활성 간호사 전체를 정렬해요. 드래그하거나 위로·아래로 버튼을 사용한 뒤 저장해 주세요.</p>
     {data.teams.map((team) => <TeamOrder key={team.teamId} team={team} nurses={data.staff.filter((item) => item.active && item.team?.teamId === team.teamId)} store={store} run={run} />)}
@@ -168,12 +181,12 @@ function StaffDetail({ nurse, data, store, run, confirm }: { nurse: StaffMember;
     store.api.adjustments(nurse.nurseId).then((items) => { if (active) setHistory(items) }, () => { if (active) setHistoryError(true) })
     return () => { active = false }
   }, [store, nurse.nurseId, attempt])
-  return <section className="card" aria-label="간호사 상세"><h2>{nurse.displayName}</h2>
+  return <section className="staff-detail" aria-label="간호사 상세"><header className="staff-detail-summary"><span className="staff-avatar" aria-hidden="true">{nurse.displayName.slice(0, 1)}</span><h2>{nurse.displayName}</h2></header>
     <p>{nurse.active ? '간호사 기록 활성' : '간호사 기록 비활성'} · {nurse.linkedAccount ? '계정 연결됨' : '계정 미연결'}</p>
-    <dl className="summary"><dt>병원 입사 연월</dt><dd>{nurse.profile.hospitalJoinedOn ?? '미입력'}</dd><dt>실제 경력 상태</dt><dd>{profileStatus[nurse.profile.status]}</dd>
+    <details className="profile-summary"><summary>경력·편성 정보 요약</summary><dl className="summary"><dt>병원 입사 연월</dt><dd>{nurse.profile.hospitalJoinedOn ?? '미입력'}</dd><dt>실제 경력 상태</dt><dd>{profileStatus[nurse.profile.status]}</dd>
       <dt>확정 경력 시작</dt><dd>{nurse.profile.confirmedCareerStartedOn ?? '미입력'}</dd><dt>확정 직급</dt><dd>{nurse.profile.confirmedRank ?? '미입력'}</dd>
       <dt>경력 개월 수</dt><dd>{nurse.profile.experienceMonths == null ? '미설정' : `${nurse.profile.experienceMonths}개월`}</dd><dt>서버 계산 단계</dt><dd>{stage(nurse.profile.scoringStage)}</dd>
-      <dt>관리자 조정 단계</dt><dd>{nurse.stageOverride == null ? '계산값 사용' : stage(nurse.stageOverride)}</dd><dt>최종 편성 단계</dt><dd>{stage(nurse.rosterStage)}</dd></dl>
+      <dt>관리자 조정 단계</dt><dd>{nurse.stageOverride == null ? '계산값 사용' : stage(nurse.stageOverride)}</dd><dt>최종 편성 단계</dt><dd>{stage(nurse.rosterStage)}</dd></dl></details>
     <form onSubmit={(event) => { event.preventDefault(); void run('간호사 정보 저장', () => store.api.updateStaff(nurse.nurseId, { displayName: name.trim(), qualifications: values, active: nurse.active })) }}>
       <label className="field">간호사 이름<input maxLength={100} value={name} onChange={(event) => setName(event.target.value)} /></label>
       <label className="field">보유 자격 · 한 줄에 하나<textarea value={qualifications} onChange={(event) => setQualifications(event.target.value)} /></label>

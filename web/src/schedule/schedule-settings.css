@@ -1,0 +1,78 @@
+@font-face { font-family: Inter; src: url('../assets/Inter.woff2') format('woff2'); font-weight: 100 900; font-style: normal; font-display: swap; }
+body:has(.settings-page) { background: #f4f6f8; }
+.settings-page { --bg: #f4f6f8; --surface: #fff; --text: #18212b; --muted: #5b6775; --border: #e3e8ee; --primary: #0e7c71; --brand: #0f8b7e; --brand-soft: #e0f3f0; --brand-deep: #0b5f57; --error: #d1343a; --font: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans KR', 'Malgun Gothic', sans-serif; color-scheme: light; font: 14px/20px var(--font); color: var(--text); min-height: 100svh; max-width: 1040px; padding: 16px 16px 40px; }
+.settings-main { min-width: 0; }
+.settings-sidebar { display: none; }
+.settings-page h1, .settings-page h2, .settings-page h3, .settings-page p { margin: 0; overflow-wrap: anywhere; }
+.settings-page h1 { font-size: 20px; line-height: 28px; }
+.settings-page h2 { font-size: 16px; line-height: 24px; }
+.settings-page h3 { font-size: 14px; line-height: 20px; }
+.settings-subtitle { color: var(--muted); font-size: 12px; margin-top: 4px !important; }
+.settings-page a { color: var(--brand-deep); text-underline-offset: 3px; }
+.settings-page .toolbar { margin-bottom: 16px; gap: 12px; }
+.settings-page .toolbar h1 { margin: 0; }
+.settings-page .notice { color: var(--muted); font-size: 12px; line-height: 18px; }
+.settings-page p + p { margin-top: 8px; }
+.settings-page .card { min-width: 0; background: white; border: 1px solid var(--border); border-radius: 16px; padding: 16px; margin: 16px 0; }
+.settings-page .card > h2 { margin-bottom: 12px; }
+.settings-page .confirm { background: var(--brand-soft); border-color: var(--brand); scroll-margin-top: 16px; }
+.settings-page button { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 48px; padding: 12px 16px; background: var(--primary); color: white; border: 1px solid transparent; border-radius: 12px; cursor: pointer; font: 700 14px/20px var(--font); }
+.settings-page button:hover:not(:disabled) { background: var(--brand-deep); }
+.settings-page button.secondary { background: white; border-color: #c5ced8; color: var(--text); }
+.settings-page button.secondary:hover:not(:disabled) { background: #eef2f5; }
+.settings-page button:disabled { background: #eef2f5; color: var(--muted); border-color: var(--border); opacity: 1; cursor: default; }
+.settings-page :focus-visible { outline: 3px solid var(--brand); outline-offset: 3px; }
+.settings-page input, .settings-page select { width: 100%; min-width: 0; min-height: 48px; padding: 12px 14px; border: 1px solid #c5ced8; border-radius: 12px; background: white; color: var(--text); font: 400 14px/22px var(--font); }
+.settings-page input:disabled, .settings-page select:disabled { background: #eef2f5; color: var(--muted); }
+.settings-page .field { gap: 6px; margin: 16px 0; color: var(--muted); font-size: 13px; font-weight: 700; }
+.settings-page input[type=checkbox] { width: 18px; height: 18px; min-height: 18px; flex-shrink: 0; accent-color: var(--brand); }
+.settings-page .check { align-items: flex-start; font-size: 12px; line-height: 20px; }
+.settings-page .check input { margin-top: 1px; }
+.settings-page .staff-grid { grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr)); gap: 0 16px; }
+.settings-page .staff-list { margin: 16px 0 0; padding: 0; list-style: none; }
+.settings-page .staff-list > li { display: flex; flex-direction: column; align-items: stretch; gap: 8px; padding: 16px; margin-top: 12px; border: 1px solid var(--border); border-radius: 12px; background: white; overflow-wrap: anywhere; }
+.settings-page .team-editor { padding: 16px; margin: 16px 0; border: 1px solid var(--border); border-radius: 12px; background: var(--bg); }
+.settings-page .team-editor h3 { margin-bottom: 8px; }
+.settings-page .settings-tabs { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); padding: 4px; gap: 4px; margin: 16px 0; background: #eef2f5; border-radius: 16px; }
+.settings-page .settings-tabs button { min-height: 40px; padding: 8px; border: 0; border-radius: 12px; background: transparent; color: var(--muted); font-size: 13px; }
+.settings-page .settings-tabs button[aria-pressed=true] { background: white; color: var(--brand-deep); outline: none; box-shadow: 0 1px 2px #0f172914; }
+.settings-page .settings-tabs button:focus-visible { outline: 3px solid var(--brand); outline-offset: -3px; }
+.settings-page .settings-tabs button:disabled { color: var(--muted); }
+.settings-shift-layout { display: grid; gap: 16px; margin-top: 16px; }
+.settings-catalog { min-width: 0; }
+.settings-catalog ul { padding: 0; margin: 0 0 12px; list-style: none; border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+.settings-catalog li + li { border-top: 1px solid var(--border); }
+.settings-page button.settings-shift-row { width: 100%; min-width: 0; justify-content: flex-start; padding: 12px; border: 0; border-radius: 0; background: white; color: var(--text); text-align: left; }
+.settings-page button.settings-shift-row[aria-pressed=true] { background: var(--brand-soft); outline: none; }
+.settings-page button.settings-shift-row:hover:not(:disabled) { background: #eef2f5; }
+.settings-page button.settings-shift-row:focus-visible { outline: 3px solid var(--brand); outline-offset: -3px; }
+.settings-shift-copy { display: flex; flex: 1; min-width: 0; flex-direction: column; gap: 4px; overflow-wrap: anywhere; }
+.settings-shift-copy > span { color: var(--muted); font-size: 11px; line-height: 16px; font-weight: 400; }
+.settings-catalog > button { width: 100%; }
+.settings-shift-editor { min-width: 0; padding: 16px; border-radius: 12px; background: var(--bg); border: 1px solid var(--border); }
+.settings-shift-editor > .field:first-child { margin-top: 0; }
+.settings-page form > button { margin-top: 16px; }
+.settings-page summary { padding: 12px 0; cursor: pointer; font-size: 13px; font-weight: 700; }
+.settings-table-scroll { overflow-x: auto; margin-bottom: 16px; }
+.settings-table-scroll table { width: 100%; border-collapse: collapse; white-space: nowrap; font-size: 12px; }
+.settings-table-scroll th, .settings-table-scroll td { padding: 10px 12px; border-bottom: 1px solid var(--border); text-align: left; }
+.settings-table-scroll th { background: var(--bg); color: var(--muted); }
+.settings-page .shift-chip { display: inline-flex; align-items: center; justify-content: center; min-width: 28px; min-height: 28px; padding: 2px 4px; border-radius: 6px; background: #eef1f4; color: #5b6775; font-size: 11px; line-height: 16px; font-weight: 700; overflow-wrap: anywhere; }
+.settings-page .shift-d { background: #fff1cc; color: #8a5100; }
+.settings-page .shift-e { background: #dcebff; color: #1f5fd1; }
+.settings-page .shift-n { background: #e9e3ff; color: #5b3cc4; }
+.settings-page [role=alert] { padding: 12px 14px; border-radius: 12px; background: #fdecec; color: var(--error); font-size: 13px; }
+@media(min-width:760px) { .settings-page .settings-tabs { grid-template-columns: repeat(4,minmax(0,1fr)); } .settings-shift-layout { grid-template-columns: minmax(220px, 1fr) minmax(0,2fr); align-items: start; } }
+@media(min-width:1024px) {
+ .page.settings-page { display: grid; grid-template-columns: 232px minmax(0,1fr); max-width: none; padding: 0; }
+ .settings-main { padding: 24px 32px 40px; }
+ .settings-sidebar { display: flex; flex-direction: column; gap: 24px; padding: 24px 16px; background: white; border-right: 1px solid var(--border); }
+ .settings-sidebar .nf-brand { display: flex; align-items: center; gap: 8px; }
+ .settings-sidebar .nf-brand-copy { display: flex; flex-direction: column; }
+ .settings-sidebar .nf-wordmark { font: 700 19px/26px Inter,sans-serif; }
+ .settings-sidebar .nf-wordmark > span { color: var(--brand); }
+ .settings-sidebar .nf-brand-caption { font-size: 10px; color: var(--muted); }
+ .settings-ward { display: flex; flex-direction: column; gap: 6px; padding: 12px; border-radius: 12px; background: var(--bg); font-size: 14px; text-decoration: none; }
+ .settings-ward > span { font-size: 11px; color: var(--muted); }
+ .settings-current { padding: 12px 16px; background: var(--brand-soft); color: var(--brand-deep); border-radius: 10px; font-weight: 700; }
+}
