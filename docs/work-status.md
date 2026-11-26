@@ -1,5 +1,37 @@
 # 공유 작업 현황
 
+## B7a PR #60 최신 dev 통합 (2026-11-26, Claude)
+
+- 사용자 요청으로 `feat/android-schedule-settings`에 최신 `origin/dev` `ae24f27`(#63 문서, #64 웹 디자인)을 병합했다. 충돌은 이 문서뿐이며 양쪽 기록을 모두 보존했다(dev 기록을 위에 둠).
+- 병합 기준 이후 dev의 `android/**`·`backend/**` 변경은 없어 B7a 코드 영향은 없다. 로컬 Android 빌드는 이 환경에서 실행하지 않았고 원격 CI 결과로 확인한다.
+- 인계: 다음은 #62(B8a)에 이 병합 이후의 dev를 반영한다. #60과 Android 파일 5개가 겹친다. PR 병합·배포는 하지 않았다.
+
+## PR #64 리뷰 수정 (2026-11-26, Codex)
+
+- 공유 worktree `C:\Users\jjang\IdeaProjects\NurseFlow`, 기존 `fix/web-figma-ui`, 기준 HEAD `2012e68`에서 [리뷰](https://github.com/gerrmang/NurseFlow/pull/64#pullrequestreview-6069089093)를 반영했다. 사용자 DB 두 파일은 그대로 보존했다.
+- P2: `.staff-page`의 1040px 상한을 복원하고, 공통 `.staff-list li`의 세로 배치·여백을 복원했다. 카드형 목록 스타일은 `.staff-directory` 안에만 적용해 구성원 접근 목록과 후속 #59 근무 설정 목록으로 번지지 않게 했다. 본문은 시스템 글꼴로 전환하고 Noto Sans KR 전체 파일·관련 라이선스를 제거했다. 최종 빌드의 폰트 자산은 Inter 350.34kB만 남는다.
+- P3: 로그인 버튼의 보이는 문구와 접근 가능한 이름을 `카카오로 로그인`으로 통일하고 화면 크기와 무관하게 h1을 하나만 제공한다. 간호사 행은 `aria-describedby`로 팀·팀 내 순서·편성 단계·활성 상태·선임 자격·계정 연결 여부를 설명한다. 밝은 테마 고정 결정을 `web/README.md`에 기록했다.
+- 공개 월간 표는 slot 응답 순서 대신 이름·동명이인 ID순으로 안정 정렬하고 표시 기준을 안내한다. **팀별 정렬은 후속 계약 보완 사항**이다. 공개 Assignment에는 소속 팀·팀 내 순서가 없으며, StaffingSlot의 `teamId`는 지원근무의 배치 팀일 수 있어 소속 팀으로 추정하지 않았다. 관리자 전용 staff API를 간호사 공개 화면에 추가 호출하지 않았다.
+- 최종 검증: web `npm run api:check`, `npm run typecheck`, `npm run lint`, `npm run build` 성공. `npm test -- --run`: 397개 통과·기존 opt-in 3개 건너뜀·실패 0. 로그인 접근성·행 설명·응답 역순 및 동명이인 정렬 회귀 검증 포함. `git diff --check` 성공. 이번 수정 diff를 자체 재검토했다. 독립 재리뷰·브라우저 시각 검증·실제 스크린리더·실제 Kakao·실서버·Android·backend 검사는 이번에 실행하지 않았다.
+- API·DB·환경 변경 없음. 웹 정적 자산만 영향이 있고 시스템 글꼴에 따라 자폭·줄바꿈이 달라질 수 있다. 롤백은 수정 커밋 revert 후 웹 정적 빌드 재배포다.
+- 인계: 같은 브랜치의 PR #64로 이어간다. #59의 `근무 설정` 링크는 추후 통합 시 segmented 탭 nav 밖의 이동 링크로 배치하고, #61의 `.off-page` 규칙을 유지한다. #59~#62의 문서 충돌은 양쪽 진행 기록을 보존한다. 다른 열린 PR을 이번 브랜치에 선행 병합하지 않았다. 원격 CI는 수정 커밋 게시 후 별도로 확인하며 병합·수동 배포하지 않는다.
+
+## 웹 기존 화면 디자인 반영·재검증 (2026-11-26, Codex)
+
+- 공유 worktree `C:\Users\jjang\IdeaProjects\NurseFlow`, `fix/web-figma-ui`, 기준 HEAD `3e30752`. 이후 origin/dev의 #63은 문서만 추가하며 웹 코드 차이는 없다. 로그인·병동 선택/생성·초대·구성원·공개 근무표의 기존 기능에 디자인을 반영했다. Android·서버·API·DB·환경 변경 없음.
+- Figma 도구로 확보한 W0/W11 원본과 사용자가 허용한 브라우저 원본 확인을 사용했다. 도구 월간 읽기 한도는 여전히 남아 있다. 웹 전용 로그인 분할 배치와 개인 달력/병동 월간 표를 추가하고, 독립 리뷰의 구성원 행 포커스 잘림과 월 선택 입력·비활성 화살표 표시를 수정했다. 보기 전환·새로고침 시 선택 날짜 유지 회귀 테스트 추가. 미구현 홈·초안 편성·알림 등은 추가하지 않았다.
+- 최종 로컬 검증: `npm run api:check`, `npm run typecheck`, `npm run lint`, `npm test -- --run`(395개 통과·기존 3개 건너뜀), `npm run build`, `git diff --check` 성공. 읽기 전용 독립 재리뷰에서 추가 조치 사항 없음. 이후 표 렌더링의 간호사/날짜별 집계를 분리했고 루트에서 재검토·재검증했다.
+- 실제 앱 컴포넌트와 가상 응답을 사용하는 임시 브라우저 페이지에서 1440·1024·360px 가로 넘침 없음, 로컬 아이콘 로드/크기, 로그인→초대 입력, 근무표 날짜→보기 전환의 날짜 유지, 월 키보드 조작, 구성원 키보드 포커스→상세 이동을 확인했다. 임시 페이지는 마지막 정식 빌드로 제거했다. 실제 Kakao·실서버·기기·원격 CI 검사는 재실행하지 않았다.
+- 최신 dev 통합·PR 준비: 디자인을 `c3e84ff`로 커밋하고, 기존 화면 수정 성격에 맞춰 사용자와 브랜치 이름을 `fix/web-figma-ui`로 정리했다. `origin/dev` `748a0a9`를 `f55ff43`으로 병합했으며 작업 기록 문서의 충돌은 양쪽 내용을 모두 유지해 해결했다. 통합 후 웹 API 타입·타입 검사·Lint·테스트(395개 통과·기존 3개 건너뜀)·빌드와 `git diff --check origin/dev...HEAD` 성공. 폰트 라이선스의 행 끝 공백도 정리했다.
+- 인계: `fix/web-figma-ui` → `dev` [PR #64](https://github.com/gerrmang/NurseFlow/pull/64)를 게시했다. 같은 공유 worktree와 브랜치에서 후속 검토한다. 사용자 DB 두 파일은 커밋에서 제외해 보존했다. PR 병합·배포하지 않았다. 웹 정적 자산 배포 영향만 있으며 스쿼시 병합 후에는 해당 커밋을 revert한다. 원본과 모든 화면의 픽셀 단위 완전 일치를 보증하는 검증은 아니다.
+
+## 공휴일·휴일 달력 클라이언트 인수인계 문서 (2026-11-26, Claude)
+
+- 브랜치 `claude/project-thread-0nhhfg`(최신 `dev` `3e30752`에서 분기). 문서만 추가: `docs/holiday-calendar-client-handoff.md`.
+- 내용: A13 휴일 달력·공휴일·목표시간 API, 달력 표시 우선순위(병동 항목 > 국가 공휴일 > 주말), 관리자 설정 화면 요구, 정책 ETag 공유, 오류 코드별 화면 처리, 알려진 공백(자동배치 미반영·간호사용 표시 API 없음·운영 키 미확인), B 쪽 권장 순서.
+- 확인: `origin/dev`와 열린 PR #59~#62의 `web/src`·`android`에 휴일 달력 사용 코드 없음(`schema.gen.ts` 타입만). 문서의 응답 예시 수치는 `TargetHourCalculator.monthTarget` 규칙으로 손계산했다. 빌드·테스트는 문서 변경이라 실행하지 않았다.
+- API/DB/환경 변경 없음. 공유 인계: B7a·B7b 병합 후 휴일 달력 화면을 별도 행으로 둘지 B10에 포함할지 `docs/feature-breakdown.md`에서 정한다.
+
 ## B7a PR #60 A13 최신 dev 통합 (2026-11-25, Codex)
 
 - 사용자 요청으로 기존 `feat/android-schedule-settings`의 `b2d9028`에 최신 `origin/dev` `3e30752`(A13 #58)을 통합했다. 충돌 없음. Android 동작 코드는 변경하지 않았고 backend·OpenAPI·웹 생성 타입은 dev와 동일하다. 기존 사용자 DB·trace 보존, 새 브랜치/worktree 없음.

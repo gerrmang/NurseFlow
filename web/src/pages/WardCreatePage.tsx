@@ -11,7 +11,7 @@ export function WardCreatePage({ epoch }: { epoch: number }) {
   const locked = state.busy || state.uncertain
 
   if (state.created) return (
-    <main className="page">
+    <main className="page ward-create-page">
       <h1>병동을 만들었어요</h1>
       <section className="card" aria-label="생성한 병동">
         <h2>{state.created.wardName}</h2>
@@ -38,7 +38,7 @@ export function WardCreatePage({ epoch }: { epoch: number }) {
 
   const results = state.results
   return (
-    <main className="page">
+    <main className="page ward-create-page">
       <header className="toolbar"><h1>병동 만들기</h1><Link to="/wards">내 병동 목록 확인</Link></header>
       <p>공식 목록에서 병원을 고르고 병동 이름을 입력해 주세요. 병원 선택은 재직 인증이 아니에요.</p>
       <section className="card" aria-label="병원 검색">
