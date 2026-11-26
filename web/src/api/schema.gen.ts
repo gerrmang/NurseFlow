@@ -1051,6 +1051,89 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/wards/{wardId}/night-policy": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                wardId: components["parameters"]["WardId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * 병동 SOF·Night 전담 정책 조회
+         * @description 설정이 없으면 시연 기본값(일반 간호사 월 Night 6회 이상이면 같은 달 SOF 1일, Night 전담 2명, 3개월 순환, 전담 월 Night 최소 15회)을 반환한다.
+         *     법정 기준이 아니라 병원·병동이 바꿀 수 있는 설정값이다. 응답 ETag는 병동 공통 정책 revision이다.
+         */
+        get: operations["getNightPolicy"];
+        /**
+         * 병동 SOF·Night 전담 정책 변경
+         * @description 전체 교체한다. SOF 필요와 전담 Night 횟수는 조회할 때 계산하는 진단이라 초안 revision을 올리거나 재검증 표시를 하지 않는다.
+         *     sofDays=0이면 SOF 필요 진단을 끈다. SOF 이월은 지원하지 않는다. 현재 값과 같은 요청도 정책 ETag를 확인하며 revision은 올리지 않는다.
+         */
+        put: operations["replaceNightPolicy"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/wards/{wardId}/night-dedicated-terms": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                wardId: components["parameters"]["WardId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Night 전담 순환 기록 조회
+         * @description 기본은 취소되지 않은 기록만 반환한다. includeCancelled=true면 시작 전에 취소된 기록도 함께 반환한다. 시작 월 순.
+         */
+        get: operations["listNightDedicatedTerms"];
+        put?: never;
+        /**
+         * Night 전담 기간 지정
+         * @description 간호사를 startMonth부터 endMonth까지(포함, 월 단위, 1~12개월) Night 전담으로 기록한다. endMonth를 비우면 병동 정책의
+         *     순환 개월 수(기본 3개월)만큼으로 정한다. 편성 대상(활성) 간호사만 지정할 수 있다. 같은 간호사의 다른 전담 기간과 겹치면 409다.
+         *     같은 간호사·시작·종료의 활성 기록을 다시 요청하면 새로 만들지 않고 그 기록을 200으로 반환한다.
+         *     이 기록은 근무 배치나 필수 규칙을 바꾸지 않으며(허용 근무 유형은 간호사 근무 형태가 정한다) 초안 revision도 바꾸지 않는다.
+         *     Night 진단이 조회할 때마다 읽는다.
+         */
+        post: operations["createNightDedicatedTerm"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/wards/{wardId}/night-dedicated-terms/{termId}/end": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                wardId: components["parameters"]["WardId"];
+                termId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Night 전담 기간 조기 종료·취소
+         * @description 순환 중도 변경용이다. lastMonth를 마지막 전담 월로 하여 종료 월을 앞당긴다(연장은 새 기록으로 한다).
+         *     시작 월의 전월을 주면 시작 전 취소(CANCELLED)다. 기록은 이력으로 남고 처음 정한 종료 월은 plannedEndMonth로 유지된다.
+         *     현재 종료 월과 같은 값을 다시 보내면 변경 없이 현재 기록을 반환한다. 초안 revision은 바꾸지 않는다.
+         */
+        post: operations["endNightDedicatedTerm"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/wards/{wardId}/target-hour-policy": {
         parameters: {
             query?: never;
@@ -1237,6 +1320,36 @@ export interface paths {
          *     간호사에게는 노출하지 않는다. 결과가 근무표 외에 정책·달력·앞뒤 달 공개본에도 달려 있어 ETag를 주지 않는다.
          */
         get: operations["getRosterHourDiagnostics"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/rosters/{rosterId}/night-diagnostics": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                rosterId: components["parameters"]["RosterId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * 관리자용 SOF·Night 전담 진단
+         * @description 활성 편성 대상 간호사, 이 근무표에 Night·SOF가 있는 간호사, 이 달을 덮는 전담 기록이 있는 간호사별로 진단한다.
+         *     조회 때 현재 정책과 전담 기록으로 계산하며 저장하지 않고, 저장·확정을 막지 않는다(공개 전 확인은 A16).
+         *     Night는 근무가 시작한 날짜의 월에 센다(nightAttribution=SHIFT_DATE). 이 달 말일 Night는 이 달 횟수다.
+         *     시간 진단(END_DATE_MONTH)과 기준이 다르다.
+         *     일반 간호사는 Night가 sofNightThreshold 이상이면 같은 달 sofDays일의 SOF가 필요하다(12회여도 추가되지 않으며 이월 없음).
+         *     SOF는 관리자가 근무표 휴식일(rest-days, kind=SOF)로 같은 달 자유 날짜에 넣는다.
+         *     이 달을 덮는 전담 기록이 있거나 근무 형태가 NIGHT_ONLY인 간호사는 전담자로 보아 SOF 일반 규칙에서 제외(DEDICATED_EXEMPT)하고
+         *     월 Night 최소 횟수를 확인한다. 전담 인원은 이 달을 덮는 기록이 있는 편성 대상 간호사 수로 센다.
+         *     간호사에게는 노출하지 않으며, 결과가 정책·전담 기록에도 달려 있어 ETag를 주지 않는다.
+         */
+        get: operations["getRosterNightDiagnostics"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2186,6 +2299,103 @@ export interface components {
             nightDedicatedTargetMinutes: number | null;
             nightDedicatedNightCreditMinutes: number | null;
             policyRevision: number;
+        };
+        NightPolicy: {
+            /** @description 일반 간호사의 SOF가 필요해지는 월 Night 횟수(기본 6). */
+            sofNightThreshold: number;
+            /** @description 기준에 도달했을 때 같은 달에 필요한 SOF 일수(기본 1, 0이면 진단 끔). */
+            sofDays: number;
+            /** @description 동시에 필요한 Night 전담 인원(기본 2). */
+            dedicatedHeadcount: number;
+            /** @description 한 사람의 연속 전담 개월 수(기본 3). 전담 기록의 기본 길이이며, 이어진 기록이 이보다 길면 ROTATION_EXCEEDED. */
+            dedicatedRotationMonths: number;
+            /** @description 전담자의 월 Night 최소 횟수(기본 15). */
+            dedicatedMinNights: number;
+            policyRevision: number;
+        };
+        NightPolicyInput: {
+            sofNightThreshold: number;
+            sofDays: number;
+            dedicatedHeadcount: number;
+            dedicatedRotationMonths: number;
+            dedicatedMinNights: number;
+        };
+        NightDedicatedTermInput: {
+            /** Format: uuid */
+            nurseId: string;
+            startMonth: string;
+            /** @description 마지막 전담 월(포함). 비우면 시작 월 + 순환 개월 수 - 1. */
+            endMonth?: string | null;
+        };
+        EndNightDedicatedTermInput: {
+            /** @description 새 마지막 전담 월. 시작 월의 전월이면 취소. */
+            lastMonth: string;
+        };
+        NightDedicatedTerm: {
+            /** Format: uuid */
+            termId: string;
+            /** Format: uuid */
+            nurseId: string;
+            startMonth: string;
+            /** @description 처음 기록한 마지막 전담 월. */
+            plannedEndMonth: string;
+            /** @description 현재 마지막 전담 월. CANCELLED면 시작 월의 전월. */
+            endMonth: string;
+            /** @enum {string} */
+            status: "ACTIVE" | "SHORTENED" | "CANCELLED";
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            endedAt?: string | null;
+        };
+        NightDedicatedTermItems: {
+            items: components["schemas"]["NightDedicatedTerm"][];
+        };
+        RosterNightDiagnostics: {
+            /** Format: uuid */
+            rosterId: string;
+            month: string;
+            /** @enum {string} */
+            status: "DRAFT" | "PUBLISHED";
+            revision: number;
+            policyRevision: number;
+            policy: components["schemas"]["NightPolicy"];
+            /** @enum {string} */
+            nightAttribution: "SHIFT_DATE";
+            dedicatedHeadcount: {
+                required: number;
+                /** @description 이 달을 덮는 전담 기록이 있는 편성 대상 간호사 수. 기록 없이 NIGHT_ONLY인 간호사는 세지 않는다. */
+                assigned: number;
+                /** @enum {string} */
+                status: "SHORTAGE" | "MET" | "EXCESS";
+                nurseIds: string[];
+            };
+            items: components["schemas"]["NurseNightDiagnosis"][];
+        };
+        NurseNightDiagnosis: {
+            /** Format: uuid */
+            nurseId: string;
+            displayName: string;
+            /** @enum {string} */
+            workPattern: "GENERAL" | "DAY_EVENING_ONLY" | "NIGHT_ONLY";
+            rosterable: boolean;
+            nightCount: number;
+            /** @description 이 근무표에 넣은 SOF 휴식일 수. */
+            sofDays: number;
+            /** @description 이 달을 덮는 전담 기록이 있거나 근무 형태가 NIGHT_ONLY. */
+            dedicated: boolean;
+            /** Format: uuid */
+            dedicatedTermId: string | null;
+            /** @description 이 달을 포함해 전담 기록이 끊기지 않고 이어지는 개월 수. 기록이 없으면 0. */
+            dedicatedRunMonths: number;
+            sofRequiredDays: number;
+            /** @enum {string} */
+            sofStatus: "NOT_REQUIRED" | "MISSING" | "MET" | "EXCESS" | "DEDICATED_EXEMPT";
+            /** @enum {string|null} */
+            dedicatedNightStatus: "BELOW_MINIMUM" | "MET" | null;
+            /** @description 전담자의 최소 Night까지 부족한 횟수. 전담자가 아니면 0. */
+            nightShortfall: number;
+            issues: ("WORK_PATTERN_NOT_NIGHT_ONLY" | "NO_DEDICATED_TERM" | "NOT_ROSTERABLE" | "ROTATION_EXCEEDED")[];
         };
         HolidayCalendarDay: {
             /** Format: date */
@@ -5088,6 +5298,224 @@ export interface operations {
             };
         };
     };
+    getNightPolicy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                wardId: components["parameters"]["WardId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description SOF·Night 전담 정책과 병동 정책 revision */
+            200: {
+                headers: {
+                    ETag: components["headers"]["PolicyETag"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NightPolicy"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    replaceNightPolicy: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description 마지막으로 받은 병동 공통 정책 ETag.
+                 * @example "policy-3"
+                 */
+                "If-Match": components["parameters"]["PolicyIfMatch"];
+            };
+            path: {
+                wardId: components["parameters"]["WardId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NightPolicyInput"];
+            };
+        };
+        responses: {
+            /** @description 적용된 정책과 병동 정책 revision */
+            200: {
+                headers: {
+                    ETag: components["headers"]["PolicyETag"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NightPolicy"];
+                };
+            };
+            /** @description INVALID_NIGHT_POLICY(필수 값 누락·null, 범위 밖·소수·문자열 값) 또는 INVALID_REQUEST */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            /** @description STALE_POLICY_REVISION(If-Match가 현재 병동 정책 revision과 다름) */
+            412: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+        };
+    };
+    listNightDedicatedTerms: {
+        parameters: {
+            query?: {
+                includeCancelled?: boolean;
+            };
+            header?: never;
+            path: {
+                wardId: components["parameters"]["WardId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 전담 기록 목록 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NightDedicatedTermItems"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    createNightDedicatedTerm: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                wardId: components["parameters"]["WardId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NightDedicatedTermInput"];
+            };
+        };
+        responses: {
+            /** @description 같은 기간의 기존 활성 기록 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NightDedicatedTerm"];
+                };
+            };
+            /** @description 생성된 전담 기록 */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NightDedicatedTerm"];
+                };
+            };
+            /** @description INVALID_NIGHT_DEDICATED_TERM(종료 월이 시작 월보다 앞섬, 12개월 초과, 비활성 간호사), INVALID_MONTH, INVALID_REQUEST */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            /** @description WARD_NOT_FOUND, NURSE_NOT_FOUND(이 병동의 간호사가 아님) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            /** @description NIGHT_DEDICATED_TERM_OVERLAP(같은 간호사의 다른 전담 기간과 겹침) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+        };
+    };
+    endNightDedicatedTerm: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                wardId: components["parameters"]["WardId"];
+                termId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EndNightDedicatedTermInput"];
+            };
+        };
+        responses: {
+            /** @description 변경된 전담 기록 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NightDedicatedTerm"];
+                };
+            };
+            /** @description INVALID_NIGHT_DEDICATED_TERM(현재 종료 월보다 늦거나 시작 월의 전월보다 앞섬), INVALID_MONTH, INVALID_REQUEST */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            /** @description WARD_NOT_FOUND, NIGHT_DEDICATED_TERM_NOT_FOUND(이 병동의 기록이 아님) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ApiProblem"];
+                };
+            };
+        };
+    };
     getTargetHourPolicy: {
         parameters: {
             query?: never;
@@ -5469,6 +5897,31 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RosterHourDiagnostics"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    getRosterNightDiagnostics: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                rosterId: components["parameters"]["RosterId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 전담 인원과 간호사별 Night·SOF 진단 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RosterNightDiagnostics"];
                 };
             };
             401: components["responses"]["Unauthorized"];

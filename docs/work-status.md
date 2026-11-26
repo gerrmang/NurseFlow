@@ -1,5 +1,14 @@
 # 공유 작업 현황
 
+## A15 SOF·Night 전담 진단 구현 (2026-11-26, Claude)
+
+- 최신 `origin/dev` `d6f69de`에서 `claude/project-thread-f6215g`로 분기했다(사용자 지시로 작업 브랜치명은 세션 지정 이름을 사용). 소유 범위 `backend/roster/**`, `backend/policy/**`, `schema.sql`, `openapi.yaml`과 생성 파일 `web/src/api/schema.gen.ts`만 바꿨다.
+- 결정 사항 16이 미해결이라 사용자 지시에 따라 가장 가능성 높은 해석으로 진행하고 `feature-breakdown.md` 7절에 **잠정**으로 적었다. SOF는 관리자가 기존 A11 휴식일 API(kind=SOF)로 넣고 서버는 진단만 한다. 전담 순환은 관리자가 기간을 기록한다. 인원 부족·순환 초과·근무 형태 불일치는 진단이며 저장·확정을 막지 않는다(공개 전 확인은 A16).
+- 추가 API: `GET/PUT /wards/{wardId}/night-policy`(병동 정책 ETag 공유, 기본 6회→SOF 1일·전담 2명·3개월·월 15회, 초안 재검증 표시 없음), `GET/POST /wards/{wardId}/night-dedicated-terms`, `POST .../{termId}/end`(조기 종료·시작 전 취소, 이력 유지), `GET /rosters/{rosterId}/night-diagnostics`(관리자 전용, 조회 시 계산). 새 테이블 `ward_night_policies`, `night_dedicated_terms`. 새 오류 코드 `INVALID_NIGHT_POLICY`, `INVALID_NIGHT_DEDICATED_TERM`, `NIGHT_DEDICATED_TERM_NOT_FOUND`, `NIGHT_DEDICATED_TERM_OVERLAP`.
+- 진단 규칙: Night는 근무 시작일의 월로 센다(`SHIFT_DATE`, A13 시간 진단의 `END_DATE_MONTH`와 다름). 일반 간호사는 임계값 이상이면 같은 달 SOF가 필요하고 12회여도 추가되지 않으며 이월 없음. 이 달을 덮는 전담 기록이 있거나 `NIGHT_ONLY`면 전담자로 보아 SOF 일반 규칙에서 제외하고 월 최소 Night를 확인한다. 전담 인원은 기록이 있는 편성 대상 간호사만 센다.
+- 검증: 신규 `NightDiagnosticsCalculatorTest` 6개(6회 경계, 12회, 정책 변경, 전담 최소·면제, 형태 불일치, 순환 초과·취소, 인원 부족·초과·교대 월)와 `NightDedicatedHttpTest` 3개(권한·ETag·입력 검증, 기간 생성·중복·겹침·조기 종료·취소, 월 경계 Night 포함 진단) 통과. 백엔드 전체 `LC_ALL=C.UTF-8 ./gradlew test --rerun-tasks` 318개 중 통과 313·건너뜀 5·실패 0(기본 POSIX 로캘에서는 기존 `HospitalDatasetSearchHttpTest` 3개가 한글 파일명 경로 오류로 실패해 UTF-8 로캘로 재실행). `web`: `npm run api:gen` 후 `api:check`·`typecheck` 통과. Android·실서버·독립 리뷰는 실행하지 않았다.
+- 인계: 같은 브랜치에서 PR 리뷰 대응. 클라이언트 화면(B10 계열)은 이 API를 소비하면 된다. 자동배치의 SOF 배치·전담 반영은 A19 범위다.
+
 ## B8a PR #62 최신 dev(B7a #60) 통합 (2026-11-26, Claude)
 
 - 사용자 요청으로 `feat/android-off-requests`에 B7a(#60)가 병합된 `origin/dev` `3c777e9`를 병합했다. 충돌 6파일(`AppContainer.kt`, `ApiFactory.kt`, `WardListScreen.kt`, `NurseFlowRoot.kt`, `android/README.md`, 이 문서)은 모두 양쪽을 함께 유지해 해결했다.

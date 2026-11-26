@@ -376,3 +376,33 @@ CREATE TABLE IF NOT EXISTS cross_team_support_allowances (
     CHECK (start_date <= end_date)
 );
 CREATE INDEX IF NOT EXISTS ix_support_allowances_ward ON cross_team_support_allowances(ward_id, start_date, end_date);
+
+-- A15: SOF and Night-dedicated settings. Absent row = demo defaults (6 Nights → 1 SOF in the same month, 2 dedicated
+-- nurses, 3-month rotation, at least 15 Nights a month). Ward settings, never legal limits; diagnosed, not enforced.
+CREATE TABLE IF NOT EXISTS ward_night_policies (
+    ward_id UUID PRIMARY KEY REFERENCES wards(ward_id),
+    sof_night_threshold INT NOT NULL CHECK (sof_night_threshold BETWEEN 1 AND 31),
+    sof_days INT NOT NULL CHECK (sof_days BETWEEN 0 AND 31),
+    dedicated_headcount INT NOT NULL CHECK (dedicated_headcount BETWEEN 0 AND 50),
+    dedicated_rotation_months INT NOT NULL CHECK (dedicated_rotation_months BETWEEN 1 AND 12),
+    dedicated_min_nights INT NOT NULL CHECK (dedicated_min_nights BETWEEN 0 AND 31),
+    updated_by VARCHAR(255) NOT NULL,
+    updated_at VARCHAR(40) NOT NULL
+);
+
+-- A15: Night-dedicated terms in whole months (YYYY-MM, inclusive). Ending early keeps the row and moves end_month
+-- back; end_month before start_month = cancelled before it began. planned_end_month keeps the first recorded end.
+CREATE TABLE IF NOT EXISTS night_dedicated_terms (
+    term_id UUID PRIMARY KEY,
+    ward_id UUID NOT NULL REFERENCES wards(ward_id),
+    nurse_id UUID NOT NULL REFERENCES nurses(nurse_id),
+    start_month VARCHAR(7) NOT NULL,
+    planned_end_month VARCHAR(7) NOT NULL,
+    end_month VARCHAR(7) NOT NULL,
+    created_at VARCHAR(40) NOT NULL,
+    created_by VARCHAR(255) NOT NULL,
+    ended_at VARCHAR(40),
+    ended_by VARCHAR(255),
+    CHECK (start_month <= planned_end_month)
+);
+CREATE INDEX IF NOT EXISTS ix_night_dedicated_terms_ward ON night_dedicated_terms(ward_id, nurse_id);
