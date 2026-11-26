@@ -6,7 +6,8 @@
 - 수요 필요 자격은 제출 직전 trim·빈 항목 제거 후 검증/전송한다. 원문 입력은 유지한다. 기본 대상 월은 브라우저 로컬 연월로 계산하여 한국 월초 새벽의 UTC 전월 선택을 막는다. 같은 패턴 검색에서 B7b의 대상 월 계산·필요 자격 분리는 각각 한 곳이며 시간대 변환 모듈의 의도적인 ISO 변환은 유지했다.
 - 검증: `TZ=Asia/Seoul`의 관련 Store/DOM 테스트 49개 통과 후 전체 `npm test -- --run` **461개 통과·실서버 opt-in 4개 건너뜀·실패 0**(25파일). `npm run typecheck`, `npm run lint`, `npm run api:check`, `npm run build`, `git diff --check` exit 0. 신규 회귀 13건: 거절 후 입력 보존/수정 후 재전송, 유형 preview/저장, 부재, 월초·연초, Store의 400 처리. 기존 수요 회귀는 공백·빈 항목을 포함한 자격 정규화 검증으로 보강했다.
 - 수정 diff 자체 재검토 완료. 별도 에이전트 독립 재리뷰·브라우저 수동 검사·실서버·실제 Kakao·Android/backend 전체 검사는 이번 웹 상태/입력 변경에서 실행하지 않았다. 서버 필수 규칙·API/DB/환경·의존성 변경 없음. 웹 정적 빌드 영향만 있으며 롤백은 수정 커밋 revert 및 이전 빌드 복원이다.
-- 인계: 같은 B7b 브랜치에 수정과 검증 기록을 커밋·푸시해 기존 PR #59를 갱신한다. 원격 최종 CI는 푸시 후 별도 확인 대상이다. 사용자 `nurseflow.mv.db`·`nurseflow.trace.db` 보존·커밋 제외. PR 병합·수동 배포 없음.
+- 게시 확인: 수정 커밋 `2bbba71a558148c53bb52930eb3c0a56cd866ce3`을 기존 `origin/feat/web-schedule-settings`에 푸시했고 PR #59의 head 일치를 확인했다. Backend tests·Android debug build·Web checks·Demo seed checks는 조회 시 진행 중, Vercel Preview Comments는 success였다. GitHub 연결 도구의 설명 수정이 integration 권한 403으로 실패하여 기존 gh 인증의 `--body-file`로 기존 설명을 보존하고 수정·검증 결과를 추가했다. 리뷰 댓글·승인·대화 해결은 수행하지 않았다.
+- 인계: 같은 B7b 브랜치를 유지한다. 이 게시 기록 커밋의 최종 원격 CI는 별도 확인 대상이다. 사용자 `nurseflow.mv.db`·`nurseflow.trace.db` 보존·커밋 제외. PR 병합·수동 배포 없음.
 
 ## B7b 근무 설정 디자인 반영 (2026-11-26, Codex)
 
