@@ -1,5 +1,10 @@
 # 공유 작업 현황
 
+## A15 PR #67 리뷰 P3 수정 (2026-11-26, Claude)
+
+- 리뷰 지적: 시작 월 `9999-12`에 종료 월을 생략하면 기본 3개월 종료 월이 10000년이 되어 `VARCHAR(7)`에 저장되지 못하고 500이 났다. 계산된 종료 월이 9999년을 넘으면 저장 전에 `INVALID_NIGHT_DEDICATED_TERM`(400)으로 거부한다.
+- 검증: `NightDedicatedHttpTest`에 회귀 검사 추가(수정 전 `INTERNAL_ERROR`로 실패 재현, 수정 후 통과). `LC_ALL=C.UTF-8 ./gradlew test --tests '*Night*'` 9개 통과. API 형태·DB 변경 없음. 같은 브랜치에서 인계.
+
 ## A15 SOF·Night 전담 진단 구현 (2026-11-26, Claude)
 
 - 최신 `origin/dev` `d6f69de`에서 `claude/project-thread-f6215g`로 분기했다(사용자 지시로 작업 브랜치명은 세션 지정 이름을 사용). 소유 범위 `backend/roster/**`, `backend/policy/**`, `schema.sql`, `openapi.yaml`과 생성 파일 `web/src/api/schema.gen.ts`만 바꿨다.

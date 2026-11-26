@@ -5438,7 +5438,7 @@ export interface operations {
                     "application/json": components["schemas"]["NightDedicatedTerm"];
                 };
             };
-            /** @description INVALID_NIGHT_DEDICATED_TERM(종료 월이 시작 월보다 앞섬, 12개월 초과, 비활성 간호사), INVALID_MONTH, INVALID_REQUEST */
+            /** @description INVALID_NIGHT_DEDICATED_TERM(종료 월이 시작 월보다 앞섬, 12개월 초과, 계산된 종료 월이 9999년을 넘음, 비활성 간호사), INVALID_MONTH, INVALID_REQUEST */
             400: {
                 headers: {
                     [name: string]: unknown;

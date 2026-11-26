@@ -83,6 +83,9 @@ class NightDedicatedHttpTest : ApiTestBase() {
         assertEquals("INVALID_NIGHT_DEDICATED_TERM",
             http.post(path, mapOf("nurseId" to nurse, "startMonth" to "2027-02", "endMonth" to "2028-02"), token).code)
         assertEquals("INVALID_MONTH", http.post(path, mapOf("nurseId" to nurse, "startMonth" to "2027-13"), token).code)
+        // The default three-month end of 9999-12 would fall in year 10000, which cannot be stored.
+        assertEquals("INVALID_NIGHT_DEDICATED_TERM", http.post(path, mapOf("nurseId" to nurse, "startMonth" to "9999-12"), token).code)
+        assertEquals(201, http.post(path, mapOf("nurseId" to nurse, "startMonth" to "9999-12", "endMonth" to "9999-12"), token).status)
         assertEquals("INVALID_NIGHT_DEDICATED_TERM", http.post(path, mapOf("nurseId" to inactive, "startMonth" to "2026-11"), token).code)
         assertEquals("NURSE_NOT_FOUND", http.post(path, mapOf("nurseId" to stranger, "startMonth" to "2026-11"), token).code)
 
@@ -100,8 +103,8 @@ class NightDedicatedHttpTest : ApiTestBase() {
         // Ending before the start cancels; the record stays in the full list.
         assertEquals("INVALID_NIGHT_DEDICATED_TERM", http.post(endPath, mapOf("lastMonth" to "2026-09"), token).code)
         assertEquals("CANCELLED", http.post(endPath, mapOf("lastMonth" to "2026-10"), token).json!!.get("status").asString())
-        assertEquals(1, http.get(path, token).json!!.get("items").size())
-        assertEquals(2, http.get("$path?includeCancelled=true", token).json!!.get("items").size())
+        assertEquals(2, http.get(path, token).json!!.get("items").size())
+        assertEquals(3, http.get("$path?includeCancelled=true", token).json!!.get("items").size())
         assertEquals(404, http.post("$path/${UUID.randomUUID()}/end", mapOf("lastMonth" to "2026-11"), token).status)
         // Another ward's admin view does not reach this ward's term.
         assertEquals(404, http.post("/api/v1/wards/$other/night-dedicated-terms/$termId/end", mapOf("lastMonth" to "2026-11"), token).status)
