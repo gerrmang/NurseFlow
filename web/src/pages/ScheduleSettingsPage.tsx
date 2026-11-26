@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, useSyncExternalStore } from 'react'
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { Link } from 'react-router'
 import { createScheduleSettingsApi, type Shift, type ShiftInput, type Preview, type Requirement, type Absence, type Pattern } from '../api/scheduleSettingsApi'
 import { createStaffAdminApi } from '../api/staffAdminApi'
@@ -6,11 +6,13 @@ import { ScheduleSettingsStore, type SettingsData } from '../schedule/ScheduleSe
 import { compareInstants, localTime, toInstant } from '../schedule/timeZone'
 import { useSessionManager } from '../session/SessionContext'
 import { monthDates } from '../roster/calendar'
+import { Brand } from '../ui/Brand'
+import { ShiftCatalog, DemandSummary } from '../schedule/ScheduleViews'
+import '../schedule/schedule-settings.css'
 
 type Confirm = (label: string, text: string, operation: () => Promise<unknown>, preview?: Preview) => void
 type Run = (label: string, operation: () => Promise<unknown>) => Promise<boolean>
 const patterns: Record<Pattern['workPattern'], string> = { GENERAL: '일반', DAY_EVENING_ONLY: 'D/E 전담', NIGHT_ONLY: 'N 전담' }
-const kinds = { DAY: 'Day', EVENING: 'Evening', NIGHT: 'Night', OTHER: '기존 특수 유형' }
 
 export function ScheduleSettingsPage({ wardId }: { wardId: string }) {
   const manager = useSessionManager()
@@ -21,25 +23,29 @@ export function ScheduleSettingsPage({ wardId }: { wardId: string }) {
   const state = useSyncExternalStore(store.subscribe, store.getSnapshot)
   const [tab, setTab] = useState('shifts')
   const [confirmation, setConfirmation] = useState<{ label: string; text: string; operation: () => Promise<unknown>; preview?: Preview } | null>(null)
+  const confirmationPanel = useRef<HTMLElement>(null)
+  useEffect(() => { if (confirmation) confirmationPanel.current?.focus() }, [confirmation])
   useEffect(() => { store.activate(); void store.reload(); return () => store.dispose() }, [store])
   const confirm: Confirm = (label, text, operation, preview) => setConfirmation({ label, text, operation, preview })
   const run: Run = (label, operation) => store.run(label, operation)
   const data = state.data
   const locked = state.loading || state.busy || state.stale || state.uncertain || state.forbidden || confirmation !== null
-  return <main className="page staff-page">
-    <header className="toolbar"><h1>{data?.wardName ?? '병동'} · 근무 설정</h1><div className="actions"><Link to="/wards">내 병동</Link><button className="secondary" disabled={state.loading || state.busy || confirmation !== null} onClick={() => void store.reload()}>새로고침</button></div></header>
+  return <main className="page settings-page">
+    <aside className="settings-sidebar" aria-label="병동 메뉴"><Brand /><Link className="settings-ward" to="/wards"><strong>{data?.wardName ?? '내 병동'}</strong><span>병동 선택 ▾</span></Link><span className="settings-current">설정</span></aside>
+    <div className="settings-main">
+    <header className="toolbar"><div><h1>근무 설정</h1><p className="settings-subtitle">{data?.wardName ?? '병동'} · 근무 유형과 편성 기준</p></div><div className="actions"><Link to="/wards">내 병동</Link><button className="secondary" disabled={state.loading || state.busy || confirmation !== null} onClick={() => void store.reload()}>새로고침</button></div></header>
     <p className="notice">입력한 설정은 서버가 검증해요. 변경 후 초안 재검증이 필요할 수 있고, 공개본은 재확정 전까지 유지돼요.</p>
     {state.loading && <p role="status">최신 설정을 불러오고 있어요…</p>}
     {state.notice && <p role="status" className="notice">{state.notice}</p>}
     {state.forbidden && <p role="alert">관리 권한 또는 세션이 변경됐어요. <Link to="/wards">내 병동에서 다시 확인해 주세요.</Link></p>}
     {state.stale && data && !state.forbidden && <p role="alert">이전 조회 결과예요. 최신 설정을 다시 불러올 때까지 편집할 수 없어요.</p>}
     {state.uncertain && !state.forbidden && <section className="card" aria-label="저장 결과 확인"><p>이미 처리됐을 수 있어요. 선택한 월의 초안과 해당 설정을 확인해 주세요.</p><button disabled={state.loading || state.busy || state.stale} onClick={() => store.acknowledge()}>최신 결과를 확인했어요</button></section>}
-    {confirmation && !state.forbidden && <section className="card confirm" aria-label="설정 변경 확인"><h2>{confirmation.label}</h2><p>{confirmation.text}</p>
+    {confirmation && !state.forbidden && <section ref={confirmationPanel} tabIndex={-1} className="card confirm" aria-label="설정 변경 확인"><h2>{confirmation.label}</h2><p>{confirmation.text}</p>
       {confirmation.preview && <div><p>재검증 대상 초안 {confirmation.preview.affectedDrafts.length}개 · 칸 시각 재계산 {confirmation.preview.rewritesDraftSlotTimes ? '있음' : '없음'}</p><ul>{confirmation.preview.affectedDrafts.map(d => <li key={d.rosterId}>{d.month} · 해당 근무 {d.slots}칸 · 배치 {d.assignedSlots}칸</li>)}</ul><p>공개 당시 값을 유지하는 근무표 {confirmation.preview.publishedRostersUsingType}개</p></div>}
       <div className="actions"><button disabled={state.busy || state.loading || state.stale || state.uncertain} onClick={() => { const action = confirmation; setConfirmation(null); void run(action.label, action.operation) }}>확인하고 저장</button><button className="secondary" onClick={() => setConfirmation(null)}>취소</button></div>
     </section>}
     {data && !state.forbidden && <>
-      <nav className="actions" aria-label="근무 설정 메뉴">{[['shifts', '근무 유형'], ['patterns', '근무 형태'], ['demand', '팀별 필요 인원'], ['absences', '승인 VY·반차']].map(([id, label]) => <button key={id} className="secondary" aria-pressed={tab === id} disabled={state.busy || confirmation !== null} onClick={() => setTab(id!)}>{label}</button>)}</nav>
+      <nav className="settings-tabs" aria-label="근무 설정 메뉴">{[['shifts', '근무 유형'], ['patterns', '근무 형태'], ['demand', '팀별 필요 인원'], ['absences', '승인 VY·반차']].map(([id, label]) => <button key={id} className="secondary" aria-pressed={tab === id} disabled={state.busy || confirmation !== null} onClick={() => setTab(id!)}>{label}</button>)}</nav>
       {(tab === 'demand' || tab === 'absences') && <section className="card"><label className="field">대상 월<input aria-label="대상 월" type="month" value={state.month} min="0001-01" max="9999-12" disabled={state.busy || state.loading || state.uncertain || confirmation !== null} onChange={e => void store.setMonth(e.target.value)} /></label>
         {data.draft ? <p>초안 revision {data.draft.value.revision} · {data.draft.value.timeZone}{data.draft.value.needsRevalidation ? ' · 재검증 필요' : ''}</p> : <><p>이 달의 수정 가능한 초안이 없어요.</p><button disabled={locked} onClick={() => confirm('초안 생성', `${state.month} 초안을 만들까요? 기존 공개본은 유지해요.`, () => store.api.createRoster(state.month, crypto.randomUUID()))}>이 달 초안 만들기</button></>}
       </section>}
@@ -50,6 +56,7 @@ export function ScheduleSettingsPage({ wardId }: { wardId: string }) {
         {tab === 'absences' && data.draft && <AbsenceSettings key={`absences:${state.version}`} data={data} store={store} confirm={confirm} />}
       </fieldset>
     </>}
+    </div>
   </main>
 }
 
@@ -62,7 +69,9 @@ function ShiftSettings({ data, store, run, confirm }: { data: SettingsData; stor
     if (preview === null) return
     confirm('근무 유형 비활성화', `${shift.code}를 새 수요에서 사용할 수 없게 해요. 기존 초안은 재검증 대상이 되며 공개본은 유지해요.`, () => store.api.deactivateShift(shift.shiftTypeId, data.shifts.etag), preview)
   }
-  return <section className="card"><h2>근무 유형</h2>
+  return <section className="card settings-shifts"><h2>근무 유형</h2><p className="notice">등록된 유형을 선택해 시간과 환산 기준을 확인해 주세요.</p><div className="settings-shift-layout">
+    <ShiftCatalog shifts={data.shifts.value.items} selected={id} onSelect={setId} />
+    <div className="settings-shift-editor">
     <label className="field">편집할 근무 유형<select value={id} onChange={e => setId(e.target.value)}><option value="">새 근무 유형</option>{data.shifts.value.items.map(s => <option value={s.shiftTypeId} key={s.shiftTypeId}>{s.code} · {s.displayName}{s.active ? '' : ' · 비활성'}</option>)}</select></label>
     {selected?.kind === 'OTHER' ? <p>기존 특수 유형은 조회와 비활성화만 지원해요. {selected.startTime}~{selected.endTime}{selected.spansMidnight ? ' (다음 날)' : ''} · 휴게 {selected.breakMinutes}분 · 인정 {selected.recognizedMinutes}분 · 환산 {selected.targetCreditMinutes}분</p> : <ShiftForm key={id} shift={selected} submit={async input => {
       if (!selected) { await run('근무 유형 생성', () => store.api.createShift(input, data.shifts.etag, crypto.randomUUID())); return }
@@ -70,7 +79,7 @@ function ShiftSettings({ data, store, run, confirm }: { data: SettingsData; stor
       if (preview) confirm('근무 유형 변경', '영향받는 초안을 확인하고 저장해 주세요.', () => store.api.updateShift(selected.shiftTypeId, input, data.shifts.etag), preview)
     }} />}
     {selected?.active && <button className="secondary" onClick={() => void deactivate(selected)}>선택 유형 비활성화</button>}
-    <ul className="staff-list">{data.shifts.value.items.map(s => <li key={s.shiftTypeId}>{s.code} · {s.displayName} · {kinds[s.kind]} · {s.startTime}~{s.endTime}{s.spansMidnight ? ' (다음 날)' : ''} · {s.active ? '활성' : '비활성'}<span className="notice">휴게 {s.breakMinutes} / 인정 {s.recognizedMinutes} / 월 환산 {s.targetCreditMinutes}분</span></li>)}</ul>
+    </div></div>
   </section>
 }
 function shiftInput(shift: Shift, active = shift.active): ShiftInput {
@@ -123,7 +132,7 @@ function DemandSettings({ data, store, confirm }: { data: SettingsData; store: S
   const shifts = data.shifts.value.items.filter(s => s.active && (data.teams.length === 0 || s.kind !== 'OTHER'))
   const change = (key: string, patch: Partial<Requirement>) => { setAck(false); setRows(rows.map(r => r.key === key ? { ...r, ...patch } : r)) }
   return <section className="card"><h2>팀별 필요 인원</h2><p>현재 {draft.value.slots.length}칸 · 선임 미충원 {draft.value.staffing.seniorUnfilled ?? 0}칸</p>
-    <details><summary>현재 수요 보기 (읽기 전용)</summary><ul>{[...groups].map(([key, g]) => <li key={key}>{g.date} · {g.team} · {g.code} · {g.count}명 (선임 필수 {g.senior}칸)</li>)}</ul></details>
+    <details><summary>현재 수요 보기 (읽기 전용)</summary><DemandSummary groups={[...groups].map(([key, group]) => ({ key, ...group }))} /></details>
     <p className="notice">저장은 이 달의 수요 전체를 아래 목록으로 교체해요. 기존 필요 자격은 조회 API에 없어 자동 복사하지 않아요. 필요한 모든 날짜·팀·근무와 자격을 새로 입력해 주세요. 팀 지정 D/E/N 양수 수요에는 선임 칸 1개가 포함돼요.</p>
     {assigned && <p role="alert">이미 배치가 있는 초안이에요. 수요 교체는 서버에서 거절돼요. 배치 편집에서 먼저 해제해야 해요.</p>}
     <fieldset className="admin-fields" disabled={assigned}><legend className="sr-only">전체 교체할 수요</legend>
