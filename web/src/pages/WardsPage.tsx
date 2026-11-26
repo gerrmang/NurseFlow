@@ -111,6 +111,11 @@ export function WardsPage({ user }: { user: SessionUser }) {
                   </span>
                 ))}
                 {ward.roles.includes('WARD_ADMIN') && (
+                  <Link className="button secondary" to={`/wards/${encodeURIComponent(ward.wardId)}/schedule-settings`}>
+                    근무 설정
+                  </Link>
+                )}
+                {ward.roles.includes('WARD_ADMIN') && (
                   <Link className="button secondary" to={`/wards/${encodeURIComponent(ward.wardId)}/staff`}>
                     팀·구성원 관리
                   </Link>
