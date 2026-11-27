@@ -1,0 +1,11 @@
+.holiday-page .holiday-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 5px; margin: 20px 0; }
+.holiday-page .holiday-weekday { text-align: center; color: #64748b; font-size: .85rem; }
+.holiday-page .holiday-day { min-width: 0; min-height: 96px; padding: 9px 4px; display: flex; flex-direction: column; gap: 4px; align-items: center; background: #f8fafc; color: #334155; border: 1px solid #e2e8f0; border-radius: 9px; overflow-wrap: anywhere; }
+.holiday-page .holiday-day span, .holiday-page .holiday-day small { font-size: .75rem; }
+.holiday-page .holiday-day.PUBLIC_HOLIDAY, .holiday-page .holiday-day.SUBSTITUTE_HOLIDAY { color: #a42431; background: #fff4f4; }
+.holiday-page .holiday-day.WARD_REST_DAY { background: #e8edf2; }
+.holiday-page .holiday-day.WARD_WORKDAY { color: #05664a; background: #eaf9f2; }
+.holiday-page .holiday-day[aria-pressed=true] { outline: 3px solid #08917c; outline-offset: 1px; }
+.holiday-page .holiday-total { font-size: 2rem; font-weight: 700; color: #087965; }
+.holiday-page fieldset { margin: 16px 0; }
+@media (max-width: 480px) { .holiday-page .holiday-grid { gap: 3px; } .holiday-page .holiday-day { min-height: 80px; padding: 7px 2px; } .holiday-page .holiday-day span, .holiday-page .holiday-day small { font-size: .65rem; } }

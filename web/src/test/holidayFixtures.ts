@@ -1,0 +1,3 @@
+import type { HolidayCalendar, Policy } from '../api/holidaySettingsApi'
+export const HOLIDAY_POLICY: Policy = { dailyStandardMinutes: 480, leaveCreditMinutes: 480, halfDayCreditMinutes: 240, sofCreditMinutes: 480, nightDedicatedTargetMinutes: null, nightDedicatedNightCreditMinutes: null, policyRevision: 1 }
+export const HOLIDAY_CALENDAR: HolidayCalendar = { month: '2026-11', days: [], publicHolidays: [{ date: '2026-11-03', kind: 'PUBLIC_HOLIDAY', name: '가상 공휴일' }], holidaySource: { configured: true, fetchedAt: null }, target: { month: '2026-11', daysInMonth: 30, weekendDays: 9, holidayDays: 1, wardRestDays: 0, wardWorkdays: 0, restDays: 10, targetDays: 20, dailyStandardMinutes: 480, generalTargetMinutes: 9600 }, policyRevision: 1 }

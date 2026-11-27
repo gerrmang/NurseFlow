@@ -1,5 +1,66 @@
 # 공유 작업 현황
 
+## 휴일 설정 PR #69 원격 Android 검사 실패 수정 (2026-11-27, Codex)
+
+- 최초 최종 head `b1e3d0d8`의 Verify 46006176834에서 Demo·Backend·Web은 성공했고 Android는 기존 `StaffAdminViewModelTest.modeHttpErrorsRetainAccessChecksWithResponseWrapper`의 126행 편집 가능 단언에서 실패했다(293개 중 실패 1·opt-in 건너뜀 4). 로컬 성공과 원격 실패를 구분한다.
+- 원인은 `Dispatchers.Unconfined` 테스트에서 권한 거부의 중간 상태를 StateFlow로 관측한 직후 이전 조회 작업이 끝나기 전에 deactivate/activate를 재진입하던 완료 대기다. 같은 MockWebServer fixture의 모든 호출에서 상태 조건 대기 대신 실제 scope 자식 Job을 join하도록 바꿨다. 기존 단언·권한 오류 사례·타임아웃을 유지했고 제품 코드와 의존성은 바꾸지 않았다. 수정 diff 자체 재리뷰에서 추가 확정 결함 없음.
+- 최종 수정으로 JDK 21 `:app:testDebugUnitTest :app:assembleDebug :app:assembleDebugAndroidTest :app:lintDebug --offline --no-daemon` BUILD SUCCESSFUL(41초). XML 293개 중 289개 통과·실서버 opt-in 4개 건너뜀·실패/오류 0. 단위 테스트는 실행됐고 APK/Lint는 UP-TO-DATE 결과를 포함한다. 웹·backend·기기·실서버는 테스트 대기만 바뀌어 다시 실행하지 않았으며 직전 기록과 최초 원격 통과 결과를 따른다.
+- 이 수정과 기록을 동일 `feat/holiday-target-settings`에 커밋·푸시해 PR #69에 반영하고 최종 head 원격 CI를 별도 확인한다. API/DB/환경·배포 변경 없음. 사용자 DB/trace는 보존·커밋 제외. 공유 인계 경로는 기존 `C:\Users\jjang\IdeaProjects\NurseFlow`이며 PR 승인·병합은 하지 않는다.
+
+## 휴일 설정 PR #69 게시·공유 인계 (2026-11-27, Codex)
+
+- 사용자 요청대로 기존 `codex/holiday-target-settings`를 규칙에 맞는 `feat/holiday-target-settings`로 변경하고 최신 dev `4a4cd3d6` 통합·재리뷰·검증 뒤 푸시했다. 초기 원격 head `ba155013d1461e6bf7f1f4988abdbe67eaa846d9`로 dev 대상 일반 [PR #69](https://github.com/gerrmang/NurseFlow/pull/69)을 생성했고 OPEN·draft=false·base=dev·head 일치를 확인했다.
+- 연결 GitHub 도구의 PR 생성은 integration 권한 403으로 실패해 기존 gh 인증과 정확한 한글 본문 파일로 생성했다. 사용자 요청의 기존 단일 브랜치 범위를 따라 웹·Android A13 후속을 함께 게시했다. PR 템플릿에 실행 결과·건너뜀·API/DB/설정·배포·롤백·제한을 기록했다.
+- 재검토에서 조치 가능한 확정 결함 없음. 최신 dev에서 웹 전체 560개/실서버 인수 1개, Android 기본 단위 289개·앱/계측 APK·Lint 통과와 제외 검사 수는 직전 절을 따른다. 게시 뒤 제품 코드는 바꾸지 않았다. 이 문서 기록만 추가 커밋·푸시하고 최종 head 원격 CI를 조회한다. 기존 기기·실제 인증 미검증 제한은 유지한다.
+- 공유 인계는 `C:\Users\jjang\IdeaProjects\NurseFlow`, `feat/holiday-target-settings`, PR #69이다. 사용자 DB/trace·로컬 설정은 미추적/ignored 상태로 보존·커밋 제외한다. 원래 브랜치 이름은 로컬에서 변경됐고 별도 기능 복제/새 worktree는 만들지 않았다. 앱의 현재 primary인 PR 통합 worktree와 구분해 이 원래 공유 worktree에서 후속 리뷰를 이어간다.
+- GitHub 승인·PR 병합·자동 병합·수동 배포는 수행하지 않았다. 원격 Verify 상태는 게시한 최종 head 기준으로 별도 확인하며, 로컬 성공을 원격 CI 성공으로 대신하지 않는다. 추가 API/DB/운영 환경 변경 없음. 되돌리기는 최종 기능 스쿼시 revert와 이전 클라이언트 빌드 복원이다.
+
+## 휴일 설정 최신 dev 통합·재검증·PR 게시 준비 완료 (2026-11-27, Codex)
+
+- 기존 브랜치를 `feat/holiday-target-settings`로 변경하고 현재 구현을 `ff58691b`로 보존한 뒤 최신 dev `4a4cd3d6`를 통합했다. 충돌은 이 현황 문서 한 곳뿐이며 양쪽 기록을 보존했다. 서버·OpenAPI·웹 생성 타입은 dev와 동일하다. Android와 holiday 구현 파일은 통합 전후 diff 0을 확인했다.
+- 이번 정적 재리뷰에서 웹/Android의 정책 ETag·revision 경합·권한/세션·불확실 쓰기·null/0·Activity 재생성과 A13 계약을 다시 대조했고 조치 가능한 확정 결함 없음. 기존 별도 에이전트 독립 리뷰에서 26개가 통과한 기록과 이번 재검증을 구분한다. 제품 코드 수정 없음.
+- 웹 api:check·typecheck·lint·전체 test·build 성공, 560개 통과·실서버 opt-in 6개 건너뜀·실패 0. 최신 dev JAR(bootJar 성공)·가상 OIDC·새 메모리 H2 `holiday_pr_ready_e2e`의 실서버 인수 1개 재실행 통과(1.70초). 서버·공급자는 종료했고 사용자 DB/실제 키는 사용하지 않았다.
+- Android JDK 21 전체 단위/앱 APK/계측 APK/Lint 명령 BUILD SUCCESSFUL(37초). XML 293개 중 289개 통과·opt-in 4개 건너뜀·실패/오류 0, Lint 오류 0·기존 경고 27. 단위 작업은 실행됐으며 APK/Lint에는 UP-TO-DATE 결과가 있다. 이번 기기·Android 실서버·브라우저·실제 Kakao·실제 공휴일 성공 갱신·backend 전체 회귀는 재실행하지 않았다. 기존 기기/실서버 증거와 구분한다.
+- 추가 API/DB/배포 환경·의존성 변경 없음. 웹 정적 빌드·Android 빌드에 영향. debug 비공개 테스트 Activity/manifest만 포함되고 release에는 없다. 수동 배포 없음. 되돌리기는 해당 기능의 최종 스쿼시 커밋을 revert하고 이전 클라이언트 빌드를 복원한다.
+- 공유 인계: 같은 `C:\Users\jjang\IdeaProjects\NurseFlow`, `feat/holiday-target-settings`에서 통합·검증 기록을 커밋하고 사용자 요청대로 푸시·dev 대상 일반 PR 하나를 만든다. 사용자 DB/trace·로컬 설정은 보존·커밋 제외. PR 게시 결과와 원격 CI는 후속 확인하며 PR 병합은 하지 않는다.
+
+## 휴일 설정 재리뷰·브랜치 규칙 정리·PR 준비 (2026-11-27, Codex)
+
+- 사용자 요청으로 기존 공유 worktree `C:\Users\jjang\IdeaProjects\NurseFlow`의 `codex/holiday-target-settings`를 다시 검토하고 저장소 git-flow 규칙의 `feat/holiday-target-settings`로 이름을 바꿨다. 다른 worktree나 같은 기능의 두 번째 구현 브랜치는 만들지 않았다. 사용자 지정 기존 브랜치의 웹·Android A13 후속 변경을 함께 PR 하나로 게시한다.
+- 재검토 범위는 웹 API/Store/Page·진입 경로와 Android API/ViewModel/Screen·세션 소유 navigation·debug 테스트 호스트, A13 실제 서버 계약이다. 공통 정책 ETag/저장 후 revision 대조, 미저장 입력 보존, 권한 변경 데이터 폐기, 불확실 쓰기 재전송 차단, null/0과 화면 재생성 경로를 대조했고 조치 가능한 확정 결함은 발견하지 못했다. 이전 별도 에이전트의 독립 리뷰 기록은 위 재검토와 구분한다.
+- 제품 코드·테스트는 이 재리뷰에서 수정하지 않았다. 기존 구현·검증 문서를 로컬 커밋으로 보존한 뒤 최신 dev `4a4cd3d6`를 같은 브랜치에 통합하고 최종 검사를 실행한다. 최신 dev 통합 이후 검증 결과·실행하지 않은 검사는 후속 기록으로 구분한다. 사용자 DB/trace·로컬 비밀 설정은 제외한다.
+
+## 승인된 PR 3개 순차 스쿼시 병합 완료 (2026-11-27, Codex)
+
+- 사용자 명시 요청과 스쿼시 지정에 따라 #67(A15) → #68(A16) → #66(A18) 순서로 dev에 병합했다. 병합 직전 각 PR은 APPROVED·MERGEABLE·CLEAN, 미해결 리뷰 스레드 0건과 CI 전체 성공을 확인했다. 연결 GitHub 도구의 병합은 integration 403으로 거부돼 기존 인증된 gh를 사용했으며 관리자 우회·자동 병합은 사용하지 않았다.
+- #67: head `680680c7`, Verify 45939608690 전체 성공, 스쿼시 `5051e1fd65705a9eeab68f4e27ae30e5744cc086`.
+- #68: A15 반영 뒤 schema.sql·ApiTestBase 충돌에서 양쪽 테이블/정리 목록을 모두 유지했다. JDK 21 backend 328개 중 323개 통과·opt-in 5개 건너뜀·실패/오류 0, 웹 api:check·typecheck·lint·534개 통과/opt-in 5개 건너뜀·build 성공. 통합 head `92614466`, Verify 45999630199 Demo/Backend/Android/Web 및 Vercel 검사 전체 성공. 스쿼시 `d0cf38c5e323c035a16c01ca2f1fbe8ae635e773`.
+- #66: 최신 A15/A16 dev와 RosterService 생성자·작업 현황 충돌에서 준비 점검/시간 진단/확정 기록 의존성과 양쪽 기록을 모두 유지했다. backend 340개 중 335개 통과·opt-in 5개 건너뜀·실패/오류 0, 웹 api:check·typecheck·lint·534개 통과/opt-in 5개 건너뜀·build 성공. 통합 head `17bf55c7`, Verify 46000346221 전체 성공. 스쿼시 `4a4cd3d65e354e931fe7e095b7e59557ad485dba`.
+- 최종 조회에서 열린 PR 0개. 로컬 dev와 origin/dev는 모두 `4a4cd3d6`이며 기존 `d6f69dec` 뒤 정확히 스쿼시 커밋 3개다. 최종 dev의 파일 트리가 검증한 #66 head와 같음을 git diff --quiet로 확인했다. 현재 휴일 설정 작업 브랜치에 dev를 합치지는 않았다.
+- 통합 자체의 추가 API/DB/환경 변경 없음. 원 PR의 Night 정책·전담 기간/확정 확인 기록 테이블, 확정 요청 계약 변경과 생성 준비 상태 API가 dev에 반영됐다. 수동 배포 없음. 되돌리기는 필요 시 #66 → #68 → #67 스쿼시 커밋을 역순 revert한다. Android 로컬·기기·실제 인증 인수는 병합 통합에서 반복하지 않았으며 각 최종 원격 Verify의 Android 빌드를 확인했다.
+- 원래 공유 worktree `C:\Users\jjang\IdeaProjects\NurseFlow`, `codex/holiday-target-settings`의 미커밋 휴일·목표시간 구현과 사용자 DB/trace는 보존했다. 이 완료 기록만 추가한다. 기존 기능 변경을 커밋·푸시하거나 main에 병합하지 않았다.
+- 독립 통합용 `C:\Users\jjang\.codex\worktrees\pr-merge-integration\NurseFlow`를 사용했다. 의존성 junction만 제거했고 원래 node_modules 보존을 확인했다. archive_worktree는 앱의 “The task's primary checkout cannot be removed.” 보호로 거부됐으므로 강제로 삭제하지 않고 보존했다. 원래 저장소 경로는 linked worktree가 아니어서 attach_worktree로 재지정되지 않았다. 후속 휴일 설정 작업은 원래 공유 worktree/브랜치에서 이어간다.
+
+## 휴일·목표시간 설정 독립 코드 리뷰 (2026-11-27 21:12 KST, Codex 별도 리뷰 에이전트)
+
+- 사용자 명시 요청으로 구현 대화 이력을 전달하지 않은 별도 에이전트가 읽기 전용 독립 리뷰를 수행했다. 현재 공유 worktree `C:\Users\jjang\IdeaProjects\NurseFlow`, 브랜치 `codex/holiday-target-settings`, HEAD `d6f69dec93d95cbd74da3dafef078a08884615aa` 기준의 tracked diff와 새 holiday 관련 파일 총 30개를 검토했다. 사용자 DB/trace·비밀 설정은 제외했다.
+- 확인 범위: 웹 API/Store/Page·진입 경로·회귀 검사, Android API/ViewModel/Screen·ApiFactory/AppContainer·세션 소유 navigation/lifecycle, debug 테스트 Activity/manifest·단위/기기 검사 코드, A13 서버 Controller/Service 및 인수인계 계약. 정책 ETag 공유·쓰기 직렬화·저장 후 타 revision 차단·미저장 입력 보존·권한 오류 데이터 폐기·불확실 결과 재전송 차단과 debug 호스트 `exported=false`/release 분리를 대조했다.
+- 결과: **조치 가능한 확정 결함 없음**. 독립 에이전트가 직접 실행한 웹 API/Store/Page 3파일 **26개 테스트 전부 통과**, exit 0(Vitest 3.13초). root의 `git diff --check`도 exit 0. Android·실서버·브라우저·기기·실제 공휴일 공급자는 이번 독립 리뷰에서 재실행하지 않았으며 이전 구현 검증을 독립 실행 결과로 표시하지 않는다.
+- 리뷰 시작/종료 스냅샷 일치: 사용자 DB/trace를 제외한 변경 파일의 경로와 각 파일 SHA256을 정렬해 만든 manifest의 SHA256은 `7a92e3e76dd4b10aea5762fbae5cd1922a22429272483244f4fec80729f219a4`다. 이 값은 본 리뷰 기록을 추가하기 전 30개 파일 상태이며, 기록 자체 때문에 바뀌는 현황 파일 해시와 구분한다.
+- 제품·테스트 코드 수정 없음. root가 이 리뷰 기록만 추가했다. 같은 worktree/브랜치의 기존 미커밋 구현 변경을 유지하며 커밋·푸시·PR 게시·GitHub 승인·병합·배포는 하지 않았다. 로컬 독립 코드 리뷰 결과이며 원격 CI나 GitHub의 독립 승인·브랜치 보호 확인을 뜻하지 않는다.
+
+## A13 후속 웹·Android 휴일 달력·목표시간 설정 (2026-11-27, Codex)
+
+- 사용자 요청으로 `git fetch origin` 후 로컬 `dev`를 `139b609f → d6f69dec93d95cbd74da3dafef078a08884615aa`까지 fast-forward했다. 그 dev에서 같은 공유 worktree의 `codex/holiday-target-settings`를 만들었다. 기존 B7b 브랜치·사용자 `nurseflow.mv.db`·`nurseflow.trace.db`는 보존했다. 별도 worktree는 만들지 않았다.
+- 범위: A13 인수인계의 휴일 달력·목표시간 정책을 B10 초안 검토와 별도 화면으로 구현했다. 웹은 근무 설정의 링크, Android는 관리자 병동 목록의 전용 버튼으로 진입한다. 월별 국가 공휴일/병동 지정/주말과 지정 우선순위, 전체 교체·삭제 확인, 저장된 서버 월 목표 요약, 공휴일 출처/갱신, 분 입력·시간/분 표시·전담 null/0 구분을 제공한다. 공통 정책 문서는 기능 PR에서 수정하지 않았다.
+- 공통 정책 ETag를 대조하고 쓰기를 직렬화한다. 한쪽 저장은 다른 쪽 미저장 입력을 보존한다. 저장 응답 이후 다른 revision이 관측되면 미저장 입력을 새 revision에 자동으로 합치지 않고 잠근다. 400 입력 유지, 412 재조회 안내, 권한 상실 데이터 폐기, 응답 유실·5xx·비정상 저장 응답의 재전송 차단과 최신 결과 확인을 지원한다. 공휴일 가져오기 실패는 기존 달력·입력을 유지한다. Android의 입력/요청은 세션 소유 ViewModel로 회전 중 유지한다.
+- 웹: api:check·typecheck·lint·전체 `npm test -- --run`·build 성공. 전체 **560개 통과·실서버 opt-in 6개 건너뜀·실패 0**. 마지막 반환값 정리 후 관련 Store 14개와 typecheck·lint·build를 재확인했다. 최종 코드의 가상 웹 OIDC+실제 Spring/H2 인수 **1개 통과**(새 메모리 DB `holiday_settings_final_e2e`): 저장/재조회·목표시간·0/null·412·키 미설정 503·성공 응답 유실·일반 구성원 조회 403. 실제 브라우저에서 로그인→설정 진입→휴무일 저장→월 목표 갱신과 360/1440px 가로 넘침 없음을 확인했다.
+- Android: JDK 21 `:app:testDebugUnitTest :app:assembleDebug :app:assembleDebugAndroidTest :app:lintDebug --offline --no-daemon`, `NURSEFLOW_HOLIDAY_ANDROID_E2E=1`. 단위 XML **293개 중 290개 통과·기존 opt-in 3개 건너뜀·실패/오류 0**, 새 API 3개·ViewModel 13개·실서버 1개 포함. 실제 Retrofit/SessionManager/ViewModel+Spring/H2로 저장·목표시간·0/null·412·키 미설정 503·재진입·일반 구성원 403을 확인했다. 최종 debug 앱/계측 APK·Lint·선택 기기 4개는 별도 마지막 실행에서 **BUILD SUCCESSFUL(1분 31초)**, Lint 오류 0·기존 경고 27을 확인했다.
+- 읽기 전용 Pixel_10(Android 17) 기기 검사 **4/4 통과·실패/오류/건너뜀 0, 22.233초**. 가상 API 화면 3개와 전용 debug Activity의 실제 재생성 1개다. 초기 MainActivity+가상 HTTP 인수는 기존 AVD의 전역 프록시로 세션 복원 연결이 실패했다. 자동 승인 검토가 에뮬레이터 프록시 예외 변경을 거부해 실행하지 않았고, 네트워크 없는 debug 테스트 호스트로 화면/회전 검증을 완료했다. 이 호스트는 비공개(`exported=false`)이며 release에 포함되지 않는다. MainActivity 실제 HTTP 진입 검증으로 표현하지 않는다.
+- 서버·OpenAPI·웹 생성 타입·DB·배포 환경·의존성 변경 없음을 diff로 확인했다. Android debug 테스트 호스트/manifest만 추가했다. 갱신 시각은 API에 병동 시간대가 없어 UTC로 명시한다. 실제 data.go.kr 성공 갱신·실제 Kakao·물리 기기·운영·전체 기기 회귀·독립 리뷰·원격 CI는 미검증이다. backend 전체 회귀는 서버 미변경이라 실행하지 않았고 최신 dev bootJar 빌드만 성공했다.
+- 배포 영향은 웹 정적 빌드·Android 빌드, 수동 배포 없음. 되돌리기는 이번 기능 변경을 되돌리고 이전 클라이언트 빌드를 복원한다. API/DB 롤백 없음. 상세 재현·실패 수정·제한은 `web/holiday-settings-verification.md`, `android/holiday-settings-verification.md`에 기록했다.
+- 공유 인계: 같은 `C:\Users\jjang\IdeaProjects\NurseFlow`, `codex/holiday-target-settings`에서 변경을 **미커밋 상태**로 유지한다. 사용자 DB/trace는 미추적·커밋 제외다. 커밋·푸시·PR 게시·병합은 수행하지 않았다. PR을 만들 때는 저장소 원칙대로 웹/Android 변경을 분리하고 실제 CI·독립 리뷰를 별도로 확인한다. 이번 검증용 서버·공급자·Vite·읽기 전용 에뮬레이터를 종료했다. 원본 AVD·프록시 설정은 변경하지 않았다.
+
 ## A18 PR #66 최신 dev 통합·순차 스쿼시 병합 준비 (2026-11-27, Codex)
 
 - 사용자 승인·스쿼시 병합 요청으로 #67(A15, `5051e1fd`)에 이어 #68(A16, `d0cf38c5e323c035a16c01ca2f1fbe8ae635e773`)을 dev에 병합했다. #68 최종 통합 head `92614466`의 Verify 45999630199에서 Demo/Backend/Android/Web 전체 성공과 승인 유지·CLEAN을 확인한 뒤 병합했다.

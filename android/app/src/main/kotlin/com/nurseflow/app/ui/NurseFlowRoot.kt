@@ -33,6 +33,8 @@ import com.nurseflow.app.feature.staff.StaffAdminScreen
 import com.nurseflow.app.feature.staff.StaffAdminViewModel
 import com.nurseflow.app.feature.offrequest.OffRequestScreen
 import com.nurseflow.app.feature.offrequest.OffRequestViewModel
+import com.nurseflow.app.feature.holiday.HolidaySettingsScreen
+import com.nurseflow.app.feature.holiday.HolidaySettingsViewModel
 import com.nurseflow.app.feature.schedule.ScheduleSettingsScreen
 import com.nurseflow.app.feature.schedule.ScheduleSettingsViewModel
 
@@ -51,6 +53,7 @@ fun NurseFlowRoot(container: AppContainer) {
     var staffWardId by rememberSaveable(sessionKey) { mutableStateOf<String?>(null) }
     var offWardId by rememberSaveable(sessionKey) { mutableStateOf<String?>(null) }
     var scheduleWardId by rememberSaveable(sessionKey) { mutableStateOf<String?>(null) }
+    var holidayWardId by rememberSaveable(sessionKey) { mutableStateOf<String?>(null) }
     var wardEntry by rememberSaveable(sessionKey) { mutableStateOf(0) }
     var pasting by remember(sessionKey) { mutableStateOf(false) }
     var creatingWard by rememberSaveable(sessionKey) { mutableStateOf(false) }
@@ -105,6 +108,7 @@ fun NurseFlowRoot(container: AppContainer) {
                             val staffWard = loaded?.firstOrNull { it.wardId == staffWardId && it.isAdmin }
                             val offWard = loaded?.firstOrNull { it.wardId == offWardId }
                             val scheduleWard = loaded?.firstOrNull { it.wardId == scheduleWardId && it.isAdmin }
+                            val holidayWard = loaded?.firstOrNull { it.wardId == holidayWardId && it.isAdmin }
                             // Created for the whole session so a newer link replaces, not duplicates, the flow.
                             // One fixed-key model; reset() on entry and exit means flows never pile up in the store.
                             val createModel = viewModel(key = "ward-create") {
@@ -139,6 +143,7 @@ fun NurseFlowRoot(container: AppContainer) {
                                         staffWardId = null
                                         offWardId = null
                                         scheduleWardId = null
+                                        holidayWardId = null
                                         wardEntry += 1
                                     }
                                 }
@@ -161,6 +166,17 @@ fun NurseFlowRoot(container: AppContainer) {
                                             onSessionInvalid = { container.logout() })
                                     }
                                     OffRequestScreen(offWard.wardName, off) { offWardId = null; wardsModel.reload(silent = true) }
+                                }
+                                holidayWard != null -> {
+                                    val holidays = viewModel(key = "holiday-${holidayWard.wardId}") {
+                                        HolidaySettingsViewModel(container.holidaySettingsApi(), holidayWard.wardId,
+                                            memberships = { container.api.wards().items },
+                                            sessionValid = { val now = container.session.state.value; now is SessionState.SignedIn && now.userId == current.userId && now.generation == current.generation },
+                                            onSessionInvalid = { container.logout() })
+                                    }
+                                    HolidaySettingsScreen(holidayWard.wardName, holidays,
+                                        onBack = { holidayWardId = null; wardsModel.reload(silent = true) },
+                                        onForbidden = { holidayWardId = null; selectedWardId = null; wardsModel.reload() })
                                 }
                                 scheduleWard != null -> {
                                     val settings = viewModel(key = "schedule-${scheduleWard.wardId}") {
@@ -210,6 +226,7 @@ fun NurseFlowRoot(container: AppContainer) {
                                     onManageStaff = { staffWardId = it.wardId },
                                     onOffRequests = { offWardId = it.wardId },
                                     onScheduleSettings = { scheduleWardId = it.wardId },
+                                    onHolidaySettings = { holidayWardId = it.wardId },
                                 )
                                 else -> {
                                     BackHandler { selectedWardId = null }

@@ -23,6 +23,7 @@ class AppContainer(
     fun staffAdminApi() = ApiFactory.staffAdminApi(apiBaseUrl, session)
     fun offRequestApi() = ApiFactory.offRequestApi(apiBaseUrl, session)
     fun scheduleSettingsApi() = ApiFactory.scheduleSettingsApi(apiBaseUrl, session)
+    fun holidaySettingsApi() = ApiFactory.holidaySettingsApi(apiBaseUrl, session)
     /** Invitation link being handled; memory only, never persisted. */
     val invites = PendingInvitationStore()
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
