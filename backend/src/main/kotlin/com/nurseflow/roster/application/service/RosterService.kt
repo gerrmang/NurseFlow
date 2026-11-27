@@ -47,6 +47,8 @@ class RosterService(
     private val mapper: JsonMapper,
     private val replays: MutationReplayRepository,
     private val supportAllowances: SupportAllowanceJdbcRepository,
+    private val setupReadiness: SetupReadinessService,
+
     private val hourDiagnostics: HourDiagnosticsService,
     private val confirmations: ConfirmationJdbcRepository,
 ) {
@@ -361,6 +363,8 @@ class RosterService(
         if (repo.activeNurseCount(roster.wardId) > 200) {
             throw BusinessException(ErrorCode.GENERATION_TOO_LARGE, safeDetail = "자동배치 한도는 활성 간호사 200명입니다.")
         }
+        // A18: required settings must exist before generation; senior and other notices never block.
+        setupReadiness.requireReadyForGeneration(roster)
         val job = GenerationJob(UUID.randomUUID(), rosterId, "QUEUED", roster.revision, Instant.now(), progressPercent = 0)
         repo.insertGenerationJob(
             job.jobId, rosterId, subject, roster.revision,
@@ -419,6 +423,13 @@ class RosterService(
             finishFailedUnlessCancelled(
                 jobId, listOf(RuleDiagnostic("STALE_ROSTER_REVISION", "HARD", "근무표가 변경되어 자동배치를 적용하지 않았습니다.")),
             )
+            return
+        }
+        // A18: a required setting can disappear while the job waits (e.g. the last rosterable nurse deactivated).
+        // Checked again under the ward lock, before any assignment is cleared, so the draft stays as it was.
+        val setupMissing = setupReadiness.blockingDiagnostics(roster)
+        if (setupMissing.isNotEmpty()) {
+            finishFailedUnlessCancelled(jobId, setupMissing)
             return
         }
         val allSlots = repo.slots(roster.id)

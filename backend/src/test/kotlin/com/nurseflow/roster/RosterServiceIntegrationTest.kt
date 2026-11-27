@@ -178,6 +178,23 @@ class RosterServiceIntegrationTest @Autowired constructor(
     }
 
     @Test
+    fun `queued generation rechecks required setup and keeps the draft when it is gone`() {
+        val draft = assign(newRoster("2026-11", LocalDate.parse("2026-11-10"), dayTypeId), nurseId)
+        val job = service.startGeneration(draft.rosterId, tag(draft), UUID.randomUUID(), StartGenerationRequest(false), admin)
+        // The last rosterable nurse is deactivated while the job waits in the queue.
+        jdbc.update("UPDATE nurses SET active=FALSE WHERE nurse_id=?", nurseId)
+        service.markGenerationRunning(job.jobId)
+        service.processGeneration(job.jobId)
+
+        val finished = service.getGenerationJob(job.jobId, admin)
+        assertEquals("FAILED", finished.status)
+        assertEquals(listOf("SETUP_STAFF"), finished.diagnostics.map { it.code })
+        val after = service.getRoster(draft.rosterId, admin)
+        assertEquals(draft.revision, after.revision)
+        assertEquals(nurseId, after.slots.single().assignment?.nurseId, "unlocked assignment must not be cleared")
+    }
+
+    @Test
     fun `work pattern is enforced for candidate manual locked generation automatic and confirmation`() {
         jdbc.update("UPDATE nurses SET work_pattern='DAY_EVENING_ONLY' WHERE nurse_id=?", nurseId)
         val draft = newRoster("2026-11", LocalDate.parse("2026-11-30"), nightTypeId)

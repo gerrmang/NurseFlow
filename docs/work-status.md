@@ -1,5 +1,28 @@
 # 공유 작업 현황
 
+## A18 PR #66 최신 dev 통합·순차 스쿼시 병합 준비 (2026-11-27, Codex)
+
+- 사용자 승인·스쿼시 병합 요청으로 #67(A15, `5051e1fd`)에 이어 #68(A16, `d0cf38c5e323c035a16c01ca2f1fbe8ae635e773`)을 dev에 병합했다. #68 최종 통합 head `92614466`의 Verify 45999630199에서 Demo/Backend/Android/Web 전체 성공과 승인 유지·CLEAN을 확인한 뒤 병합했다.
+- 같은 임시 통합 worktree에서 #66 원래 head `431d99fa`에 최신 dev를 통합했다. `RosterService.kt` 생성자 충돌은 준비 점검·시간 진단·확정 기록 의존성을 모두 보존했고, 작업 현황도 A15/A16/A18 기록을 모두 유지했다. A18의 생성 시작·실행 전 준비 재검사와 A16의 확정 경로는 각각 유지된다. 추가 동작·API/DB/환경 변경 없음.
+- JDK 21 backend `test --offline --no-daemon` BUILD SUCCESSFUL(1분 16초), XML 340개 중 335개 통과·기존 opt-in 5개 건너뜀·실패/오류 0. 웹 api:check·typecheck·lint·전체 test·build 성공, 534개 통과·실서버 opt-in 5개 건너뜀·실패 0. 생성 타입 일치·충돌 해결 diff 자체 검토·git diff --cached --check 통과.
+- Android 로컬·기기·실제 인증·실서버 인수는 이번 기계적 통합에서 재실행하지 않았다. 이 커밋을 기존 #66 head 브랜치에 푸시한 뒤 최종 원격 Verify·승인·충돌 상태를 확인하고 스쿼시 병합한다. 수동 배포 없음. 되돌리기는 통합 커밋 첫 부모 revert 또는 최종 스쿼시 커밋 revert다.
+- 원래 공유 `C:\Users\jjang\IdeaProjects\NurseFlow`의 `codex/holiday-target-settings` 미커밋 구현·사용자 DB/trace는 보존한다. 최종 병합 결과는 원래 공유 작업 현황에도 남기며 임시 통합 worktree는 아카이브한다.
+
+## A18 PR #66 리뷰 수정 (2026-11-26, Claude)
+
+- P2: 자동배치 실행(`processGeneration`) 단계에서 병동 잠금 아래 준비 상태를 다시 검사한다. 대기 중 필수 항목이 사라지면(예: 마지막 편성 대상 간호사 비활성화) 작업을 FAILED(`SETUP_<항목>` 진단)로 끝내고 기존 배정·revision을 그대로 둔다.
+- P3: 선임 수요·공급 판정을 배치 규칙과 맞췄다. 한 간호사가 시간이 겹치지 않는 같은 날 여러 칸을 맡을 수 있으므로, SAME_DAY는 동시에 겹치는 선임 칸 수(자정 넘는 Night 포함)로, MONTHLY_CAPACITY는 날짜별 최대 겹침의 합(`requiredSeniorDays`)과 근무일 상한으로 비교한다. 응답에 `requiredSeniorDays`를 추가했다.
+- 검증: `LC_ALL=C.UTF-8 ./gradlew test` 321개 중 316 통과·5 건너뜀·실패 0. 새 테스트: 실행 단계 재검사(배정 보존), D·E 비겹침 1명 충족, 겹침 부족, Night-다음 날 겹침. `npm run api:check` 통과.
+
+## A18 설정 준비 상태·생성 전 점검 구현 (2026-11-26, Claude)
+
+- `origin/dev` `d6f69de`에서 `claude/project-thread-1tgx42`로 분기했다. 새 API: `GET /api/v1/wards/{wardId}/setup-readiness`(병동 준비 상태), `GET /api/v1/rosters/{rosterId}/generation-precheck`(초안 생성 전 점검). 둘 다 관리자 전용·조회 전용이며 `Cache-Control: private, no-store`, ETag 없음.
+- 항목 상태는 COMPLETE/DEFAULT/WARNING/MISSING. 생성을 막는 필수 항목(MISSING)은 활성 D/E/N 근무 유형 0개, 편성 가능한 간호사 0명, 그 달 필요 인원 칸 0개 세 가지다. `POST /rosters/{id}/generation-jobs`는 이 중 하나라도 있으면 422 `SETUP_INCOMPLETE`로 거부하고 작업을 만들지 않으며, `ruleViolations`에 `SETUP_<항목>`을 하나씩 담는다.
+- 알림 항목(생성 막지 않음): D/E/N 일부 누락, 팀 미지정 간호사, 선임 없는 팀, 목표 시간 정책 미입력(DEFAULT), 그 달 공휴일 미수신, 확정하지 않은 희망 오프, 초안 재검증 필요. 팀·근무 종류별 선임 필요 칸 대비 가용 선임(근무 형태 반영)과 월 상한(월 일수 - floor(월 일수 / (최대 연속 + 1)))을 비교해 NO_SENIOR·MONTHLY_CAPACITY·SAME_DAY 부족을 보여준다. 팀 간 지원 허용은 공급에 넣지 않았다.
+- 스키마 변경 없음(`schema.sql` 미수정). `RosterService`는 생성자 의존성 1개와 `startGeneration`의 점검 호출 2줄만 바뀌었다. 새 코드는 `roster/domain/readiness/**`, `SetupReadiness*` 파일에 있다.
+- 검증: `./gradlew test` 318개 중 315 통과·5 건너뜀·3 실패. 실패 3건은 `HospitalDatasetSearchHttpTest`의 한글 파일 경로 `InvalidPathException`(이 컨테이너 로캘 문제)이며 `LC_ALL=C.UTF-8`로 다시 실행해 통과했다. 새 테스트 9개(`SetupReadinessEvaluatorTest` 7, `SetupReadinessHttpTest` 2) 통과.
+- 남은 일: 기본값을 관리자가 "확인"했는지 저장하는 기능은 없다(스키마 필요). Night 전담·SOF 준비 항목은 A15 병합 뒤 추가. 클라이언트(B10a/b, 설정 홈) 연동 전. PR 병합·배포하지 않았다.
+
 ## A16 PR #68 최신 dev 통합·순차 스쿼시 병합 준비 (2026-11-27, Codex)
 
 - 사용자 승인·스쿼시 병합 요청으로 A15 PR #67을 먼저 dev에 병합했다(`5051e1fd65705a9eeab68f4e27ae30e5744cc086`). #68의 충돌은 별도 통합 worktree에서 원래 head `d69776df`에 최신 dev를 병합해 해결했다. 원래 공유 worktree의 미커밋 휴일·목표시간 구현과 사용자 DB/trace는 건드리지 않았다.
