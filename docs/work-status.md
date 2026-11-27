@@ -1,5 +1,32 @@
 # 공유 작업 현황
 
+## A16 PR #68 최신 dev 통합·순차 스쿼시 병합 준비 (2026-11-27, Codex)
+
+- 사용자 승인·스쿼시 병합 요청으로 A15 PR #67을 먼저 dev에 병합했다(`5051e1fd65705a9eeab68f4e27ae30e5744cc086`). #68의 충돌은 별도 통합 worktree에서 원래 head `d69776df`에 최신 dev를 병합해 해결했다. 원래 공유 worktree의 미커밋 휴일·목표시간 구현과 사용자 DB/trace는 건드리지 않았다.
+- `schema.sql`은 A15 Night 정책/전담 기간과 A16 확정 기록 테이블을 모두 보존했다. `ApiTestBase.kt`는 양쪽 테스트 초기화 목록을 모두 포함한다. 나머지 계약·생성 타입·현황은 자동 병합됐고 api:check로 계약 타입 일치를 확인했다. 추가 동작·API/DB/환경 변경은 없다.
+- JDK 21 backend `test --offline --no-daemon` BUILD SUCCESSFUL(1분 42초). XML 328개 중 323개 통과·기존 opt-in 5개 건너뜀·실패/오류 0. 웹 api:check·typecheck·lint·전체 test·build 성공, 534개 통과·실서버 opt-in 5개 건너뜀·실패 0. 충돌 해결 diff 자체 검토·git diff --cached --check 통과.
+- Android 로컬·기기·실제 인증·실서버 인수는 이번 기계적 통합에서 재실행하지 않았다. 기존 PR의 승인·검사는 통합 푸시 뒤 다시 조회하며 최종 head의 원격 Verify를 확인하고 스쿼시 병합한다. 수동 배포 없음. 되돌리기는 이 통합 커밋을 첫 부모 기준 revert하거나 최종 스쿼시 커밋을 revert한다.
+- 인계: 같은 임시 통합 worktree에서 #68 통합을 기존 PR head 브랜치에 푸시한다. #68 병합 뒤 #66을 최신 dev에 통합한다. 원래 `codex/holiday-target-settings`의 변경은 별도 보존한다.
+
+## A15 PR #67 리뷰 후속: 시작 연도 하한 (2026-11-27, Claude)
+
+- 리뷰 지적: 시작 월 `0000-01` 전담 기간이 201로 등록되었다. 취소에 필요한 시작 전월(-0001-12)을 API의 네 자리 연도 형식으로 보낼 수 없다. 상한(9999년)과 대칭으로 시작 연도가 0001년보다 앞서면 `INVALID_NIGHT_DEDICATED_TERM`(400)으로 거부한다.
+- 검증: `NightDedicatedHttpTest`에 `0000-01`(종료 월 지정)·`0000-12`(기본 종료 월) 회귀 검사 추가. 수정 전 201로 실패 재현, 수정 후 `LC_ALL=C.UTF-8 ./gradlew test --tests '*Night*'` 9개 통과. API 형태·DB 변경 없음. 같은 브랜치에서 인계.
+
+## A15 PR #67 리뷰 P3 수정 (2026-11-26, Claude)
+
+- 리뷰 지적: 시작 월 `9999-12`에 종료 월을 생략하면 기본 3개월 종료 월이 10000년이 되어 `VARCHAR(7)`에 저장되지 못하고 500이 났다. 계산된 종료 월이 9999년을 넘으면 저장 전에 `INVALID_NIGHT_DEDICATED_TERM`(400)으로 거부한다.
+- 검증: `NightDedicatedHttpTest`에 회귀 검사 추가(수정 전 `INTERNAL_ERROR`로 실패 재현, 수정 후 통과). `LC_ALL=C.UTF-8 ./gradlew test --tests '*Night*'` 9개 통과. API 형태·DB 변경 없음. 같은 브랜치에서 인계.
+
+## A15 SOF·Night 전담 진단 구현 (2026-11-26, Claude)
+
+- 최신 `origin/dev` `d6f69de`에서 `claude/project-thread-f6215g`로 분기했다(사용자 지시로 작업 브랜치명은 세션 지정 이름을 사용). 소유 범위 `backend/roster/**`, `backend/policy/**`, `schema.sql`, `openapi.yaml`과 생성 파일 `web/src/api/schema.gen.ts`만 바꿨다.
+- 결정 사항 16이 미해결이라 사용자 지시에 따라 가장 가능성 높은 해석으로 진행하고 `feature-breakdown.md` 7절에 **잠정**으로 적었다. SOF는 관리자가 기존 A11 휴식일 API(kind=SOF)로 넣고 서버는 진단만 한다. 전담 순환은 관리자가 기간을 기록한다. 인원 부족·순환 초과·근무 형태 불일치는 진단이며 저장·확정을 막지 않는다(공개 전 확인은 A16).
+- 추가 API: `GET/PUT /wards/{wardId}/night-policy`(병동 정책 ETag 공유, 기본 6회→SOF 1일·전담 2명·3개월·월 15회, 초안 재검증 표시 없음), `GET/POST /wards/{wardId}/night-dedicated-terms`, `POST .../{termId}/end`(조기 종료·시작 전 취소, 이력 유지), `GET /rosters/{rosterId}/night-diagnostics`(관리자 전용, 조회 시 계산). 새 테이블 `ward_night_policies`, `night_dedicated_terms`. 새 오류 코드 `INVALID_NIGHT_POLICY`, `INVALID_NIGHT_DEDICATED_TERM`, `NIGHT_DEDICATED_TERM_NOT_FOUND`, `NIGHT_DEDICATED_TERM_OVERLAP`.
+- 진단 규칙: Night는 근무 시작일의 월로 센다(`SHIFT_DATE`, A13 시간 진단의 `END_DATE_MONTH`와 다름). 일반 간호사는 임계값 이상이면 같은 달 SOF가 필요하고 12회여도 추가되지 않으며 이월 없음. 이 달을 덮는 전담 기록이 있거나 `NIGHT_ONLY`면 전담자로 보아 SOF 일반 규칙에서 제외하고 월 최소 Night를 확인한다. 전담 인원은 기록이 있는 편성 대상 간호사만 센다.
+- 검증: 신규 `NightDiagnosticsCalculatorTest` 6개(6회 경계, 12회, 정책 변경, 전담 최소·면제, 형태 불일치, 순환 초과·취소, 인원 부족·초과·교대 월)와 `NightDedicatedHttpTest` 3개(권한·ETag·입력 검증, 기간 생성·중복·겹침·조기 종료·취소, 월 경계 Night 포함 진단) 통과. 백엔드 전체 `LC_ALL=C.UTF-8 ./gradlew test --rerun-tasks` 318개 중 통과 313·건너뜀 5·실패 0(기본 POSIX 로캘에서는 기존 `HospitalDatasetSearchHttpTest` 3개가 한글 파일명 경로 오류로 실패해 UTF-8 로캘로 재실행). `web`: `npm run api:gen` 후 `api:check`·`typecheck` 통과. Android·실서버·독립 리뷰는 실행하지 않았다.
+- 인계: 같은 브랜치에서 PR 리뷰 대응. 클라이언트 화면(B10 계열)은 이 API를 소비하면 된다. 자동배치의 SOF 배치·전담 반영은 A19 범위다.
+
 ## B8a PR #62 최신 dev(B7a #60) 통합 (2026-11-26, Claude)
 
 - 사용자 요청으로 `feat/android-off-requests`에 B7a(#60)가 병합된 `origin/dev` `3c777e9`를 병합했다. 충돌 6파일(`AppContainer.kt`, `ApiFactory.kt`, `WardListScreen.kt`, `NurseFlowRoot.kt`, `android/README.md`, 이 문서)은 모두 양쪽을 함께 유지해 해결했다.
