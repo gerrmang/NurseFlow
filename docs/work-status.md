@@ -1,5 +1,12 @@
 # 공유 작업 현황
 
+## 휴일 설정 PR #69 원격 Android 검사 실패 수정 (2026-11-27, Codex)
+
+- 최초 최종 head `b1e3d0d8`의 Verify 46006176834에서 Demo·Backend·Web은 성공했고 Android는 기존 `StaffAdminViewModelTest.modeHttpErrorsRetainAccessChecksWithResponseWrapper`의 126행 편집 가능 단언에서 실패했다(293개 중 실패 1·opt-in 건너뜀 4). 로컬 성공과 원격 실패를 구분한다.
+- 원인은 `Dispatchers.Unconfined` 테스트에서 권한 거부의 중간 상태를 StateFlow로 관측한 직후 이전 조회 작업이 끝나기 전에 deactivate/activate를 재진입하던 완료 대기다. 같은 MockWebServer fixture의 모든 호출에서 상태 조건 대기 대신 실제 scope 자식 Job을 join하도록 바꿨다. 기존 단언·권한 오류 사례·타임아웃을 유지했고 제품 코드와 의존성은 바꾸지 않았다. 수정 diff 자체 재리뷰에서 추가 확정 결함 없음.
+- 최종 수정으로 JDK 21 `:app:testDebugUnitTest :app:assembleDebug :app:assembleDebugAndroidTest :app:lintDebug --offline --no-daemon` BUILD SUCCESSFUL(41초). XML 293개 중 289개 통과·실서버 opt-in 4개 건너뜀·실패/오류 0. 단위 테스트는 실행됐고 APK/Lint는 UP-TO-DATE 결과를 포함한다. 웹·backend·기기·실서버는 테스트 대기만 바뀌어 다시 실행하지 않았으며 직전 기록과 최초 원격 통과 결과를 따른다.
+- 이 수정과 기록을 동일 `feat/holiday-target-settings`에 커밋·푸시해 PR #69에 반영하고 최종 head 원격 CI를 별도 확인한다. API/DB/환경·배포 변경 없음. 사용자 DB/trace는 보존·커밋 제외. 공유 인계 경로는 기존 `C:\Users\jjang\IdeaProjects\NurseFlow`이며 PR 승인·병합은 하지 않는다.
+
 ## 휴일 설정 PR #69 게시·공유 인계 (2026-11-27, Codex)
 
 - 사용자 요청대로 기존 `codex/holiday-target-settings`를 규칙에 맞는 `feat/holiday-target-settings`로 변경하고 최신 dev `4a4cd3d6` 통합·재리뷰·검증 뒤 푸시했다. 초기 원격 head `ba155013d1461e6bf7f1f4988abdbe67eaa846d9`로 dev 대상 일반 [PR #69](https://github.com/gerrmang/NurseFlow/pull/69)을 생성했고 OPEN·draft=false·base=dev·head 일치를 확인했다.

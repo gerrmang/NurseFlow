@@ -4,7 +4,7 @@ import com.nurseflow.app.core.network.*
 import com.nurseflow.app.core.session.MemoryTokenStore
 import com.nurseflow.app.core.session.SessionManager
 import kotlinx.coroutines.*
-import kotlinx.coroutines.flow.first
+
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
 import org.junit.Assert.*
@@ -56,7 +56,7 @@ class StaffAdminViewModelTest {
     private val vm = StaffAdminViewModel(api, "w1", { if (admin) listOf(MembershipDto("w1", "가상 병동", listOf("WARD_ADMIN"), true)) else emptyList() }, { valid }, { expired++ }, scope)
     private fun open() { vm.activate(); assertTrue(vm.state.value.editable) }
 
-    private fun withModeApi(test: suspend (StaffAdminViewModel, MockWebServer) -> Unit) = runBlocking {
+    private fun withModeApi(test: suspend (StaffAdminViewModel, MockWebServer, suspend () -> Unit) -> Unit) = runBlocking {
         MockWebServer().use { server ->
             server.start(java.net.InetAddress.getByName("127.0.0.1"), 0)
             val base = "http://127.0.0.1:${server.port}/"
@@ -68,19 +68,22 @@ class StaffAdminViewModelTest {
             val model = StaffAdminViewModel(mixed, "w1", {
                 listOf(MembershipDto("w1", "가상 병동", listOf("WARD_ADMIN"), true))
             }, scope = testScope)
-            try { withTimeout(5_000) { test(model, server) } }
+            try { withTimeout(5_000) {
+                test(model, server) {
+                    // A terminal state may be emitted before the Unconfined load finishes.
+                    // Join the actual jobs before the next deactivate/activate cycle.
+                    testScope.coroutineContext.job.children.toList().joinAll()
+                }
+            } }
             finally { model.deactivate(); testScope.cancel() }
         }
     }
     private fun modeResponse(body: String) = MockResponse().setHeader("Content-Type", "application/json").setBody(body)
-    private suspend fun awaitLoad(model: StaffAdminViewModel) {
-        model.state.first { !it.loading && !it.busy }
-    }
 
-    @Test fun malformedModeJsonOnEntryStillLoadsEditableLists() = withModeApi { model, server ->
+    @Test fun malformedModeJsonOnEntryStillLoadsEditableLists() = withModeApi { model, server, awaitLoad ->
         for (body in listOf("{}", "{", """{"demoMode":{},"policyRevision":0}""")) {
             server.enqueue(modeResponse(body))
-            model.activate(); awaitLoad(model)
+            model.activate(); awaitLoad()
             assertTrue(model.state.value.editable); assertFalse(model.state.value.stale)
             assertNull(model.state.value.data!!.eligibility)
             assertEquals(api.nurses, model.state.value.data!!.staff)
@@ -90,10 +93,10 @@ class StaffAdminViewModelTest {
         }
     }
 
-    @Test fun emptySuccessfulModeResponseStillLoadsEditableLists() = withModeApi { model, server ->
+    @Test fun emptySuccessfulModeResponseStillLoadsEditableLists() = withModeApi { model, server, awaitLoad ->
         for (status in listOf(204, 205, 200)) {
             server.enqueue(MockResponse().setResponseCode(status))
-            model.activate(); awaitLoad(model)
+            model.activate(); awaitLoad()
             assertTrue("HTTP $status", model.state.value.editable)
             assertNull(model.state.value.data!!.eligibility)
             assertEquals(api.nurses, model.state.value.data!!.staff)
@@ -102,52 +105,52 @@ class StaffAdminViewModelTest {
         }
     }
 
-    @Test fun emptyModeRefreshAndPostWriteReloadKeepListsAndRecover() = withModeApi { model, server ->
+    @Test fun emptyModeRefreshAndPostWriteReloadKeepListsAndRecover() = withModeApi { model, server, awaitLoad ->
         server.enqueue(modeResponse("""{"demoMode":true,"policyRevision":0}"""))
-        model.activate(); awaitLoad(model)
+        model.activate(); awaitLoad()
         assertTrue(model.state.value.data!!.eligibility!!.demoMode)
-        server.enqueue(MockResponse().setResponseCode(204)); model.reload(); awaitLoad(model)
+        server.enqueue(MockResponse().setResponseCode(204)); model.reload(); awaitLoad()
         assertTrue(model.state.value.editable); assertNull(model.state.value.data!!.eligibility)
         server.enqueue(MockResponse().setResponseCode(205))
-        model.saveTeam(null, "가상팀", "1"); awaitLoad(model)
+        model.saveTeam(null, "가상팀", "1"); awaitLoad()
         assertEquals(1, api.writes); assertTrue(model.state.value.editable)
         assertNull(model.state.value.data!!.eligibility)
         assertEquals(api.nurses, model.state.value.data!!.staff)
         server.enqueue(modeResponse("""{"demoMode":false,"policyRevision":0}"""))
-        model.reload(); awaitLoad(model)
+        model.reload(); awaitLoad()
         assertTrue(model.state.value.editable)
         assertFalse(model.state.value.data!!.eligibility!!.demoMode)
     }
 
-    @Test fun modeHttpErrorsRetainAccessChecksWithResponseWrapper() = withModeApi { model, server ->
+    @Test fun modeHttpErrorsRetainAccessChecksWithResponseWrapper() = withModeApi { model, server, awaitLoad ->
         for ((status, code) in listOf(401 to "USER_NOT_FOUND", 403 to "WARD_ADMIN_REQUIRED", 404 to "WARD_NOT_FOUND")) {
             server.enqueue(modeResponse("""{"demoMode":true,"policyRevision":0}"""))
-            model.activate(); awaitLoad(model)
+            model.activate(); awaitLoad()
             assertTrue(model.state.value.editable)
             server.enqueue(modeResponse("""{"code":"$code"}""").setResponseCode(status))
-            model.reload(); awaitLoad(model)
+            model.reload(); awaitLoad()
             assertTrue("HTTP $status", model.state.value.forbidden)
             assertNull(model.state.value.data)
             model.deactivate()
         }
         server.enqueue(MockResponse().setResponseCode(503))
-        model.activate(); awaitLoad(model)
+        model.activate(); awaitLoad()
         assertTrue(model.state.value.editable)
         assertNull(model.state.value.data!!.eligibility)
     }
 
-    @Test fun malformedModeRefreshAndPostWriteReloadKeepListsAndRecover() = withModeApi { model, server ->
+    @Test fun malformedModeRefreshAndPostWriteReloadKeepListsAndRecover() = withModeApi { model, server, awaitLoad ->
         server.enqueue(modeResponse("""{"demoMode":true,"policyRevision":0}"""))
-        model.activate(); awaitLoad(model)
+        model.activate(); awaitLoad()
         assertTrue(model.state.value.data!!.eligibility!!.demoMode)
-        server.enqueue(modeResponse("{}")); model.reload(); awaitLoad(model)
+        server.enqueue(modeResponse("{}")); model.reload(); awaitLoad()
         assertTrue(model.state.value.editable); assertNull(model.state.value.data!!.eligibility)
-        server.enqueue(modeResponse("{")); model.saveTeam(null, "가상팀", "1"); awaitLoad(model)
+        server.enqueue(modeResponse("{")); model.saveTeam(null, "가상팀", "1"); awaitLoad()
         assertEquals(1, api.writes); assertTrue(model.state.value.editable)
         assertNull(model.state.value.data!!.eligibility)
         assertEquals(api.nurses, model.state.value.data!!.staff)
         server.enqueue(modeResponse("""{"demoMode":false,"policyRevision":0}"""))
-        model.reload(); awaitLoad(model)
+        model.reload(); awaitLoad()
         assertFalse(model.state.value.data!!.eligibility!!.demoMode)
     }
 
