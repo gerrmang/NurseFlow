@@ -37,3 +37,10 @@ $env:NURSEFLOW_HOLIDAY_ANDROID_E2E='1'
 - 실제 공휴일 성공 갱신·실제 Kakao·물리 기기·운영·전체 기기 회귀·독립 리뷰·원격 CI는 미검증. 공휴일 성공 응답과 실패는 가상 API 및 실제 키 미설정 경로를 구분한다.
 - API에 병동 시간대가 없어 갱신 시각을 UTC로 명시한다. ViewModel은 Activity 재생성을 견디지만 프로세스 종료 뒤 입력 복원은 제공하지 않는다.
 - Android 빌드에 영향. 수동 배포·PR 게시·병합 없음. 되돌리기는 이 기능을 되돌리고 이전 Android 빌드를 복원한다. 서버/DB 롤백은 없다.
+
+## 최신 dev 통합 후 PR 검증 (2026-11-27)
+
+- 브랜치는 `feat/holiday-target-settings`, 통합 기준은 최신 dev `4a4cd3d6`. Android 구현·검사는 통합 전 `ff58691b`와 동일함을 git diff로 확인했다.
+- JDK 21 `:app:testDebugUnitTest :app:assembleDebug :app:assembleDebugAndroidTest :app:lintDebug --offline --no-daemon` BUILD SUCCESSFUL(37초). XML 293개 중 289개 통과·실서버 opt-in 4개 건너뜀·실패/오류 0. Lint 오류 0·기존 경고 27. 단위 검사는 실제 실행됐고 APK/Lint는 UP-TO-DATE 결과를 포함한다.
+- 이번에는 기기/회전·Android 실서버·실제 Kakao·물리 기기를 재실행하지 않았다. 이전의 Android 실서버 1개·가상 API 기기 4개 통과와 혼합하지 않는다. 최신 dev 서버의 웹 holiday 실연동 1개는 재실행 통과했고 서버 계약과 Android DTO도 재대조했다.
+- 재검토에서 조치 가능한 확정 결함 없음. 서버·API·DB·운영 환경·의존성 변경 없음. debug 테스트 호스트는 release 소스에 포함되지 않는다.

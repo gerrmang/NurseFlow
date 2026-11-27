@@ -29,3 +29,10 @@ npm test -- --run src/holiday/HolidaySettingsStore.server.test.ts
 - 실제 data.go.kr 성공 갱신·운영·실제 Kakao·모든 브라우저·독립 리뷰·원격 CI는 미검증. 가짜 응답의 refresh 성공/실패는 단위 검사, 실제 키 미설정 503은 실서버 검사로 구분한다.
 - 갱신 시각은 API에 병동 시간대가 없어 UTC로 명시한다. 개인별 시간 진단은 B10 후속이다.
 - 웹 정적 빌드에 영향. 수동 배포·PR 게시·병합 없음. 되돌리기는 이 기능 변경을 되돌리고 이전 웹 빌드를 복원한다. API/DB 롤백은 없다.
+
+## 최신 dev 통합 후 PR 검증 (2026-11-27)
+
+- 브랜치는 저장소 규칙에 맞춰 `feat/holiday-target-settings`로 변경했다. 최신 `dev` `4a4cd3d6`를 통합했으며 충돌은 작업 현황 문서 한 곳뿐이다. 서버·OpenAPI·생성 타입은 dev와 같고 holiday 구현·검사는 통합 전 커밋 `ff58691b`와 같다.
+- api:check·typecheck·lint·전체 Vitest·build 모두 통과. 560개 통과·opt-in 6개 건너뜀·실패 0, JS gzip 130.47 kB.
+- 최신 dev JAR·가상 웹 OIDC·새 메모리 DB `holiday_pr_ready_e2e`에서 실서버 인수 1개 재실행 통과(1.70초). 사용자 DB/실제 인증 키를 사용하지 않았다. 검증 프로세스는 종료했다.
+- 코드·계약 재검토에서 조치 가능한 확정 결함 없음. 브라우저·실제 Kakao·실제 공휴일 성공 갱신은 이번 통합에서 재실행하지 않았다. 이전 브라우저/실서버 기록과 이번 결과를 구분한다.

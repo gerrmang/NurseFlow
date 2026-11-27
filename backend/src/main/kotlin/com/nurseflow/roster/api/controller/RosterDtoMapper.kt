@@ -17,7 +17,14 @@ internal fun ReplaceRequirementsRequest.toCommand() = RequirementsCommand(items.
 internal fun ApprovedAbsenceInput.toCommand() = AbsenceCommand(nurseId, kind, startsAt, endsAt)
 internal fun ValidateAssignmentRequest.toCommand() = ValidateCommand(slotId, nurseId)
 internal fun AssignNurseRequest.toCommand() = AssignCommand(nurseId, locked)
-internal fun ConfirmRosterRequest.toCommand() = ConfirmCommand(acknowledgeUnfilledCount)
+internal fun ConfirmRosterRequest.toCommand() = ConfirmCommand(
+    acknowledgements?.let { ack ->
+        com.nurseflow.roster.application.model.ConfirmAcknowledgements(
+            ack.generalUnfilledSlotIds, ack.seniorUnfilledSlotIds,
+            ack.hourShortfalls?.map { com.nurseflow.roster.application.model.HourShortfallAcknowledgement(it.nurseId, it.shortfallMinutes) },
+        )
+    },
+)
 internal fun StartGenerationRequest.toCommand() = GenerationCommand(preserveLockedAssignments, timeLimitSeconds)
 
 internal fun com.nurseflow.roster.application.model.StaffingSummary.toResponse() =
@@ -45,3 +52,20 @@ internal fun com.nurseflow.roster.application.model.PersonalAssignment.toRespons
     PersonalAssignment(date, shiftType, startsAt, endsAt)
 internal fun com.nurseflow.roster.application.model.PublishedPersonalCalendar.toResponse() =
     PublishedPersonalCalendar(wardId, month, revision, timeZone, assignments.map { it.toResponse() })
+
+internal fun com.nurseflow.roster.application.model.UnfilledSlotDiagnostic.toResponse() =
+    UnfilledSlotAcknowledgementItem(slotId, date, shiftTypeId, shiftCode, teamId, reason, message)
+internal fun com.nurseflow.roster.application.model.HourShortfallDiagnostic.toResponse() =
+    HourShortfallAcknowledgementItem(nurseId, displayName, targetMinutes, creditMinutes, shortfallMinutes, reason, message)
+internal fun com.nurseflow.roster.application.model.ConfirmationCheck.toResponse() = ConfirmationCheckResponse(
+    rosterId, status, revision, confirmable, blockingViolations.map { it.toResponse() },
+    UnfilledAcknowledgementGroup(generalUnfilled.size, generalUnfilled.map { it.toResponse() }),
+    UnfilledAcknowledgementGroup(seniorUnfilled.size, seniorUnfilled.map { it.toResponse() }),
+    HourShortfallAcknowledgementGroup(hourShortfalls.size, hourShortfalls.sumOf { it.shortfallMinutes }, hourShortfalls.map { it.toResponse() }),
+)
+internal fun com.nurseflow.roster.application.model.ConfirmationRecord.toResponse() = ConfirmationRecordResponse(
+    rosterId, month, revision, confirmedAt,
+    UnfilledAcknowledgementGroup(generalUnfilled.size, generalUnfilled.map { it.toResponse() }),
+    UnfilledAcknowledgementGroup(seniorUnfilled.size, seniorUnfilled.map { it.toResponse() }),
+    HourShortfallAcknowledgementGroup(hourShortfalls.size, hourShortfalls.sumOf { it.shortfallMinutes }, hourShortfalls.map { it.toResponse() }),
+)

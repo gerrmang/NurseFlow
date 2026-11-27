@@ -61,7 +61,7 @@ class RosterServiceIntegrationTest @Autowired constructor(
         // A stored assignment from before the policy changed must also fail at publication.
         jdbc.update("UPDATE roster_slots SET nurse_id=? WHERE slot_id=?", fictional, slot)
         assertThrows(BusinessException::class.java) {
-            service.confirm(draft.rosterId, tag(draft), UUID.randomUUID(), ConfirmRosterRequest(), admin)
+            service.confirm(draft.rosterId, tag(draft), UUID.randomUUID(), acknowledgeAll(draft.rosterId), admin)
         }
         jdbc.update("UPDATE roster_slots SET nurse_id=NULL WHERE slot_id=?", slot)
 
@@ -69,7 +69,7 @@ class RosterServiceIntegrationTest @Autowired constructor(
         val refreshed = service.getRoster(draft.rosterId, admin)
         assertTrue(service.validate(refreshed.rosterId, tag(refreshed), ValidateAssignmentRequest(slot, fictional), admin).allowed)
         val assigned = assign(refreshed, fictional)
-        service.confirm(assigned.rosterId, tag(assigned), UUID.randomUUID(), ConfirmRosterRequest(), admin)
+        service.confirm(assigned.rosterId, tag(assigned), UUID.randomUUID(), acknowledgeAll(assigned.rosterId), admin)
         assertEquals("PUBLISHED", service.getRoster(assigned.rosterId, admin).status)
     }
 
@@ -79,7 +79,7 @@ class RosterServiceIntegrationTest @Autowired constructor(
         jdbc.update("INSERT INTO nurses(nurse_id,ward_id,display_name,qualifications,active) VALUES(?,?,?,'[]',TRUE)",
             fictional, wardId, "가상 미가입 간호사")
         val publishedDraft = assign(newRoster("2026-10", LocalDate.parse("2026-10-30"), dayTypeId), nurseId)
-        service.confirm(publishedDraft.rosterId, tag(publishedDraft), UUID.randomUUID(), ConfirmRosterRequest(), admin)
+        service.confirm(publishedDraft.rosterId, tag(publishedDraft), UUID.randomUUID(), acknowledgeAll(publishedDraft.rosterId), admin)
         val publishedBefore = service.publishedWard(wardId, "2026-10", admin)
 
         eligibility.setDemoMode(wardId, true, ShiftTypeService.policyEtag(0), admin)
@@ -95,11 +95,11 @@ class RosterServiceIntegrationTest @Autowired constructor(
         assertEquals(fictional, changed.slots.single().assignment?.nurseId)
 
         val stale = assertThrows(BusinessException::class.java) {
-            service.confirm(assigned.rosterId, tag(assigned), UUID.randomUUID(), ConfirmRosterRequest(), admin)
+            service.confirm(assigned.rosterId, tag(assigned), UUID.randomUUID(), acknowledgeAll(assigned.rosterId), admin)
         }
         assertEquals("STALE_ROSTER_REVISION", stale.errorCode.name)
         val rejected = assertThrows(BusinessException::class.java) {
-            service.confirm(changed.rosterId, tag(changed), UUID.randomUUID(), ConfirmRosterRequest(), admin)
+            service.confirm(changed.rosterId, tag(changed), UUID.randomUUID(), acknowledgeAll(changed.rosterId), admin)
         }
         assertEquals("RULE_VIOLATION", rejected.errorCode.name)
         assertTrue(rejected.ruleViolations.filterIsInstance<RuleDiagnostic>().any { it.code == "NURSE_INACTIVE" })
@@ -152,7 +152,7 @@ class RosterServiceIntegrationTest @Autowired constructor(
         assertTrue(denied.ruleViolations.filterIsInstance<RuleDiagnostic>().any { it.code == "SENIOR_REQUIRED" })
         jdbc.update("UPDATE roster_slots SET nurse_id=?,locked=TRUE WHERE slot_id=?", nurseId, senior.slotId)
         val confirmation = assertThrows(BusinessException::class.java) {
-            service.confirm(current.rosterId, tag(current), UUID.randomUUID(), ConfirmRosterRequest(1), admin)
+            service.confirm(current.rosterId, tag(current), UUID.randomUUID(), acknowledgeAll(current.rosterId), admin)
         }
         assertTrue(confirmation.ruleViolations.filterIsInstance<RuleDiagnostic>().any { it.code == "SENIOR_REQUIRED" })
         fun generate(): GenerationJob {
@@ -171,10 +171,27 @@ class RosterServiceIntegrationTest @Autowired constructor(
         current = service.getRoster(draft.rosterId, admin)
         assertEquals(1, current.staffing.seniorUnfilled)
         assertEquals(nurseId, current.slots.single { !it.seniorRequired }.assignment?.nurseId)
-        service.confirm(current.rosterId, tag(current), UUID.randomUUID(), ConfirmRosterRequest(1), admin)
+        service.confirm(current.rosterId, tag(current), UUID.randomUUID(), acknowledgeAll(current.rosterId), admin)
         val published = service.publishedWard(wardId, "2026-11", admin)
         assertEquals(1, published.staffing.seniorUnfilled)
         assertEquals(team, published.slots.single { it.seniorRequired }.teamId)
+    }
+
+    @Test
+    fun `queued generation rechecks required setup and keeps the draft when it is gone`() {
+        val draft = assign(newRoster("2026-11", LocalDate.parse("2026-11-10"), dayTypeId), nurseId)
+        val job = service.startGeneration(draft.rosterId, tag(draft), UUID.randomUUID(), StartGenerationRequest(false), admin)
+        // The last rosterable nurse is deactivated while the job waits in the queue.
+        jdbc.update("UPDATE nurses SET active=FALSE WHERE nurse_id=?", nurseId)
+        service.markGenerationRunning(job.jobId)
+        service.processGeneration(job.jobId)
+
+        val finished = service.getGenerationJob(job.jobId, admin)
+        assertEquals("FAILED", finished.status)
+        assertEquals(listOf("SETUP_STAFF"), finished.diagnostics.map { it.code })
+        val after = service.getRoster(draft.rosterId, admin)
+        assertEquals(draft.revision, after.revision)
+        assertEquals(nurseId, after.slots.single().assignment?.nurseId, "unlocked assignment must not be cleared")
     }
 
     @Test
@@ -189,7 +206,7 @@ class RosterServiceIntegrationTest @Autowired constructor(
         assertEquals("RULE_VIOLATION", denied.errorCode.name)
         jdbc.update("UPDATE roster_slots SET nurse_id=?,locked=TRUE WHERE slot_id=?", nurseId, slot)
         val confirmed = assertThrows(BusinessException::class.java) {
-            service.confirm(draft.rosterId, tag(draft), UUID.randomUUID(), ConfirmRosterRequest(), admin)
+            service.confirm(draft.rosterId, tag(draft), UUID.randomUUID(), acknowledgeAll(draft.rosterId), admin)
         }
         assertTrue(confirmed.ruleViolations.filterIsInstance<RuleDiagnostic>().any { it.code == "SHIFT_KIND_NOT_ALLOWED" })
         val locked = service.startGeneration(draft.rosterId, tag(draft), UUID.randomUUID(), StartGenerationRequest(true), admin)
@@ -206,7 +223,7 @@ class RosterServiceIntegrationTest @Autowired constructor(
 
     @BeforeEach
     fun setup() {
-        listOf("mutation_replays", "generation_jobs", "approved_absences", "roster_slots", "rosters",
+        listOf("mutation_replays", "generation_jobs", "approved_absences", "roster_slots", "roster_confirmation_items", "roster_confirmations", "rosters",
             "shift_types", "staff_adjustments", "off_requests", "nurses", "ward_memberships", "audit_events", "ward_policy_revisions", "ward_teams", "wards")
             .forEach { jdbc.update("DELETE FROM $it") }
         wardId = UUID.randomUUID()
@@ -233,9 +250,9 @@ class RosterServiceIntegrationTest @Autowired constructor(
         val octoberAssigned = assign(october, nurseId)
         val novemberAssigned = assign(november, nurseId)
 
-        service.confirm(october.rosterId, tag(octoberAssigned), UUID.randomUUID(), ConfirmRosterRequest(), admin)
+        service.confirm(october.rosterId, tag(octoberAssigned), UUID.randomUUID(), acknowledgeAll(october.rosterId), admin)
         val conflict = assertThrows(BusinessException::class.java) {
-            service.confirm(november.rosterId, tag(novemberAssigned), UUID.randomUUID(), ConfirmRosterRequest(), admin)
+            service.confirm(november.rosterId, tag(novemberAssigned), UUID.randomUUID(), acknowledgeAll(november.rosterId), admin)
         }
         assertEquals("RULE_VIOLATION", conflict.errorCode.name)
         assertTrue(conflict.ruleViolations.filterIsInstance<RuleDiagnostic>().any { it.code == "REST_AFTER_NIGHT" })
@@ -251,7 +268,7 @@ class RosterServiceIntegrationTest @Autowired constructor(
         assertEquals("COMPLETED", generated.status)
         val assigned = service.getRoster(october.rosterId, admin)
         assertEquals(5, assigned.staffing.assigned)
-        service.confirm(october.rosterId, tag(assigned), UUID.randomUUID(), ConfirmRosterRequest(), admin)
+        service.confirm(october.rosterId, tag(assigned), UUID.randomUUID(), acknowledgeAll(october.rosterId), admin)
 
         val draft = newRoster("2026-11", LocalDate.parse("2026-11-03"), nightTypeId)
         val slot = draft.slots.single().slotId
@@ -277,7 +294,7 @@ class RosterServiceIntegrationTest @Autowired constructor(
         val afterGeneration = service.getRoster(november.rosterId, admin)
         jdbc.update("UPDATE roster_slots SET nurse_id=?,locked=TRUE WHERE slot_id=?", nurseId, slot)
         val invalid = assertThrows(BusinessException::class.java) {
-            service.confirm(november.rosterId, tag(afterGeneration), UUID.randomUUID(), ConfirmRosterRequest(), admin)
+            service.confirm(november.rosterId, tag(afterGeneration), UUID.randomUUID(), acknowledgeAll(november.rosterId), admin)
         }
         assertTrue(invalid.ruleViolations.filterIsInstance<RuleDiagnostic>().any { it.code == "CONSECUTIVE_WORK_LIMIT" })
         val locked = waitForGeneration(generation.start(
@@ -290,7 +307,7 @@ class RosterServiceIntegrationTest @Autowired constructor(
         val rest = RosterRestDay(nurseId, LocalDate.parse("2026-11-01"), RestDayKind.OF)
         service.replaceRestDays(november.rosterId, tag(afterGeneration), listOf(rest), admin)
         val withRest = service.getRoster(november.rosterId, admin)
-        service.confirm(november.rosterId, tag(withRest), UUID.randomUUID(), ConfirmRosterRequest(), admin)
+        service.confirm(november.rosterId, tag(withRest), UUID.randomUUID(), acknowledgeAll(november.rosterId), admin)
         val replacement = service.createRoster(wardId, CreateRosterRequest("2026-11"), admin, UUID.randomUUID())
         assertEquals(listOf(rest), service.listRestDays(replacement.rosterId, admin).items)
     }
@@ -303,11 +320,11 @@ class RosterServiceIntegrationTest @Autowired constructor(
             val filled = roster.slots.fold(roster) { current, slot ->
                 service.assign(current.rosterId, slot.slotId, tag(current), UUID.randomUUID(), AssignNurseRequest(nurseId), admin)
             }
-            service.confirm(filled.rosterId, tag(filled), UUID.randomUUID(), ConfirmRosterRequest(), admin)
+            service.confirm(filled.rosterId, tag(filled), UUID.randomUUID(), acknowledgeAll(filled.rosterId), admin)
         }
         val gap = newRoster("2026-11", LocalDate.parse("2026-11-15"), nightTypeId)
         val rejected = assertThrows(BusinessException::class.java) {
-            service.confirm(gap.rosterId, tag(gap), UUID.randomUUID(), ConfirmRosterRequest(1), admin)
+            service.confirm(gap.rosterId, tag(gap), UUID.randomUUID(), acknowledgeAll(gap.rosterId), admin)
         }
         assertTrue(rejected.ruleViolations.filterIsInstance<RuleDiagnostic>().any { it.code == "CONSECUTIVE_WORK_LIMIT" })
     }
@@ -316,7 +333,7 @@ class RosterServiceIntegrationTest @Autowired constructor(
     fun `editing a shift type never rewrites a published roster or the rest rules checked against it`() {
         val october = assign(newRoster("2026-10", LocalDate.parse("2026-10-31"), nightTypeId), nurseId)
         val november = assign(newRoster("2026-11", LocalDate.parse("2026-11-01"), dayTypeId), nurseId)
-        service.confirm(october.rosterId, tag(october), UUID.randomUUID(), ConfirmRosterRequest(), admin)
+        service.confirm(october.rosterId, tag(october), UUID.randomUUID(), acknowledgeAll(october.rosterId), admin)
 
         // The published night type is turned into a day type with another code.
         shiftTypes.update(wardId, nightTypeId, ShiftTypeCommand("N2", "데이로 바뀐 유형", ShiftKind.DAY,
@@ -327,7 +344,7 @@ class RosterServiceIntegrationTest @Autowired constructor(
         assertEquals("NIGHT", published.shiftType)
         assertEquals(Instant.parse("2026-10-31T10:00:00Z"), published.startsAt)
         val conflict = assertThrows(BusinessException::class.java) {
-            service.confirm(november.rosterId, tag(november), UUID.randomUUID(), ConfirmRosterRequest(), admin)
+            service.confirm(november.rosterId, tag(november), UUID.randomUUID(), acknowledgeAll(november.rosterId), admin)
         }
         assertTrue(conflict.ruleViolations.filterIsInstance<RuleDiagnostic>().any { it.code == "REST_AFTER_NIGHT" })
     }
@@ -343,7 +360,7 @@ class RosterServiceIntegrationTest @Autowired constructor(
                 executor.submit<Boolean> {
                     start.await()
                     try {
-                        service.confirm(roster.rosterId, tag(roster), UUID.randomUUID(), ConfirmRosterRequest(), admin)
+                        service.confirm(roster.rosterId, tag(roster), UUID.randomUUID(), acknowledgeAll(roster.rosterId), admin)
                         true
                     } catch (ex: BusinessException) {
                         assertEquals("RULE_VIOLATION", ex.errorCode.name)
@@ -369,11 +386,11 @@ class RosterServiceIntegrationTest @Autowired constructor(
         val added = service.addAbsence(november.rosterId, tag(november), UUID.randomUUID(), absence, admin)
         val october = newRoster("2026-10", LocalDate.parse("2026-10-31"), nightTypeId)
         val octoberAssigned = assign(october, nurseId)
-        service.confirm(october.rosterId, tag(octoberAssigned), UUID.randomUUID(), ConfirmRosterRequest(), admin)
+        service.confirm(october.rosterId, tag(octoberAssigned), UUID.randomUUID(), acknowledgeAll(october.rosterId), admin)
 
         val conflict = assertThrows(BusinessException::class.java) {
             service.confirm(november.rosterId, "\"${service.etag(november.rosterId, added.rosterRevision)}\"",
-                UUID.randomUUID(), ConfirmRosterRequest(1), admin)
+                UUID.randomUUID(), acknowledgeAll(november.rosterId), admin)
         }
         assertTrue(conflict.ruleViolations.filterIsInstance<RuleDiagnostic>().any { it.code == "APPROVED_ABSENCE_PUBLISHED_OVERLAP" })
         assertEquals("DRAFT", service.getRoster(november.rosterId, admin).status)
@@ -410,7 +427,7 @@ class RosterServiceIntegrationTest @Autowired constructor(
         assertFalse(generated.slots.any { it.assignment?.nurseId == nurseId })
         assertThrows(BusinessException::class.java) { service.publishedWard(wardId, "2026-11", admin) }
 
-        service.confirm(draft.rosterId, tag(generated), UUID.randomUUID(), ConfirmRosterRequest(1), admin)
+        service.confirm(draft.rosterId, tag(generated), UUID.randomUUID(), acknowledgeAll(draft.rosterId), admin)
         val published = service.publishedWard(wardId, "2026-11", admin)
         assertEquals(1, published.staffing.unfilled)
         assertEquals(1, published.staffing.assigned)
@@ -435,11 +452,11 @@ class RosterServiceIntegrationTest @Autowired constructor(
         val added = service.addAbsence(original.rosterId, tag(original), UUID.randomUUID(), input, admin)
         service.confirm(original.rosterId,
             "\"${service.etag(original.rosterId, added.rosterRevision)}\"", UUID.randomUUID(),
-            ConfirmRosterRequest(), admin)
+            acknowledgeAll(original.rosterId), admin)
 
         val replacement = service.createRoster(wardId, CreateRosterRequest("2026-11"), admin, UUID.randomUUID())
         val emptyConfirmation = assertThrows(BusinessException::class.java) {
-            service.confirm(replacement.rosterId, tag(replacement), UUID.randomUUID(), ConfirmRosterRequest(), admin)
+            service.confirm(replacement.rosterId, tag(replacement), UUID.randomUUID(), acknowledgeAll(replacement.rosterId), admin)
         }
         assertEquals("ROSTER_REQUIREMENTS_REQUIRED", emptyConfirmation.errorCode.name)
         assertEquals("PUBLISHED", service.getRoster(original.rosterId, admin).status)
@@ -515,7 +532,7 @@ class RosterServiceIntegrationTest @Autowired constructor(
     fun `confirmed off request blocks candidate manual automatic and confirm but keeps the published roster`() {
         val date = LocalDate.parse("2026-11-02")
         val published = assign(newRoster("2026-11", date, dayTypeId), nurseId)
-        service.confirm(published.rosterId, tag(published), UUID.randomUUID(), ConfirmRosterRequest(), admin)
+        service.confirm(published.rosterId, tag(published), UUID.randomUUID(), acknowledgeAll(published.rosterId), admin)
         val publishedBefore = service.publishedWard(wardId, "2026-11", admin)
         val draft = newRoster("2026-11", date, dayTypeId)
         val request = offRequests.submit(wardId, nurseId, date, admin)
@@ -547,7 +564,7 @@ class RosterServiceIntegrationTest @Autowired constructor(
         assertEquals("FAILED", locked.status)
         assertTrue(locked.diagnostics.any { it.code == "CONFIRMED_OFF_REQUEST" })
         val rejected = assertThrows(BusinessException::class.java) {
-            service.confirm(afterGeneration.rosterId, tag(afterGeneration), UUID.randomUUID(), ConfirmRosterRequest(), admin)
+            service.confirm(afterGeneration.rosterId, tag(afterGeneration), UUID.randomUUID(), acknowledgeAll(afterGeneration.rosterId), admin)
         }
         assertTrue(rejected.ruleViolations.filterIsInstance<RuleDiagnostic>().any { it.code == "CONFIRMED_OFF_REQUEST" })
         assertEquals(publishedBefore, service.publishedWard(wardId, "2026-11", admin))
@@ -555,7 +572,7 @@ class RosterServiceIntegrationTest @Autowired constructor(
         offRequests.withdraw(wardId, request.id, admin)
         val reopened = service.getRoster(draft.rosterId, admin)
         assertEquals(afterGeneration.revision + 1, reopened.revision)
-        service.confirm(reopened.rosterId, tag(reopened), UUID.randomUUID(), ConfirmRosterRequest(), admin)
+        service.confirm(reopened.rosterId, tag(reopened), UUID.randomUUID(), acknowledgeAll(reopened.rosterId), admin)
         assertEquals("PUBLISHED", service.getRoster(reopened.rosterId, admin).status)
     }
 
@@ -623,6 +640,8 @@ class RosterServiceIntegrationTest @Autowired constructor(
     private fun assign(roster: RosterView, nurse: UUID): RosterView = service.assign(
         roster.rosterId, roster.slots.single().slotId, tag(roster), UUID.randomUUID(), AssignNurseRequest(nurse), admin,
     )
+
+    private fun acknowledgeAll(rosterId: UUID) = service.confirmationCheck(rosterId, admin).acknowledgeAll()
 
     private fun tag(roster: RosterView): String = "\"${service.etag(roster.rosterId, roster.revision)}\""
 }
