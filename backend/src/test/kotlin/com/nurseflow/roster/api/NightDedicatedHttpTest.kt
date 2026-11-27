@@ -86,6 +86,10 @@ class NightDedicatedHttpTest : ApiTestBase() {
         // The default three-month end of 9999-12 would fall in year 10000, which cannot be stored.
         assertEquals("INVALID_NIGHT_DEDICATED_TERM", http.post(path, mapOf("nurseId" to nurse, "startMonth" to "9999-12"), token).code)
         assertEquals(201, http.post(path, mapOf("nurseId" to nurse, "startMonth" to "9999-12", "endMonth" to "9999-12"), token).status)
+        // Year 0000 is refused: its cancellation month (the one before the start) has no four-digit form.
+        assertEquals("INVALID_NIGHT_DEDICATED_TERM",
+            http.post(path, mapOf("nurseId" to nurse, "startMonth" to "0000-01", "endMonth" to "0000-01"), token).code)
+        assertEquals("INVALID_NIGHT_DEDICATED_TERM", http.post(path, mapOf("nurseId" to nurse, "startMonth" to "0000-12"), token).code)
         assertEquals("INVALID_NIGHT_DEDICATED_TERM", http.post(path, mapOf("nurseId" to inactive, "startMonth" to "2026-11"), token).code)
         assertEquals("NURSE_NOT_FOUND", http.post(path, mapOf("nurseId" to stranger, "startMonth" to "2026-11"), token).code)
 

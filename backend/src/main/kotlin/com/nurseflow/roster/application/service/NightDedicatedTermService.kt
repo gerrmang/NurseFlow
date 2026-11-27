@@ -47,8 +47,9 @@ class NightDedicatedTermService(
         val start = TargetHourPolicyService.parseMonth(startMonth)
         val end = endMonth?.let(TargetHourPolicyService::parseMonth)
             ?: start.plusMonths(policies.policyOf(wardId).dedicatedRotationMonths - 1L)
-        // A default end past year 9999 would not fit the stored YYYY-MM text.
-        if (end < start || monthsBetween(start, end) >= MAX_TERM_MONTHS || end.year > MAX_YEAR) {
+        // Months stay within 0001-01..9999-12: a default end past 9999 would not fit the stored YYYY-MM text, and a
+        // start in year 0000 could never be cancelled, since the month before it has no four-digit year.
+        if (end < start || monthsBetween(start, end) >= MAX_TERM_MONTHS || start.year < MIN_YEAR || end.year > MAX_YEAR) {
             throw BusinessException(ErrorCode.INVALID_NIGHT_DEDICATED_TERM)
         }
         val nurse = roster.findNurse(nurseId, wardId) ?: throw BusinessException(ErrorCode.NURSE_NOT_FOUND)
@@ -85,6 +86,7 @@ class NightDedicatedTermService(
 
     companion object {
         const val MAX_TERM_MONTHS = 12
+        private const val MIN_YEAR = 1
         private const val MAX_YEAR = 9999
 
         private fun monthsBetween(from: YearMonth, to: YearMonth): Long = java.time.temporal.ChronoUnit.MONTHS.between(from, to)
