@@ -1,5 +1,13 @@
 # 공유 작업 현황
 
+## 휴일 설정 PR #69 게시·공유 인계 (2026-11-27, Codex)
+
+- 사용자 요청대로 기존 `codex/holiday-target-settings`를 규칙에 맞는 `feat/holiday-target-settings`로 변경하고 최신 dev `4a4cd3d6` 통합·재리뷰·검증 뒤 푸시했다. 초기 원격 head `ba155013d1461e6bf7f1f4988abdbe67eaa846d9`로 dev 대상 일반 [PR #69](https://github.com/gerrmang/NurseFlow/pull/69)을 생성했고 OPEN·draft=false·base=dev·head 일치를 확인했다.
+- 연결 GitHub 도구의 PR 생성은 integration 권한 403으로 실패해 기존 gh 인증과 정확한 한글 본문 파일로 생성했다. 사용자 요청의 기존 단일 브랜치 범위를 따라 웹·Android A13 후속을 함께 게시했다. PR 템플릿에 실행 결과·건너뜀·API/DB/설정·배포·롤백·제한을 기록했다.
+- 재검토에서 조치 가능한 확정 결함 없음. 최신 dev에서 웹 전체 560개/실서버 인수 1개, Android 기본 단위 289개·앱/계측 APK·Lint 통과와 제외 검사 수는 직전 절을 따른다. 게시 뒤 제품 코드는 바꾸지 않았다. 이 문서 기록만 추가 커밋·푸시하고 최종 head 원격 CI를 조회한다. 기존 기기·실제 인증 미검증 제한은 유지한다.
+- 공유 인계는 `C:\Users\jjang\IdeaProjects\NurseFlow`, `feat/holiday-target-settings`, PR #69이다. 사용자 DB/trace·로컬 설정은 미추적/ignored 상태로 보존·커밋 제외한다. 원래 브랜치 이름은 로컬에서 변경됐고 별도 기능 복제/새 worktree는 만들지 않았다. 앱의 현재 primary인 PR 통합 worktree와 구분해 이 원래 공유 worktree에서 후속 리뷰를 이어간다.
+- GitHub 승인·PR 병합·자동 병합·수동 배포는 수행하지 않았다. 원격 Verify 상태는 게시한 최종 head 기준으로 별도 확인하며, 로컬 성공을 원격 CI 성공으로 대신하지 않는다. 추가 API/DB/운영 환경 변경 없음. 되돌리기는 최종 기능 스쿼시 revert와 이전 클라이언트 빌드 복원이다.
+
 ## 휴일 설정 최신 dev 통합·재검증·PR 게시 준비 완료 (2026-11-27, Codex)
 
 - 기존 브랜치를 `feat/holiday-target-settings`로 변경하고 현재 구현을 `ff58691b`로 보존한 뒤 최신 dev `4a4cd3d6`를 통합했다. 충돌은 이 현황 문서 한 곳뿐이며 양쪽 기록을 보존했다. 서버·OpenAPI·웹 생성 타입은 dev와 동일하다. Android와 holiday 구현 파일은 통합 전후 diff 0을 확인했다.
