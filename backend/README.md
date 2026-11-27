@@ -103,8 +103,10 @@ The API stores approved absence category and time range only. It does not store 
 4. `POST /api/v1/rosters/{rosterId}/assignments/validate` returns hard-rule reasons before placement.
 5. `PUT /api/v1/rosters/{rosterId}/slots/{slotId}/assignment` rechecks hard rules on the server and rejects invalid placement.
 6. `POST /api/v1/rosters/{rosterId}/generation-jobs` starts a bounded deterministic draft-generation job. Status and cancellation endpoints report completed, partial, timed-out, cancelled, or failed outcomes; unfilled slots remain visible.
-7. `POST /api/v1/rosters/{rosterId}/confirm` revalidates the draft and atomically switches the active published calendar. An unfilled roster requires an exact `acknowledgeUnfilledCount`.
-8. Published ward and personal calendars read only the active published roster. A new draft stays private until confirmed.
+7. `GET /api/v1/rosters/{rosterId}/confirmation-check` lists what confirming needs now: hard-rule violations (`blockingViolations`, never waivable) and, separately, general unfilled slots, senior unfilled slots, and nurses below their monthly target hours, each with its target, size and server reason code.
+8. `POST /api/v1/rosters/{rosterId}/confirm` revalidates the draft and atomically switches the active published calendar. The body echoes every item of the check in `acknowledgements` (`generalUnfilledSlotIds`, `seniorUnfilledSlotIds`, `hourShortfalls[{nurseId, shortfallMinutes}]`); a category with no items may be omitted. The server recomputes the check: hard violations return `RULE_VIOLATION`, a missing category returns `UNFILLED_ACK_REQUIRED` or `HOUR_SHORTFALL_ACK_REQUIRED`, and any difference returns `CONFIRM_ACK_MISMATCH`. The removed `acknowledgeUnfilledCount` field is rejected.
+9. `GET /api/v1/rosters/{rosterId}/confirmation` returns the acknowledgement snapshot stored with the published revision (admin only).
+10. Published ward and personal calendars read only the active published roster. A new draft stays private until confirmed.
 
 Writes require the current strong `If-Match` ETag. Mutations that require `Idempotency-Key` retain their original response in H2, so a retry with the same key and payload returns the prior result. The generator is a heuristic and does not claim optimality. Membership role changes, shift-type configuration APIs, Android/web API integration, production database migrations, and full contract coverage remain to be built; see the [MVP scope](../docs/mvp-scope.md).
 

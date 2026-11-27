@@ -64,9 +64,18 @@ it.skipIf(process.env.NURSEFLOW_B9B_E2E !== '1')('reads publication, personal sc
     await readJson(assigned)
     return { id: roster.rosterId, etag: assigned.headers.get('etag')! }
   }
+  // A16: echo every item of the server's confirmation check.
+  async function acknowledgeAll(rosterId: string) {
+    const check = await readJson<Schemas['ConfirmationCheck']>(await adminFetch(`/rosters/${rosterId}/confirmation-check`))
+    return { acknowledgements: {
+      generalUnfilledSlotIds: check.generalUnfilled.items.map((it) => it.slotId),
+      seniorUnfilledSlotIds: check.seniorUnfilled.items.map((it) => it.slotId),
+      hourShortfalls: check.hourShortfalls.items.map((it) => ({ nurseId: it.nurseId, shortfallMinutes: it.shortfallMinutes })),
+    } }
+  }
   const first = await draft('01', 2)
   await store.load(); expect(store.getState().error?.code).toBe('PUBLISHED_ROSTER_NOT_FOUND')
-  await readJson(await adminFetch(`/rosters/${first.id}/confirm`, write('POST', { acknowledgeUnfilledCount: 1 }, { 'If-Match': first.etag })))
+  await readJson(await adminFetch(`/rosters/${first.id}/confirm`, write('POST', await acknowledgeAll(first.id), { 'If-Match': first.etag })))
   await store.load()
   expect(store.getState().result?.mode).toBe('mine')
   const own = await nurseApi.mine(ward.wardId, month)
@@ -79,7 +88,7 @@ it.skipIf(process.env.NURSEFLOW_B9B_E2E !== '1')('reads publication, personal sc
   expect(await response.json()).not.toHaveProperty('absences')
   const revised = await draft('02', 1)
   expect((await nurseApi.mine(ward.wardId, month)).assignments[0]!.date).toBe(`${month}-01`)
-  await readJson(await adminFetch(`/rosters/${revised.id}/confirm`, write('POST', {}, { 'If-Match': revised.etag })))
+  await readJson(await adminFetch(`/rosters/${revised.id}/confirm`, write('POST', await acknowledgeAll(revised.id), { 'If-Match': revised.etag })))
   await store.load()
   const state = store.getState()
   expect(state.result?.mode === 'mine' && state.result.calendar.assignments[0]!.date).toBe(`${month}-02`)

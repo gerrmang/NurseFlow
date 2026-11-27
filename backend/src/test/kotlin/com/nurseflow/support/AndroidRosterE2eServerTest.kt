@@ -83,7 +83,7 @@ class AndroidRosterE2eServerTest {
                 view = roster.getRoster(view.rosterId, actor)
                 view = roster.assign(view.rosterId, view.slots.single().slotId, tag(view), UUID.randomUUID(),
                     AssignNurseRequest(nurses.getValue(if (phase == "first") "member" else "limited")), actor)
-                roster.confirm(view.rosterId, tag(view), UUID.randomUUID(), ConfirmRosterRequest(), actor)
+                roster.confirm(view.rosterId, tag(view), UUID.randomUUID(), roster.confirmationCheck(view.rosterId, actor).acknowledgeAll(), actor)
             } catch (_: Exception) { status = 500 }
             exchange.sendResponseHeaders(status, -1)
             exchange.close()

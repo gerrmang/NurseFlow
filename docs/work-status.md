@@ -1,5 +1,13 @@
 # 공유 작업 현황
 
+## A18 PR #66 최신 dev 통합·순차 스쿼시 병합 준비 (2026-11-27, Codex)
+
+- 사용자 승인·스쿼시 병합 요청으로 #67(A15, `5051e1fd`)에 이어 #68(A16, `d0cf38c5e323c035a16c01ca2f1fbe8ae635e773`)을 dev에 병합했다. #68 최종 통합 head `92614466`의 Verify 45999630199에서 Demo/Backend/Android/Web 전체 성공과 승인 유지·CLEAN을 확인한 뒤 병합했다.
+- 같은 임시 통합 worktree에서 #66 원래 head `431d99fa`에 최신 dev를 통합했다. `RosterService.kt` 생성자 충돌은 준비 점검·시간 진단·확정 기록 의존성을 모두 보존했고, 작업 현황도 A15/A16/A18 기록을 모두 유지했다. A18의 생성 시작·실행 전 준비 재검사와 A16의 확정 경로는 각각 유지된다. 추가 동작·API/DB/환경 변경 없음.
+- JDK 21 backend `test --offline --no-daemon` BUILD SUCCESSFUL(1분 16초), XML 340개 중 335개 통과·기존 opt-in 5개 건너뜀·실패/오류 0. 웹 api:check·typecheck·lint·전체 test·build 성공, 534개 통과·실서버 opt-in 5개 건너뜀·실패 0. 생성 타입 일치·충돌 해결 diff 자체 검토·git diff --cached --check 통과.
+- Android 로컬·기기·실제 인증·실서버 인수는 이번 기계적 통합에서 재실행하지 않았다. 이 커밋을 기존 #66 head 브랜치에 푸시한 뒤 최종 원격 Verify·승인·충돌 상태를 확인하고 스쿼시 병합한다. 수동 배포 없음. 되돌리기는 통합 커밋 첫 부모 revert 또는 최종 스쿼시 커밋 revert다.
+- 원래 공유 `C:\Users\jjang\IdeaProjects\NurseFlow`의 `codex/holiday-target-settings` 미커밋 구현·사용자 DB/trace는 보존한다. 최종 병합 결과는 원래 공유 작업 현황에도 남기며 임시 통합 worktree는 아카이브한다.
+
 ## A18 PR #66 리뷰 수정 (2026-11-26, Claude)
 
 - P2: 자동배치 실행(`processGeneration`) 단계에서 병동 잠금 아래 준비 상태를 다시 검사한다. 대기 중 필수 항목이 사라지면(예: 마지막 편성 대상 간호사 비활성화) 작업을 FAILED(`SETUP_<항목>` 진단)로 끝내고 기존 배정·revision을 그대로 둔다.
@@ -14,6 +22,33 @@
 - 스키마 변경 없음(`schema.sql` 미수정). `RosterService`는 생성자 의존성 1개와 `startGeneration`의 점검 호출 2줄만 바뀌었다. 새 코드는 `roster/domain/readiness/**`, `SetupReadiness*` 파일에 있다.
 - 검증: `./gradlew test` 318개 중 315 통과·5 건너뜀·3 실패. 실패 3건은 `HospitalDatasetSearchHttpTest`의 한글 파일 경로 `InvalidPathException`(이 컨테이너 로캘 문제)이며 `LC_ALL=C.UTF-8`로 다시 실행해 통과했다. 새 테스트 9개(`SetupReadinessEvaluatorTest` 7, `SetupReadinessHttpTest` 2) 통과.
 - 남은 일: 기본값을 관리자가 "확인"했는지 저장하는 기능은 없다(스키마 필요). Night 전담·SOF 준비 항목은 A15 병합 뒤 추가. 클라이언트(B10a/b, 설정 홈) 연동 전. PR 병합·배포하지 않았다.
+
+## A16 PR #68 최신 dev 통합·순차 스쿼시 병합 준비 (2026-11-27, Codex)
+
+- 사용자 승인·스쿼시 병합 요청으로 A15 PR #67을 먼저 dev에 병합했다(`5051e1fd65705a9eeab68f4e27ae30e5744cc086`). #68의 충돌은 별도 통합 worktree에서 원래 head `d69776df`에 최신 dev를 병합해 해결했다. 원래 공유 worktree의 미커밋 휴일·목표시간 구현과 사용자 DB/trace는 건드리지 않았다.
+- `schema.sql`은 A15 Night 정책/전담 기간과 A16 확정 기록 테이블을 모두 보존했다. `ApiTestBase.kt`는 양쪽 테스트 초기화 목록을 모두 포함한다. 나머지 계약·생성 타입·현황은 자동 병합됐고 api:check로 계약 타입 일치를 확인했다. 추가 동작·API/DB/환경 변경은 없다.
+- JDK 21 backend `test --offline --no-daemon` BUILD SUCCESSFUL(1분 42초). XML 328개 중 323개 통과·기존 opt-in 5개 건너뜀·실패/오류 0. 웹 api:check·typecheck·lint·전체 test·build 성공, 534개 통과·실서버 opt-in 5개 건너뜀·실패 0. 충돌 해결 diff 자체 검토·git diff --cached --check 통과.
+- Android 로컬·기기·실제 인증·실서버 인수는 이번 기계적 통합에서 재실행하지 않았다. 기존 PR의 승인·검사는 통합 푸시 뒤 다시 조회하며 최종 head의 원격 Verify를 확인하고 스쿼시 병합한다. 수동 배포 없음. 되돌리기는 이 통합 커밋을 첫 부모 기준 revert하거나 최종 스쿼시 커밋을 revert한다.
+- 인계: 같은 임시 통합 worktree에서 #68 통합을 기존 PR head 브랜치에 푸시한다. #68 병합 뒤 #66을 최신 dev에 통합한다. 원래 `codex/holiday-target-settings`의 변경은 별도 보존한다.
+
+## A15 PR #67 리뷰 후속: 시작 연도 하한 (2026-11-27, Claude)
+
+- 리뷰 지적: 시작 월 `0000-01` 전담 기간이 201로 등록되었다. 취소에 필요한 시작 전월(-0001-12)을 API의 네 자리 연도 형식으로 보낼 수 없다. 상한(9999년)과 대칭으로 시작 연도가 0001년보다 앞서면 `INVALID_NIGHT_DEDICATED_TERM`(400)으로 거부한다.
+- 검증: `NightDedicatedHttpTest`에 `0000-01`(종료 월 지정)·`0000-12`(기본 종료 월) 회귀 검사 추가. 수정 전 201로 실패 재현, 수정 후 `LC_ALL=C.UTF-8 ./gradlew test --tests '*Night*'` 9개 통과. API 형태·DB 변경 없음. 같은 브랜치에서 인계.
+
+## A15 PR #67 리뷰 P3 수정 (2026-11-26, Claude)
+
+- 리뷰 지적: 시작 월 `9999-12`에 종료 월을 생략하면 기본 3개월 종료 월이 10000년이 되어 `VARCHAR(7)`에 저장되지 못하고 500이 났다. 계산된 종료 월이 9999년을 넘으면 저장 전에 `INVALID_NIGHT_DEDICATED_TERM`(400)으로 거부한다.
+- 검증: `NightDedicatedHttpTest`에 회귀 검사 추가(수정 전 `INTERNAL_ERROR`로 실패 재현, 수정 후 통과). `LC_ALL=C.UTF-8 ./gradlew test --tests '*Night*'` 9개 통과. API 형태·DB 변경 없음. 같은 브랜치에서 인계.
+
+## A15 SOF·Night 전담 진단 구현 (2026-11-26, Claude)
+
+- 최신 `origin/dev` `d6f69de`에서 `claude/project-thread-f6215g`로 분기했다(사용자 지시로 작업 브랜치명은 세션 지정 이름을 사용). 소유 범위 `backend/roster/**`, `backend/policy/**`, `schema.sql`, `openapi.yaml`과 생성 파일 `web/src/api/schema.gen.ts`만 바꿨다.
+- 결정 사항 16이 미해결이라 사용자 지시에 따라 가장 가능성 높은 해석으로 진행하고 `feature-breakdown.md` 7절에 **잠정**으로 적었다. SOF는 관리자가 기존 A11 휴식일 API(kind=SOF)로 넣고 서버는 진단만 한다. 전담 순환은 관리자가 기간을 기록한다. 인원 부족·순환 초과·근무 형태 불일치는 진단이며 저장·확정을 막지 않는다(공개 전 확인은 A16).
+- 추가 API: `GET/PUT /wards/{wardId}/night-policy`(병동 정책 ETag 공유, 기본 6회→SOF 1일·전담 2명·3개월·월 15회, 초안 재검증 표시 없음), `GET/POST /wards/{wardId}/night-dedicated-terms`, `POST .../{termId}/end`(조기 종료·시작 전 취소, 이력 유지), `GET /rosters/{rosterId}/night-diagnostics`(관리자 전용, 조회 시 계산). 새 테이블 `ward_night_policies`, `night_dedicated_terms`. 새 오류 코드 `INVALID_NIGHT_POLICY`, `INVALID_NIGHT_DEDICATED_TERM`, `NIGHT_DEDICATED_TERM_NOT_FOUND`, `NIGHT_DEDICATED_TERM_OVERLAP`.
+- 진단 규칙: Night는 근무 시작일의 월로 센다(`SHIFT_DATE`, A13 시간 진단의 `END_DATE_MONTH`와 다름). 일반 간호사는 임계값 이상이면 같은 달 SOF가 필요하고 12회여도 추가되지 않으며 이월 없음. 이 달을 덮는 전담 기록이 있거나 `NIGHT_ONLY`면 전담자로 보아 SOF 일반 규칙에서 제외하고 월 최소 Night를 확인한다. 전담 인원은 기록이 있는 편성 대상 간호사만 센다.
+- 검증: 신규 `NightDiagnosticsCalculatorTest` 6개(6회 경계, 12회, 정책 변경, 전담 최소·면제, 형태 불일치, 순환 초과·취소, 인원 부족·초과·교대 월)와 `NightDedicatedHttpTest` 3개(권한·ETag·입력 검증, 기간 생성·중복·겹침·조기 종료·취소, 월 경계 Night 포함 진단) 통과. 백엔드 전체 `LC_ALL=C.UTF-8 ./gradlew test --rerun-tasks` 318개 중 통과 313·건너뜀 5·실패 0(기본 POSIX 로캘에서는 기존 `HospitalDatasetSearchHttpTest` 3개가 한글 파일명 경로 오류로 실패해 UTF-8 로캘로 재실행). `web`: `npm run api:gen` 후 `api:check`·`typecheck` 통과. Android·실서버·독립 리뷰는 실행하지 않았다.
+- 인계: 같은 브랜치에서 PR 리뷰 대응. 클라이언트 화면(B10 계열)은 이 API를 소비하면 된다. 자동배치의 SOF 배치·전담 반영은 A19 범위다.
 
 ## B8a PR #62 최신 dev(B7a #60) 통합 (2026-11-26, Claude)
 
@@ -1277,3 +1312,16 @@ Claude와 Codex가 같은 진행 기록을 사용한다. PR 또는 정기 리뷰
 - A14 통합(2026-11-24): A14 PR #57 병합본(`db5e412`)을 병합했다. `schema.sql`은 A13 표 뒤에 A14 `cross_team_support_allowances`를 두었고, `ApiTestBase.kt` 초기화 목록은 양쪽 표를 모두 포함한다. `openapi.yaml`은 dev 쪽에 A13 변경(472줄 추가, 삭제 없음)을 다시 적용했고 `schema.gen.ts`는 다시 생성했다. 동작 변경은 없다. 검증: `./gradlew check`(LC_ALL=C.UTF-8) 306개 중 301개 통과·5개 opt-in 건너뜀·실패 0, web api:check·lint·typecheck·테스트 394개 통과(3개 건너뜀)·build 성공.
 - PR #58 재검토(hyen11, P2 1건·P3 1건) 반영: 공휴일 응답은 `totalCount`가 0으로 명시된 경우만 빈 달로 저장하고, `body`·`totalCount` 누락이나 항목 수 불일치는 `HOLIDAY_SOURCE_UNAVAILABLE`로 처리해 저장값을 유지한다. 연차 날짜는 대상 월의 날짜만 확인한다(3일 이상 연차는 가운데 날짜를 온전히 덮으므로 시작일 대체 규칙은 2일 이하 연차에만 적용). 테스트 3개 추가. 검증: `./gradlew check`(LC_ALL=C.UTF-8) 309개 중 304개 통과·5개 opt-in 건너뜀·실패 0.
 - 인계: A14가 먼저 병합되었으므로 PR #58은 최신 dev 기준으로 병합 가능하다.
+
+## A16 확정 확인 기록 구현 (2026-11-26, Claude)
+
+- 브랜치 `claude/project-thread-l8hxs5`(최신 `dev` `d6f69de`에서 분기, 기능 순서표의 `feat/confirm-acknowledgements`에 해당). A15·A18과 동시 진행했다.
+- 확정 요청 `ConfirmRosterRequest`의 `acknowledgeUnfilledCount`를 `acknowledgements`로 대체했다. 일반 미충원(`generalUnfilledSlotIds`), 선임 미충원(`seniorUnfilledSlotIds`), 개인별 목표시간 미달(`hourShortfalls[nurseId, shortfallMinutes]`)을 **각각** 대상별로 보낸다. 서버는 확정 시점에 다시 계산해 비교한다.
+- 순서: 필수 규칙 위반이 있으면 확인과 무관하게 `RULE_VIOLATION`(422). 그다음 항목이 있는 분류의 확인이 없거나 비면 `UNFILLED_ACK_REQUIRED`·`HOUR_SHORTFALL_ACK_REQUIRED`(422), 대상·규모가 하나라도 다르면 `CONFIRM_ACK_MISMATCH`(409, 같은 revision이라도 정책·달력 변경으로 목표 미달이 바뀐 경우 포함). 진단 0건 분류에 항목을 보내도 불일치다. 같은 `Idempotency-Key` 재시도는 처음 결과를 돌려주고 기록을 다시 만들지 않는다.
+- API: `GET /rosters/{rosterId}/confirmation-check`(확정 전 확인 항목, 저장하지 않음, `no-store`), `GET /rosters/{rosterId}/confirmation`(공개 revision의 확인 기록, 없으면 `CONFIRMATION_RECORD_NOT_FOUND` 404). 모두 관리자 전용이며 간호사 공개 근무표 응답에는 섞이지 않는다.
+- DB: `roster_confirmations`(근무표별 헤더, 공개된 revision·확정자·시각), `roster_confirmation_items`(항목별 스냅샷: 칸 날짜·근무·팀 또는 간호사·목표·환산·부족 분, 서버 사유 코드). 마이그레이션 번호 없이 `schema.sql`에 `CREATE TABLE IF NOT EXISTS`로 추가했다.
+- 가정(결정 사항 20 미확정): 확인 기록은 "총량만"이 아니라 **대상별 목록 스냅샷**으로 남긴다(Figma L5W-6 "목표 미달 1명(이도현)" 표시 근거). 목표시간 미달은 활성 편성 대상 간호사만 센다. 사유는 분류별 서버 코드(`UNFILLED_SLOT`·`SENIOR_UNFILLED`·`BELOW_MONTHLY_TARGET`)만 두고, 칸별 세부 원인은 A19 생성 진단으로 넘긴다. 확정자 이름은 응답에 넣지 않았다(저장만).
+- 검증: JDK 21 `./gradlew test`(LC_ALL=C.UTF-8) 318개 실행·실패 0. 새 테스트 `ConfirmAcknowledgementIntegrationTest`(7개: 분류별 누락·불일치·위반 차단·0건·스냅샷 불변·멱등 재시도·권한)와 `ConfirmAcknowledgementHttpTest`(1개). 기존 확정 테스트는 서버 확인 항목을 그대로 보내도록 갱신했다. web `npm run api:gen`·`api:check`·`lint`·`typecheck`·`npm test -- --run`(534개 통과·5개 건너뜀) 성공. opt-in 실서버 web 테스트 2개(`*.server.test.ts`)는 새 요청 형식으로 고쳤으나 실행하지 않았다.
+- 클라이언트 영향: 기존 `acknowledgeUnfilledCount`를 보내는 클라이언트는 400(`INVALID_REQUEST`)이 되고, 빈 본문은 목표 미달이 있으면 422가 된다. 웹·Android 확정 화면(B10a/b)이 새 계약을 사용해야 한다.
+- 인계: A15·A18 PR과 `docs/work-status.md`·`schema.sql`·`openapi.yaml`·`ApiTestBase.kt` 초기화 목록이 겹칠 수 있다. 충돌 시 양쪽 항목을 모두 살린다.
+- PR #68 리뷰 반영(2026-11-26): P2 확정 요청의 확인 목록 한도(분류별 2,000·목표 미달 500)를 초안 최대 칸 수 `MAX_ROSTER_SLOTS`(10,000)와 같게 맞췄다. 수요 저장 한도도 같은 상수를 쓴다. 미충원 2,100칸 초안을 확인 항목 그대로 확정하는 HTTP 회귀 테스트를 추가했다(수정 전 400 재현, 수정 후 통과). P5 `backend/README.md`의 확정 흐름을 confirmation-check 조회 → acknowledgements 제출 → 확인 기록 조회로 갱신했다. 검증: `./gradlew test`(LC_ALL=C.UTF-8) 319개 실패 0, web api:check·typecheck 통과.

@@ -36,7 +36,7 @@ class CrossTeamSupportIntegrationTest @Autowired constructor(
     @BeforeEach
     fun setup() {
         listOf("cross_team_support_allowances", "mutation_replays", "generation_jobs", "approved_absences", "roster_rest_days",
-            "roster_slots", "rosters", "shift_types", "nurses", "ward_memberships", "audit_events", "ward_teams", "wards")
+            "roster_slots", "roster_confirmation_items", "roster_confirmations", "rosters", "shift_types", "nurses", "ward_memberships", "audit_events", "ward_teams", "wards")
             .forEach { jdbc.update("DELETE FROM $it") }
         wardId = UUID.randomUUID()
         teamA = UUID.randomUUID()
@@ -121,14 +121,14 @@ class CrossTeamSupportIntegrationTest @Autowired constructor(
         assertEquals("FAILED", locked.status)
         assertTrue(locked.diagnostics.any { it.code == "CROSS_TEAM_NOT_ALLOWED" })
         val confirm = assertThrows(BusinessException::class.java) {
-            service.confirm(roster.rosterId, tag(roster), UUID.randomUUID(), ConfirmRosterRequest(2), admin)
+            service.confirm(roster.rosterId, tag(roster), UUID.randomUUID(), acknowledgeAll(roster.rosterId), admin)
         }
         assertTrue(confirm.ruleViolations.filterIsInstance<RuleDiagnostic>().any { it.code == "CROSS_TEAM_NOT_ALLOWED" })
 
         // A new grant makes the stored assignment valid again; publishing keeps it even after a later revocation.
         val regranted = allowances.create(wardId, SupportAllowanceInput(nurseB, teamA, d10, d10, emptyList()), UUID.randomUUID(), admin).allowance
         roster = service.getRoster(roster.rosterId, admin)
-        service.confirm(roster.rosterId, tag(roster), UUID.randomUUID(), ConfirmRosterRequest(2), admin)
+        service.confirm(roster.rosterId, tag(roster), UUID.randomUUID(), acknowledgeAll(roster.rosterId), admin)
         assertEquals(0, allowances.revoke(wardId, regranted.id, admin).flaggedDrafts)
         val published = service.publishedWard(wardId, "2026-12", admin)
         assertEquals(nurseB, published.slots.single { it.slotId == a10 }.assignment?.nurseId)
@@ -188,6 +188,8 @@ class CrossTeamSupportIntegrationTest @Autowired constructor(
         service.processGeneration(job.jobId)
         return service.getGenerationJob(job.jobId, admin)
     }
+
+    private fun acknowledgeAll(rosterId: UUID) = service.confirmationCheck(rosterId, admin).acknowledgeAll()
 
     private fun tag(roster: RosterView) = "\"${service.etag(roster.rosterId, roster.revision)}\""
 }
