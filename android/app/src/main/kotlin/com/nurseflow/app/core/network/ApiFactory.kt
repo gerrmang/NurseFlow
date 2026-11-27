@@ -104,6 +104,16 @@ object ApiFactory {
             .build().create(ScheduleSettingsApi::class.java)
     }
 
+    fun holidaySettingsApi(baseUrl: String, session: SessionManager): HolidaySettingsApi {
+        val identity = session.credentials?.identity
+        val bound = RequestSessionIdentity(identity?.userId, identity?.generation)
+        val client = nonRetryingClient(session).build()
+        return Retrofit.Builder().baseUrl(baseUrl)
+            .callFactory { request -> client.newCall(request.newBuilder().tag(RequestSessionIdentity::class.java, bound).build()) }
+            .addConverterFactory(ApiJson.json.asConverterFactory("application/json".toMediaType()))
+            .build().create(HolidaySettingsApi::class.java)
+    }
+
     private fun nonRetryingClient(session: SessionManager) = baseClient()
         .connectionPool(ConnectionPool(0, 1, TimeUnit.NANOSECONDS))
         .addInterceptor(BearerInterceptor(session))

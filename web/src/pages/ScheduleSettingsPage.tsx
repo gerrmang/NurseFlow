@@ -37,6 +37,7 @@ export function ScheduleSettingsPage({ wardId }: { wardId: string }) {
     <div className="settings-main">
     <header className="toolbar"><div><h1>근무 설정</h1><p className="settings-subtitle">{data?.wardName ?? '병동'} · 근무 유형과 편성 기준</p></div><div className="actions"><Link to="/wards">내 병동</Link><button className="secondary" disabled={state.loading || state.busy || confirmation !== null} onClick={() => void store.reload()}>새로고침</button></div></header>
     <p className="notice">입력한 설정은 서버가 검증해요. 변경 후 초안 재검증이 필요할 수 있고, 공개본은 재확정 전까지 유지돼요.</p>
+    {data && !state.forbidden && <Link to={`/wards/${encodeURIComponent(wardId)}/holiday-settings`}>휴일 달력·목표시간 설정</Link>}
     {state.loading && <p role="status">최신 설정을 불러오고 있어요…</p>}
     {state.notice && <p role="status" className="notice">{state.notice}</p>}
     {state.forbidden && <p role="alert">관리 권한 또는 세션이 변경됐어요. <Link to="/wards">내 병동에서 다시 확인해 주세요.</Link></p>}

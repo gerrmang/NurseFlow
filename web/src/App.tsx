@@ -12,6 +12,7 @@ import { WardCreatePage } from './pages/WardCreatePage'
 import { StaffAdminPage } from './pages/StaffAdminPage'
 import { OffRequestsPage } from './pages/OffRequestsPage'
 import { ScheduleSettingsPage } from './pages/ScheduleSettingsPage'
+import { HolidaySettingsPage } from './pages/HolidaySettingsPage'
 import { INVITE_PATH } from './invite/inviteLink'
 import { useSessionState } from './session/SessionContext'
 import { CALLBACK_PATH, type SessionUser } from './session/SessionManager'
@@ -35,6 +36,7 @@ export function AppRoutes() {
         <Route path="/wards/:wardId/staff" element={<StaffAdminRoute />} />
         <Route path="/wards/:wardId/off-requests" element={<OffRequestsRoute />} />
         <Route path="/wards/:wardId/schedule-settings" element={<ScheduleSettingsRoute />} />
+        <Route path="/wards/:wardId/holiday-settings" element={<HolidaySettingsRoute />} />
         <Route path="/wards/:wardId/published-roster" element={<PublishedRosterRoute />} />
         <Route path="*" element={<NotFoundPage />} />
       </Routes>
@@ -50,6 +52,11 @@ function OffRequestsRoute() {
 function ScheduleSettingsRoute() {
   const { wardId = '' } = useParams()
   return <RequireSession>{(user, epoch) => <ScheduleSettingsPage key={`${user.userId}:${epoch}:${wardId}`} wardId={wardId} />}</RequireSession>
+}
+
+function HolidaySettingsRoute() {
+  const { wardId = '' } = useParams()
+  return <RequireSession>{(user, epoch) => <HolidaySettingsPage key={`${user.userId}:${epoch}:${wardId}`} wardId={wardId} />}</RequireSession>
 }
 
 function PublishedRosterRoute() {
