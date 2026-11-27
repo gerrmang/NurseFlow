@@ -126,6 +126,19 @@ class RosterController(private val service: RosterService, private val generatio
         return ResponseEntity.noContent().eTag(service.etag(rosterId, revision)).build()
     }
 
+    /** A16: what confirming needs now. Admin only; drafts and per-nurse hours never reach nurses. */
+    @GetMapping("/rosters/{rosterId}/confirmation-check")
+    fun confirmationCheck(@PathVariable rosterId: UUID, @CurrentSubject subject: String): ResponseEntity<ConfirmationCheckResponse> {
+        val result = service.confirmationCheck(rosterId, subject)
+        // No ETag: hour shortfalls also follow the ward policy and calendar, not only the roster revision.
+        return ResponseEntity.ok().header("Cache-Control", "private, no-store").body(result.toResponse())
+    }
+
+    /** A16: the acknowledgement snapshot stored with the published revision. */
+    @GetMapping("/rosters/{rosterId}/confirmation")
+    fun confirmation(@PathVariable rosterId: UUID, @CurrentSubject subject: String): ResponseEntity<ConfirmationRecordResponse> =
+        ResponseEntity.ok().header("Cache-Control", "private, no-store").body(service.confirmation(rosterId, subject).toResponse())
+
     @PostMapping("/rosters/{rosterId}/confirm")
     fun confirm(
         @PathVariable rosterId: UUID,

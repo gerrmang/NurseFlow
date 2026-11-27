@@ -54,9 +54,26 @@ data class ValidateAssignmentRequest(val slotId: UUID, val nurseId: UUID)
 
 data class AssignNurseRequest(val nurseId: UUID, val locked: Boolean = false)
 
+/** A16: echo every diagnostic of the confirmation check. An empty body confirms only a roster with none. */
 data class ConfirmRosterRequest(
-    @field:PositiveOrZero
-    val acknowledgeUnfilledCount: Int? = null,
+    @field:Valid
+    val acknowledgements: ConfirmAcknowledgements? = null,
+)
+
+data class ConfirmAcknowledgements(
+    @field:Size(max = MAX_ROSTER_SLOTS)
+    val generalUnfilledSlotIds: List<UUID>? = null,
+    @field:Size(max = MAX_ROSTER_SLOTS)
+    val seniorUnfilledSlotIds: List<UUID>? = null,
+    // A ward has no nurse limit of its own; one slot per nurse is the largest shortfall list a valid draft yields.
+    @field:Size(max = MAX_ROSTER_SLOTS) @field:Valid
+    val hourShortfalls: List<HourShortfallAcknowledgement>? = null,
+)
+
+data class HourShortfallAcknowledgement(
+    val nurseId: UUID,
+    @field:Min(1)
+    val shortfallMinutes: Int,
 )
 
 @InvalidRequestCode(ErrorCode.INVALID_TIME_LIMIT)
@@ -65,5 +82,8 @@ data class StartGenerationRequest(
     @field:Min(1) @field:Max(600)
     val timeLimitSeconds: Int = 120,
 )
+
+/** Largest draft the server creates (sum of required counts), so every acknowledgement list of one fits. */
+const val MAX_ROSTER_SLOTS = 10_000
 
 const val MONTH_PATTERN = "^\\d{4}-(0[1-9]|1[0-2])$"

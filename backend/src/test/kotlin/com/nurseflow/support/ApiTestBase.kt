@@ -28,7 +28,7 @@ abstract class ApiTestBase {
     fun resetDatabase() {
         http = HttpTestClient(port, mapper)
         listOf("night_dedicated_terms", "ward_night_policies", "ward_calendar_days", "ward_target_hour_policies", "public_holidays", "public_holiday_imports", "hospitals", "hospital_dataset_imports", "staff_adjustments", "audit_events", "auth_web_login_attempts", "ward_invitations", "ward_career_policies", "auth_refresh_tokens", "cross_team_support_allowances", "mutation_replays", "generation_jobs", "approved_absences",
-            "roster_slots", "rosters", "shift_types", "off_requests", "nurses", "ward_teams", "ward_policy_revisions", "ward_memberships", "users", "wards",
+            "roster_slots", "roster_confirmation_items", "roster_confirmations", "rosters", "shift_types", "off_requests", "nurses", "ward_teams", "ward_policy_revisions", "ward_memberships", "users", "wards",
         ).forEach { table -> runCatching { jdbc.update("DELETE FROM $table") } }
     }
 

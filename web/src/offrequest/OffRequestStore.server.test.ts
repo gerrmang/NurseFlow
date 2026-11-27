@@ -78,7 +78,14 @@ it.skipIf(process.env.NURSEFLOW_B8B_E2E !== '1')('verifies nurse/admin lifecycle
       return { id: roster.rosterId, etag: assigned.headers.get('etag')! }
     }
     const publishedDraft = await makeDraft()
-    await readJson(await admin(`/rosters/${publishedDraft.id}/confirm`, write('POST', {}, { 'If-Match': publishedDraft.etag })))
+    // A16: echo every item of the server's confirmation check.
+    const check = await readJson<S['ConfirmationCheck']>(await admin(`/rosters/${publishedDraft.id}/confirmation-check`))
+    const acknowledgements = {
+      generalUnfilledSlotIds: check.generalUnfilled.items.map((it) => it.slotId),
+      seniorUnfilledSlotIds: check.seniorUnfilled.items.map((it) => it.slotId),
+      hourShortfalls: check.hourShortfalls.items.map((it) => ({ nurseId: it.nurseId, shortfallMinutes: it.shortfallMinutes })),
+    }
+    await readJson(await admin(`/rosters/${publishedDraft.id}/confirm`, write('POST', { acknowledgements }, { 'If-Match': publishedDraft.etag })))
     const published = await readJson<S['PublishedWardCalendar']>(await admin(`${wardPath}/published-rosters?month=${month}`))
     const draft = await makeDraft()
     const before = await readJson<S['Roster']>(await admin(`/rosters/${draft.id}`))
